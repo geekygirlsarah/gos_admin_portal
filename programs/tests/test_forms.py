@@ -3,6 +3,7 @@ import datetime
 from django import forms
 from django.test import TestCase
 
+from organizations.models import Organization
 from programs.forms import AdultForm, StudentForm
 from programs.models import Adult
 
@@ -23,10 +24,15 @@ class StudentFormTests(TestCase):
                 "last_name": "Doe",
                 "primary_contact": self.parent1.id,
                 "secondary_contact": self.parent1.id,
-            }
+            },
+            organization=self.parent1.organization,
         )
         self.assertFalse(form.is_valid())
         self.assertIn("secondary_contact", form.errors)
+        self.assertIn(
+            "Secondary contact must be different from Primary contact.",
+            form.errors["secondary_contact"],
+        )
 
     def test_grade_selector_sets_graduation_year(self):
         # Grade 12 should set graduation_year to current end-of-year (June/July boundary logic)
@@ -53,7 +59,8 @@ class StudentFormTests(TestCase):
                 "secondary_contact": self.parent2.id,
                 "parents": [self.parent1.id],  # only p1 preselected
                 "date_of_birth": "2010-01-01",
-            }
+            },
+            organization=self.parent1.organization,
         )
         self.assertTrue(form.is_valid(), form.errors)
         student = form.save()
@@ -196,7 +203,7 @@ class AdultFormAndrewIdSponsorTests(TestCase):
         )
 
     def test_andrew_id_sponsor_queryset_filters_mentors_only(self):
-        form = AdultForm()
+        form = AdultForm(organization=self.mentor1.organization)
         sponsor_field = form.fields.get("org_email_sponsor") or form.fields.get(
             "andrew_id_sponsor"
         )
@@ -214,7 +221,7 @@ class AdultFormAndrewIdSponsorTests(TestCase):
         )
 
     def test_andrew_id_sponsor_queryset_sorted_by_preferred_first_name(self):
-        form = AdultForm()
+        form = AdultForm(organization=self.mentor1.organization)
         sponsor_field = form.fields.get("org_email_sponsor") or form.fields.get(
             "andrew_id_sponsor"
         )
@@ -229,3 +236,33 @@ class AdultFormAndrewIdSponsorTests(TestCase):
             expected_order,
             f"Expected order {expected_order}, got {actual_order}",
         )
+
+    def test_sponsor_choices_reject_other_organization(self):
+        other_organization = Organization.objects.create(
+            name="Other Organization", slug="other-organization", subdomain="other"
+        )
+        foreign_mentor = Adult.objects.create(
+            organization=other_organization,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+
+        for form_class in (StudentForm, AdultForm):
+            with self.subTest(form=form_class.__name__):
+                form = form_class(organization=self.mentor1.organization)
+                choices = form.fields["org_email_sponsor"].queryset
+                self.assertIn(self.mentor1, choices)
+                self.assertNotIn(foreign_mentor, choices)
+
+                bound_form = form_class(
+                    data={
+                        "legal_first_name": "Test",
+                        "last_name": "Person",
+                        "date_of_birth": "2010-01-01",
+                        "org_email_sponsor": foreign_mentor.pk,
+                    },
+                    organization=self.mentor1.organization,
+                )
+                self.assertFalse(bound_form.is_valid())
+                self.assertIn("org_email_sponsor", bound_form.errors)

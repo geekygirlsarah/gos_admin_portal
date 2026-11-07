@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_application_approved_email
+from applications.tests.access_helpers import grant_applicant_document_access
 from programs.models import Program, ProgramDocument
 
 # Use an isolated MEDIA_ROOT so file uploads from tests don't pollute the
@@ -95,6 +96,9 @@ class Step9DocumentsTests(TestCase):
         )
         mail.outbox = []
 
+    def authorize_document_access(self, application):
+        grant_applicant_document_access(self.client, application)
+
     # -- Access gating ------------------------------------------------------
 
     def test_non_approved_application_is_redirected_away(self):
@@ -111,6 +115,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_approved_application_can_view_documents(self):
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         response = self.client.get(
             reverse("apply_step10", kwargs={"app_id": app.application_id})
         )
@@ -130,6 +135,7 @@ class Step9DocumentsTests(TestCase):
         template renders without lookup failures.
         """
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         url = reverse("apply_step10", kwargs={"app_id": app.application_id})
 
         logger = logging.getLogger("django.template")
@@ -160,6 +166,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_upload_creates_submission(self):
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         response = self.client.post(
             reverse("apply_step10", kwargs={"app_id": app.application_id}),
             {
@@ -180,6 +187,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_reupload_replaces_existing_submission(self):
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         url = reverse("apply_step10", kwargs={"app_id": app.application_id})
         self.client.post(
             url,
@@ -203,6 +211,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_upload_with_unknown_document_id_is_rejected(self):
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         # An ID that doesn't belong to this program's docs:
         other_program = Program.objects.create(
             name="Other",
@@ -230,6 +239,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_upload_with_missing_file_re_renders_form(self):
         app = _approved_application(self.program)
+        self.authorize_document_access(app)
         response = self.client.post(
             reverse("apply_step10", kwargs={"app_id": app.application_id}),
             {"document_id": self.doc_required.pk},

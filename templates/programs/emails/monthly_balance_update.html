@@ -1,15 +1,15 @@
 {% extends "programs/emails/base_notification.html" %}
 
-{% block title %}Monthly Balance Statement for {{ student.display_name }} - {{ statement_date|date:"F Y" }}{% endblock %}
+{% block title %}Monthly Balance Statement for {{ student.display_name }} - {{ program.name }} - {{ statement_date|date:"F Y" }}{% endblock %}
 
 {% block header %}Monthly Balance Statement{% endblock %}
 
 {% block content %}
 <p>Dear {{ adult.preferred_first_name|default:adult.legal_first_name|default:"Parent/Guardian" }},</p>
-<p>This is your monthly statement of program fees and payments for <strong>{{ student.display_name }}</strong> as of {{ statement_date|date:"F j, Y" }}.</p>
+<p>This is your monthly statement of fees and payments for <strong>{{ student.display_name }}</strong> in <strong>{{ program.name }}</strong> as of {{ statement_date|date:"F j, Y" }}.</p>
 
 <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin: 20px 0;">
-    <div style="font-size: 16px; margin-bottom: 4px;"><strong>Total Balance Due:</strong></div>
+    <div style="font-size: 16px; margin-bottom: 4px;"><strong>Balance Due:</strong></div>
     <div style="font-size: 28px; font-weight: bold; color: {% if total_balance > 0 %}#dc3545{% else %}#198754{% endif %};">
         ${{ total_balance|floatformat:2 }}
     </div>
@@ -60,11 +60,6 @@
 
 <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #dee2e6;">
     <h4 style="font-size: 16px; margin-bottom: 8px;">How to Pay:</h4>
-    <p style="margin: 4px 0; font-size: 14px;">Payments can be made online via credit card through the portal or by check made payable to <strong>Girls of Steel Robotics</strong>.</p>
-    <p style="margin-top: 12px;">
-        <a href="https://portal.girlsofsteel.org/payments/" style="background-color: #0d6efd; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
-            View & Pay Balance Online
-        </a>
-    </p>
+    <p style="margin: 4px 0; font-size: 14px;">Please contact the program for payment instructions.</p>
 </div>
 {% endblock %}

@@ -10,6 +10,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -443,6 +444,14 @@ class StudentEditUpdatesExistingRecordTest(TestCase):
         self.user.user_permissions.add(perm)
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(
+                slug=settings.DEFAULT_ORGANIZATION_SLUG
+            ),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="staff", password="pass12345")  # nosec B106
         self.student = Student.objects.create(
             legal_first_name="Jane",
@@ -532,6 +541,14 @@ class ProgramPermissionTests(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lm_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=Organization.objects.get(
+                slug=settings.DEFAULT_ORGANIZATION_SLUG
+            ),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.mentor_user = User.objects.create_user(
             username="mentor_user", password="password123"
         )  # nosec B106
@@ -1109,6 +1126,14 @@ class PortalPermissionsUpdateTests(TestCase):
         )
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(self.lead_mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=Organization.objects.get(
+                slug=settings.DEFAULT_ORGANIZATION_SLUG
+            ),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.mentor_user = User.objects.create_user(
             username="mentor_user_perm", password=self.password
         )
@@ -1192,7 +1217,8 @@ class PortalPermissionsUpdateTests(TestCase):
 
     def test_orders_rows_default_off_for_parents_and_alumni(self):
         self.client.login(username="lead_mentor_user", password=self.password)
-        self.client.get(reverse("portal_settings"))
+        response = self.client.get(reverse("portal_settings"))
+        self.assertEqual(response.status_code, 200)
 
         sections = ["orders-view", "orders-request", "orders-manage", "orders-shipping"]
         for section in sections:
@@ -1304,6 +1330,8 @@ class GetUserRoleTests(TestCase):
         self.assertEqual(get_user_role(user), "Student")
 
     def test_lead_mentor_group_overrides_profiles(self):
+        # A legacy group no longer overrides an active organization membership.
+        from organizations.models import UserOrganizationMembership
         from programs.permission_views import get_user_role
 
         user = User.objects.create_user(
@@ -1314,7 +1342,12 @@ class GetUserRoleTests(TestCase):
         )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         user.groups.add(lm_group)
-        self.assertEqual(get_user_role(user), "LeadMentor")
+        self.assertTrue(
+            UserOrganizationMembership.objects.filter(
+                user=user, role="Mentor", is_active=True
+            ).exists()
+        )
+        self.assertEqual(get_user_role(user), "Mentor")
 
     def test_no_profile_or_group_returns_none(self):
         from programs.permission_views import get_user_role

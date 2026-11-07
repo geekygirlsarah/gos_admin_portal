@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Enrollment, Program, Student
 
 
@@ -20,6 +21,12 @@ class DashboardActiveStudentsMetricTests(TestCase):
             username="metrics_lead", password="password123"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         today = timezone.localdate()
 

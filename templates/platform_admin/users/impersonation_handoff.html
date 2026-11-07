@@ -1,0 +1,26 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="card border-0 shadow-sm rounded-3 bg-white">
+    <div class="card-body p-4">
+        <h4 class="fw-bold mb-3">Continue to {{ handoff.organization.name }}</h4>
+        <p>
+            You are about to open the portal as
+            <strong>{{ handoff.target_user.get_full_name|default:handoff.target_user.username }}</strong>
+            ({{ handoff.target_user.email }}).
+        </p>
+        <p class="text-muted">
+            This one-time handoff expires in five minutes. Your platform administrator session
+            stays separate from the tenant session.
+        </p>
+        <form method="post" action="{{ tenant_post_url }}" autocomplete="off">
+            <input type="hidden" name="handoff_id" value="{{ handoff_id }}">
+            <input type="hidden" name="handoff_token" value="{{ handoff_token }}">
+            <button type="submit" class="btn btn-warning fw-semibold">
+                Continue to {{ handoff.organization.name }}
+            </button>
+            <a href="{% url 'platform_admin:user_support' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

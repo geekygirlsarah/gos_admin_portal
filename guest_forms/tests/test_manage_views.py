@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from guest_forms.models import GuestForm
+from organizations.models import Organization, UserOrganizationMembership
 
 
 class GuestFormManageViewTests(TestCase):
@@ -13,11 +14,20 @@ class GuestFormManageViewTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        cls.org, _ = Organization.objects.get_or_create(
+            slug="gos", defaults={"name": "Girls of Steel"}
+        )
         cls.user = User.objects.create_user(
             username="leadmentor", password="pass12345"  # nosec B106
         )
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         cls.user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=cls.user,
+            organization=cls.org,
+            role="LeadMentor",
+            is_active=True,
+        )
 
     def setUp(self):
         self.client.login(username="leadmentor", password="pass12345")  # nosec B106
@@ -52,7 +62,9 @@ class GuestFormManageViewTests(TestCase):
         self.assertNotContains(resp, 'name="form_type"')
 
     def test_edit_page_renders_url_fields(self):
-        guest_form = GuestForm.objects.create(name="Adult Waiver", file=self._pdf())
+        guest_form = GuestForm.objects.create(
+            name="Adult Waiver", file=self._pdf(), organization=self.org
+        )
         resp = self.client.get(reverse("guest_form_edit", args=[guest_form.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'name="legal_notices_url"')
@@ -65,9 +77,16 @@ class GuestFormManageViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("guest_form_manage_list"))
         self.assertTrue(GuestForm.objects.filter(name="Photo Release").exists())
+        self.assertTrue(
+            GuestForm.objects.filter(
+                name="Photo Release", organization=self.org
+            ).exists()
+        )
 
     def test_update_post_saves_changes(self):
-        guest_form = GuestForm.objects.create(name="Old Name", file=self._pdf())
+        guest_form = GuestForm.objects.create(
+            name="Old Name", file=self._pdf(), organization=self.org
+        )
         data = self._valid_post_data(name="New Name")
         data["file"] = self._pdf()
         resp = self.client.post(reverse("guest_form_edit", args=[guest_form.pk]), data)

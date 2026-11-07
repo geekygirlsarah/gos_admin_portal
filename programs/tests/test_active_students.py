@@ -12,6 +12,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
+from organizations.models import UserOrganizationMembership
 from programs.forms import (
     AddExistingStudentToProgramForm,
     AdultForm,
@@ -74,7 +75,13 @@ class ActiveStudentDropdownTests(TestCase):
             username="admin", password="password"
         )  # nosec B106
         user.groups.add(lead_group)
-        form = AdultForm(user=user)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        form = AdultForm(user=user, organization=self.program.organization)
         qs = form.fields["students"].queryset
         self.assertIn(self.active, qs)
         self.assertNotIn(self.graduated, qs)
@@ -106,7 +113,9 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn(self.graduated, qs)
 
     def test_email_balances_form_only_lists_active_enrolled(self):
-        form = ProgramEmailBalancesForm(program=self.program)
+        form = ProgramEmailBalancesForm(
+            program=self.program, organization=self.program.organization
+        )
         qs = list(form.fields["student"].queryset)
         self.assertIn(self.active, qs)
         self.assertNotIn(self.dropped, qs)
@@ -129,6 +138,12 @@ class ActiveStudentDropdownTests(TestCase):
             username="lead_bal", password="password123"  # nosec B106
         )
         user.groups.add(lead_group)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="lead_bal", password="password123")  # nosec B106
 
         response = self.client.post(
@@ -173,6 +188,12 @@ class ActiveStudentDropdownTests(TestCase):
             username="lead_bal_img", password="password123"  # nosec B106
         )
         user.groups.add(lead_group)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="lead_bal_img", password="password123")  # nosec B106
 
         png_data_url = (
@@ -248,6 +269,12 @@ class ActiveStudentDropdownTests(TestCase):
             username="lead_bal_filter", password="password123"  # nosec B106
         )
         user.groups.add(lead_group)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(
             username="lead_bal_filter", password="password123"
         )  # nosec B106
@@ -360,6 +387,12 @@ class ProgramStudentListSeparationTests(TestCase):
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.active = Student.objects.create(legal_first_name="Active", last_name="A")
         self.active_enrollment = Enrollment.objects.create(
             student=self.active, program=self.program, active=True
@@ -454,6 +487,12 @@ class InactiveStudentTest(TestCase):
         )
         mentor_group, _ = Group.objects.get_or_create(name="Mentor")
         mentor_user.groups.add(mentor_group)
+        UserOrganizationMembership.objects.update_or_create(
+            user=mentor_user,
+            organization=self.program.organization,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
 
         self.client.force_login(mentor_user)
         response = self.client.get(reverse("program_detail", args=[self.program.pk]))

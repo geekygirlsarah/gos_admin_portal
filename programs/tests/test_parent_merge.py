@@ -11,6 +11,7 @@ from PIL import Image
 from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
 from audit.events import AuditEvent
 from audit.models import AuditLog
+from organizations.models import Organization, UserOrganizationMembership
 from outreach.models import OutreachEvent, OutreachMentorSignup, OutreachShift
 from programs.models import (
     Adult,
@@ -35,6 +36,12 @@ class ParentMergeTest(TestCase):
         )
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -86,6 +93,7 @@ class ParentMergeTest(TestCase):
 
         response = self.client.get(reverse("parent_merge"))
 
+        self.assertEqual(response.status_code, 200)
         parents = list(response.context["parents"])
         self.assertEqual([p.pk for p in parents], [alice.pk, mia.pk, zoe.pk])
 
@@ -126,10 +134,11 @@ class ParentMergeTest(TestCase):
         keep = self._parent("Jane", "Doe", personal_email="jane@example.com")
         source = self._parent("Janet", "Doe", personal_email="janet@example.com")
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.personal_email, "jane@example.com")
@@ -140,10 +149,11 @@ class ParentMergeTest(TestCase):
             "Janet", "Doe", phone_number="555-5678", city="Pittsburgh"
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.phone_number, "555-1234")
@@ -165,10 +175,11 @@ class ParentMergeTest(TestCase):
             can_receive_texts=True,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.personal_email, "janet@example.com")
@@ -191,10 +202,11 @@ class ParentMergeTest(TestCase):
             emergency_contact_phone="555-4321",
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.preferred_first_name, "Jan")
@@ -205,10 +217,11 @@ class ParentMergeTest(TestCase):
         keep = self._parent("Jane", "Doe", emergency_contact_name="Existing Name")
         source = self._parent("Janet", "Doe", emergency_contact_name="Source Name")
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.emergency_contact_name, "Existing Name")
@@ -233,10 +246,11 @@ class ParentMergeTest(TestCase):
         self._rel(keep, student, specific="mother")
         self._rel(source, student, specific="stepmother")
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertFalse(Adult.objects.filter(pk=source.pk).exists())
         rel = AdultStudentRelationship.objects.get(adult=keep, student=student)
@@ -250,10 +264,11 @@ class ParentMergeTest(TestCase):
         student.primary_contact_relationship = source_rel
         student.save(update_fields=["primary_contact_relationship"])
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         student.refresh_from_db()
         self.assertEqual(student.primary_contact, keep)
@@ -266,10 +281,11 @@ class ParentMergeTest(TestCase):
         student.secondary_contact_relationship = source_rel
         student.save(update_fields=["secondary_contact_relationship"])
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         student.refresh_from_db()
         self.assertEqual(student.secondary_contact, keep)
@@ -282,10 +298,11 @@ class ParentMergeTest(TestCase):
         )
         source = self._parent("Janet", "Doe", user=source_user)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.user, source_user)
@@ -302,10 +319,11 @@ class ParentMergeTest(TestCase):
         )
         source = self._parent("Janet", "Doe", user=source_user)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.user, keep_user)
@@ -314,10 +332,11 @@ class ParentMergeTest(TestCase):
         keep = self._parent("Jane", "Doe", is_parent=True, is_mentor=False)
         source = self._parent("Janet", "Doe", is_parent=True, is_mentor=True)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertTrue(keep.is_parent)
@@ -329,6 +348,12 @@ class ParentMergeTest(TestCase):
         regular_user = User.objects.create_user(
             username="regular",
             password="password",  # nosec B106
+        )
+        UserOrganizationMembership.objects.create(
+            user=regular_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+            is_active=True,
         )
         self.client.force_login(regular_user)
 
@@ -343,10 +368,11 @@ class ParentMergeTest(TestCase):
         student = self._student()
         self._rel(source, student)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         audit = AuditLog.objects.filter(
             event=AuditEvent.RECORDS_MERGED,
@@ -377,10 +403,11 @@ class ParentMergeTest(TestCase):
             notes="Important notes about this person",
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.start_year, 2024)
@@ -416,10 +443,11 @@ class ParentMergeTest(TestCase):
             email_updates=True,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertTrue(keep.on_discord)
@@ -449,10 +477,11 @@ class ParentMergeTest(TestCase):
         )
         source = self._parent("Janet", "Doe", photo=photo)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertTrue(bool(keep.photo))
@@ -462,10 +491,11 @@ class ParentMergeTest(TestCase):
         keep = self._parent("Jane", "Doe")
         source = self._parent("Janet", "Doe", student_record=student)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.student_record, student)
@@ -475,10 +505,11 @@ class ParentMergeTest(TestCase):
         keep = self._parent("Jane", "Doe")
         source = self._parent("Janet", "Doe", andrew_id_sponsor=sponsor_adult)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.andrew_id_sponsor, sponsor_adult)
@@ -489,10 +520,11 @@ class ParentMergeTest(TestCase):
         source.andrew_id_sponsor = source
         source.save()
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.andrew_id_sponsor, keep)
@@ -504,10 +536,11 @@ class ParentMergeTest(TestCase):
         sponsored_adult = self._parent("Mentee", "One", andrew_id_sponsor=source)
         sponsored_student = self._student(andrew_id_sponsor=source)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         sponsored_adult.refresh_from_db()
         sponsored_student.refresh_from_db()
@@ -552,10 +585,11 @@ class ParentMergeTest(TestCase):
             obtained_date=None,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(BackgroundCheck.objects.filter(adult=keep).count(), 2)
         sp_check = BackgroundCheck.objects.get(adult=keep, check_type=bct_sp)
@@ -595,10 +629,11 @@ class ParentMergeTest(TestCase):
             adult=source, agreement=agreement2, file=sub_file
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(
             MentorAgreementAcceptance.objects.filter(adult=keep).count(), 2
@@ -635,10 +670,11 @@ class ParentMergeTest(TestCase):
         source = self._parent("Janet", "Doe", is_mentor=True)
         OutreachMentorSignup.objects.create(adult=source, shift=shift)
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertTrue(
             OutreachMentorSignup.objects.filter(adult=keep, shift=shift).exists()
@@ -656,10 +692,11 @@ class ParentMergeTest(TestCase):
             adjusted_gross_income=50000,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         app.refresh_from_db()
         self.assertEqual(app.applied_by, keep)
@@ -680,10 +717,11 @@ class ParentMergeTest(TestCase):
             event_type=AttendanceEvent.IN,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         session.refresh_from_db()
         event.refresh_from_db()
@@ -695,10 +733,11 @@ class ParentMergeTest(TestCase):
         source = self._parent("Janet", "Doe")
         RFIDCard.objects.create(adult=source, uid="CARD-123456")
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertTrue(RFIDCard.objects.filter(adult=keep, uid="CARD-123456").exists())
 
@@ -720,10 +759,11 @@ class ParentMergeTest(TestCase):
             start_year=2023,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("parent_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.personal_email, "keep@example.com")

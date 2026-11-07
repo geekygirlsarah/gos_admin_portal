@@ -32,6 +32,11 @@ urlpatterns = [
         name="application_review_detail",
     ),
     path(
+        "review/<str:app_id>/documents/<int:submission_id>/download/",
+        views.ApplicationReviewDocumentDownloadView.as_view(),
+        name="application_review_document_download",
+    ),
+    path(
         "review/<str:app_id>/approve/",
         views.ApplicationApproveView.as_view(),
         name="application_review_approve",
@@ -157,6 +162,16 @@ urlpatterns = [
     # Step 10: post-approval signed-document download & re-upload page.
     # Only reachable once the application has been APPROVED by a lead
     # mentor; otherwise the view redirects to the applicant's current step.
+    path(
+        "<str:app_id>/documents/<int:document_id>/download/",
+        views.Step10DocumentDownloadView.as_view(),
+        name="apply_step10_document_download",
+    ),
+    path(
+        "<str:app_id>/documents/access/",
+        views.Step10DocumentAccessView.as_view(),
+        name="apply_step10_document_access",
+    ),
     path(
         "<str:app_id>/step10/",
         views.Step10DocumentsView.as_view(),

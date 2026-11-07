@@ -4,13 +4,15 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import FileResponse, HttpResponseRedirect, QueryDict
+from django.http import FileResponse, Http404, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -27,6 +29,7 @@ from ..forms import StudentForm, StudentMergeForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
+    BackgroundCheck,
     Enrollment,
     Program,
     Student,
@@ -56,6 +59,29 @@ from .mixins import (
     SortableListViewMixin,
     StudentQuerysetRoleMixin,
 )
+
+
+def _tenant_student_queryset(organization):
+    if organization is None:
+        return Student.objects.none()
+    return Student.objects.for_organization(organization).filter(
+        (
+            models.Q(primary_contact_relationship__isnull=True)
+            | models.Q(
+                primary_contact_relationship__organization=organization,
+                primary_contact_relationship__adult__organization=organization,
+                primary_contact_relationship__student_id=models.F("pk"),
+            )
+        ),
+        (
+            models.Q(secondary_contact_relationship__isnull=True)
+            | models.Q(
+                secondary_contact_relationship__organization=organization,
+                secondary_contact_relationship__adult__organization=organization,
+                secondary_contact_relationship__student_id=models.F("pk"),
+            )
+        ),
+    )
 
 
 class StudentListView(
@@ -108,7 +134,10 @@ class StudentListView(
         ctx = super().get_context_data(**kwargs)
         program_id = self.kwargs.get("program_id")
         if program_id:
-            ctx["program"] = get_object_or_404(Program, pk=program_id)
+            ctx["program"] = get_object_or_404(
+                Program.objects.for_organization(self.request.organization),
+                pk=program_id,
+            )
 
         students = list(ctx.get("students") or ctx.get("object_list") or [])
         ctx["total_students_count"] = len(students)
@@ -322,28 +351,62 @@ class StudentDetailView(
     def get_queryset(self):
         from django.db.models import Prefetch
 
+        from ..models import ProgramFeature
+
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return Student.objects.none()
+
         return (
-            super()
-            .get_queryset()
+            _tenant_student_queryset(organization)
             .select_related(
                 "school",
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
             )
             .prefetch_related(
-                "adults",
-                "adultstudentrelationship_set",
-                "background_checks__check_type",
+                Prefetch(
+                    "adults",
+                    queryset=Adult.objects.for_organization(organization),
+                ),
+                Prefetch(
+                    "adultstudentrelationship_set",
+                    queryset=AdultStudentRelationship.objects.for_organization(
+                        organization
+                    ).filter(
+                        adult__organization=organization,
+                        student__organization=organization,
+                    ),
+                ),
+                Prefetch(
+                    "background_checks",
+                    queryset=BackgroundCheck.objects.for_organization(organization)
+                    .filter(
+                        student__organization=organization,
+                        check_type__organization=organization,
+                    )
+                    .select_related("check_type"),
+                ),
                 "race_ethnicities",
                 Prefetch(
                     "signed_documents",
-                    queryset=StudentDocument.objects.select_related("program_document"),
+                    queryset=StudentDocument.objects.filter(
+                        program_document__program__organization=organization
+                    ).select_related("program_document"),
                 ),
                 Prefetch(
                     "enrollment_set",
-                    queryset=Enrollment.objects.select_related(
-                        "program", "team", "crew", "subteam"
-                    ).prefetch_related("program__features"),
+                    queryset=Enrollment.objects.for_organization(organization)
+                    .filter(program__organization=organization)
+                    .select_related("program", "team", "crew", "subteam")
+                    .prefetch_related(
+                        Prefetch(
+                            "program__features",
+                            queryset=ProgramFeature.objects.for_organization(
+                                organization
+                            ),
+                        )
+                    ),
                 ),
                 "email_delivery_events",
             )
@@ -390,7 +453,12 @@ class StudentDetailView(
             )
             from attendance.models import AttendanceSession
 
-            sessions_qs = AttendanceSession.objects.filter(student=student)
+            organization = self.request.organization
+            sessions_qs = AttendanceSession.objects.filter(
+                student=student,
+                organization=organization,
+                program__organization=organization,
+            )
             rows = list(
                 sessions_qs.values("program_id").annotate(
                     total=Sum("duration_minutes"),
@@ -443,7 +511,11 @@ class StudentDetailView(
             from outreach.utils import compute_outreach_stats
 
             outreach_signups = list(
-                OutreachSignup.objects.filter(student=student)
+                OutreachSignup.objects.filter(
+                    student=student,
+                    organization=self.request.organization,
+                    shift__event__organization=self.request.organization,
+                )
                 .select_related("shift", "shift__event", "shift__event__program")
                 .order_by("shift__date", "shift__start_time")
             )
@@ -465,9 +537,11 @@ class StudentDetailView(
                 from badges.models import StudentBadge
 
                 badges_earned = list(
-                    StudentBadge.objects.filter(student=student).select_related(
-                        "badge", "awarded_by"
-                    )
+                    StudentBadge.objects.filter(
+                        student=student,
+                        organization=self.request.organization,
+                        badge__organization=self.request.organization,
+                    ).select_related("badge", "awarded_by")
                 )
                 ctx["badges_earned"] = badges_earned
                 ctx["badges_count"] = len(badges_earned)
@@ -497,6 +571,9 @@ class StudentUpdateView(
     section = "student_info"
     background_checks_kwarg = "student"
 
+    def get_queryset(self):
+        return _tenant_student_queryset(getattr(self.request, "organization", None))
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
@@ -517,7 +594,14 @@ class StudentUpdateView(
         )
         ctx["program_feature_keys"] = keys
         if student:
-            ctx["enrollments"] = student.enrollment_set.all().select_related("program")
+            ctx["enrollments"] = (
+                Enrollment.objects.for_organization(self.request.organization)
+                .filter(
+                    student=student,
+                    program__organization=self.request.organization,
+                )
+                .select_related("program")
+            )
         return ctx
 
     def form_valid(self, form):
@@ -534,6 +618,7 @@ class StudentUpdateView(
             if k.startswith("parent_specific_rel_")
         }
         valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        organization = getattr(self.request, "organization", None)
         for pid_str, rel in rel_map.items():
             try:
                 pid = int(pid_str)
@@ -545,9 +630,15 @@ class StudentUpdateView(
             specific = specific_map.get(pid_str, "")
             if specific:
                 defaults["specific_relationship"] = specific
-            if defaults:
+            adult = (
+                Adult.objects.for_organization(organization)
+                .filter(pk=pid, is_parent=True)
+                .first()
+            )
+            if defaults and adult is not None:
                 AdultStudentRelationship.objects.update_or_create(
-                    adult_id=pid,
+                    organization=organization,
+                    adult=adult,
                     student=self.object,
                     defaults=defaults,
                 )
@@ -616,8 +707,20 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     def post(self, request, pk):
         from ..utils import convert_student_to_alumni
 
-        student = get_object_or_404(Student, pk=pk)
-        _adult, created, _marked = convert_student_to_alumni(student)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        student = get_object_or_404(
+            Student.objects.for_organization(organization), pk=pk
+        )
+        try:
+            _adult, created, _marked = convert_student_to_alumni(student)
+        except ValidationError:
+            messages.error(
+                request,
+                "This student has inconsistent organization data and could not be converted.",
+            )
+            return redirect_back(request, "student_list")
         if created:
             messages.success(
                 request,
@@ -635,6 +738,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         year = request.GET.get("year")
         try:
             year = int(year) if year else timezone.now().year
@@ -642,7 +748,8 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
             year = timezone.now().year
         # Default to seniors: graduation_year equals the selected year, and active (non-graduated)
         students = (
-            Student.objects.filter(graduation_year=year, graduated=False)
+            Student.objects.for_organization(organization)
+            .filter(graduation_year=year, graduated=False)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -662,6 +769,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
     def post(self, request):
         from ..utils import convert_student_to_alumni, find_matching_alumni_adult
 
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
         year = request.POST.get("year")
@@ -682,20 +792,31 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
                 return HttpResponseRedirect(f"{base_url}?{query.urlencode()}")
             return redirect("student_bulk_convert_select")
 
-        qs = Student.objects.filter(pk__in=ids).order_by(
-            "last_name", "preferred_first_name"
+        qs = (
+            Student.objects.for_organization(organization)
+            .filter(pk__in=ids)
+            .order_by("last_name", "preferred_first_name")
         )
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni
             will_create = []
             already_alumni = []
+            blocked = []
             for s in qs:
-                if find_matching_alumni_adult(s):
-                    already_alumni.append(s)
-                else:
-                    will_create.append(s)
+                try:
+                    if find_matching_alumni_adult(s):
+                        already_alumni.append(s)
+                    else:
+                        will_create.append(s)
+                except ValidationError:
+                    blocked.append(s)
             will_mark_graduated = [s for s in qs if not s.graduated]
+            if blocked:
+                messages.error(
+                    request,
+                    f"{len(blocked)} selected student(s) have inconsistent organization data and cannot be converted.",
+                )
             return render(
                 request,
                 "students/convert_to_alumni_preview.html",
@@ -705,6 +826,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
                     "will_create": will_create,
                     "already_alumni": already_alumni,
                     "will_mark_graduated": will_mark_graduated,
+                    "blocked": blocked,
                     "ids": ids,
                 },
             )
@@ -714,14 +836,22 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
         existed = 0
         marked_graduated = 0
 
-        for student in qs:
-            _adult, was_created, was_marked = convert_student_to_alumni(student)
-            if was_created:
-                created += 1
-            else:
-                existed += 1
-            if was_marked:
-                marked_graduated += 1
+        try:
+            with transaction.atomic():
+                for student in qs:
+                    _adult, was_created, was_marked = convert_student_to_alumni(student)
+                    if was_created:
+                        created += 1
+                    else:
+                        existed += 1
+                    if was_marked:
+                        marked_graduated += 1
+        except ValidationError:
+            messages.error(
+                request,
+                "One or more selected students have inconsistent organization data. No conversions were made.",
+            )
+            return redirect("student_bulk_convert_select")
         messages.success(
             request,
             f"Converted {created} new alumni (Adults), {existed} already existed/updated. "
@@ -735,19 +865,46 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
     form_class = StudentMergeForm
     success_url = reverse_lazy("student_list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from django.db.models import Prefetch
+
+        organization = getattr(self.request, "organization", None)
+        students = _tenant_student_queryset(organization)
+        if organization is None:
+            enrollments = Enrollment.objects.none()
+            relationships = AdultStudentRelationship.objects.none()
+        else:
+            enrollments = (
+                Enrollment.objects.for_organization(organization)
+                .filter(
+                    student__organization=organization,
+                    program__organization=organization,
+                )
+                .select_related("program")
+            )
+            relationships = (
+                AdultStudentRelationship.objects.for_organization(organization)
+                .filter(
+                    adult__organization=organization,
+                    student__organization=organization,
+                )
+                .select_related("adult")
+            )
         context["students"] = list(
-            Student.objects.all()
-            .select_related(
+            students.select_related(
                 "school",
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
             )
             .prefetch_related(
-                "adults",
-                "enrollment_set__program",
-                "adultstudentrelationship_set__adult",
+                Prefetch("enrollment_set", queryset=enrollments),
+                Prefetch("adultstudentrelationship_set", queryset=relationships),
             )
             .annotate(
                 sort_first=Coalesce(
@@ -765,7 +922,14 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
 
-        meta = perform_student_merge(keep, source)
+        try:
+            meta = perform_student_merge(keep, source)
+        except ValidationError:
+            form.add_error(
+                None,
+                "These records have inconsistent organization data and cannot be merged.",
+            )
+            return self.form_invalid(form)
 
         log_event(
             request=self.request,
@@ -794,28 +958,45 @@ class StudentDocumentDownloadView(LoginRequiredMixin, View):
     """
 
     def get(self, request, pk):
-        student_doc = get_object_or_404(StudentDocument, pk=pk)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        student_doc = get_object_or_404(
+            StudentDocument.objects.filter(
+                student__organization=organization,
+                program_document__program__organization=organization,
+            ),
+            pk=pk,
+        )
         student = student_doc.student
         user = request.user
 
-        role = get_user_role(user)
+        role = get_user_role(user, org=organization)
         has_access = False
 
         if role == "LeadMentor" or user.is_superuser:
             has_access = True
-        elif user_is_parent(user):
+        elif user_is_parent(user, org=organization):
             adult = getattr(user, "adult_profile", None)
             if (
                 adult
                 and adult.is_parent
-                and adult.students.filter(pk=student.pk).exists()
+                and adult.organization_id == organization.pk
+                and AdultStudentRelationship.objects.for_organization(organization)
+                .filter(adult=adult, student=student)
+                .exists()
             ):
                 has_access = True
         elif hasattr(user, "student_profile") and user.student_profile == student:
             has_access = True
         elif user_is_mentor_or_lead(user):
-            if can_user_read(user, "students", student) or can_user_read(
-                user, "programs", student_doc.program_document.program
+            if can_user_read(
+                user, "students", student, org=organization
+            ) or can_user_read(
+                user,
+                "programs",
+                student_doc.program_document.program,
+                org=organization,
             ):
                 has_access = True
 
@@ -830,4 +1011,55 @@ class StudentDocumentDownloadView(LoginRequiredMixin, View):
         response = FileResponse(student_doc.file.open("rb"), content_type=content_type)
         disposition = "attachment" if request.GET.get("download") else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
+
+class StudentPhotoView(LoginRequiredMixin, View):
+    """Serve a student's photo only to a user allowed to view that student."""
+
+    def get(self, request, pk):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        student = get_object_or_404(
+            _tenant_student_queryset(organization).exclude(photo=""), pk=pk
+        )
+        role = get_user_role(request.user, org=organization)
+        if role == "Parent":
+            try:
+                adult = request.user.adult_profile
+            except (Adult.DoesNotExist, AttributeError):
+                raise Http404
+            if (
+                adult.organization_id != organization.pk
+                or not AdultStudentRelationship.objects.for_organization(organization)
+                .filter(
+                    adult=adult,
+                    student=student,
+                    adult__organization=organization,
+                    student__organization=organization,
+                )
+                .exists()
+            ):
+                raise Http404
+        if not can_user_read(request.user, "student_info", student, org=organization):
+            raise Http404
+
+        filename = os.path.basename(student.photo.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        if content_type not in {
+            "image/bmp",
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/webp",
+        }:
+            content_type = "application/octet-stream"
+        response = FileResponse(student.photo.open("rb"), content_type=content_type)
+        response["Content-Disposition"] = content_disposition_header(
+            content_type.startswith("image/"), filename
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         return response

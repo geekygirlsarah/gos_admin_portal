@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
 
@@ -11,16 +12,30 @@ from applications.services import (
     send_lead_notification_email,
     send_parent_handoff_email,
 )
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program
 
 
 class EmailNamesTest(TestCase):
     def setUp(self):
+        self.organization = Organization.objects.get(slug="gos")
         self.program = Program.objects.create(
+            organization=self.organization,
             name="Test Program",
             active=True,
         )
+        lead = get_user_model().objects.create_user(
+            username="email-names-lead",
+            email="email-names-lead@example.test",
+        )
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.student_app = Application.objects.create(
+            organization=self.organization,
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
             program=self.program,
@@ -41,6 +56,7 @@ class EmailNamesTest(TestCase):
             },
         )
         self.mentor_app = Application.objects.create(
+            organization=self.organization,
             applicant_type=Application.Type.MENTOR,
             email="mentor@example.com",
             program=self.program,

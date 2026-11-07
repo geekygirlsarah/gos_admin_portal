@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     AddressGeocode,
     Adult,
@@ -38,6 +39,12 @@ class StudentMapViewTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="mentor", password="pass12345")  # nosec B106
 
         self.program = Program.objects.create(name="Robot Camp", active=True)
@@ -360,6 +367,12 @@ class CarpoolButtonTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="mentor", password="pass12345")  # nosec B106
 
         program = Program.objects.create(name="Robot Camp")

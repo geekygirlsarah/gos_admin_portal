@@ -3,9 +3,16 @@ import re
 from datetime import date
 
 from django.conf import settings
+from django.db.models import Prefetch
 
-from programs.models import Adult, Enrollment, Program, Student
-from programs.permission_views import get_user_role
+from organizations.models import UserOrganizationMembership
+from programs.models import (
+    AdultStudentRelationship,
+    Enrollment,
+    Program,
+    ProgramFeature,
+    Student,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +27,34 @@ def wizard_context(request):
     context overrides this value.
     """
     return {"warnings": None}
+
+
+def _navbar_profile(request, name):
+    org = getattr(request, "organization", None)
+    profile = getattr(request.user, name, None) if org else None
+    return profile if profile and profile.organization_id == org.pk else None
+
+
+def _navbar_children(request):
+    org = getattr(request, "organization", None)
+    adult = _navbar_profile(request, "adult_profile")
+    if not org or not adult:
+        return Student.objects.none()
+    relationships = AdultStudentRelationship.objects.for_organization(org).filter(
+        adult=adult, student__organization=org
+    )
+    return Student.objects.for_organization(org).filter(
+        pk__in=relationships.values("student_id")
+    )
+
+
+def _navbar_enrollments(request):
+    org = getattr(request, "organization", None)
+    if not org:
+        return Enrollment.objects.none()
+    return Enrollment.objects.for_organization(org).filter(
+        student__organization=org, program__organization=org
+    )
 
 
 def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
@@ -37,42 +72,45 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
     student_travel_programs = []
     parent_travel_programs = []
     carpool_map_programs = []
-    if role == "Student":
-        try:
-            student = request.user.student_profile
+    org = getattr(request, "organization", None)
+    if role == "Student" and org:
+        student = _navbar_profile(request, "student_profile")
+        if student:
             active_enrollments = (
-                Enrollment.objects.filter(student=student, active=True)
+                _navbar_enrollments(request)
+                .filter(student=student, active=True)
                 .select_related("program")
+                .prefetch_related(
+                    Prefetch(
+                        "program__features",
+                        queryset=ProgramFeature.objects.for_organization(org),
+                        to_attr="navbar_features",
+                    )
+                )
                 .order_by("-program__start_date", "-program__end_date", "-program__id")
             )
             for e in active_enrollments:
                 carpool_map_programs.append(e.program)
-                if e.program.features.filter(key="outreach").exists():
+                feature_keys = {feature.key for feature in e.program.navbar_features}
+                if "outreach" in feature_keys:
                     student_outreach_programs.append(e.program)
-                if e.program.features.filter(key="orders").exists():
+                if "orders" in feature_keys:
                     student_orders_programs.append(e.program)
-                if e.program.features.filter(key="travel").exists():
+                if "travel" in feature_keys:
                     student_travel_programs.append(e.program)
-        except (Student.DoesNotExist, AttributeError):
-            pass
-    elif navbar_is_parent:
-        try:
-            adult = request.user.adult_profile
-            students = adult.all_students()
-            carpool_map_programs = list(
-                Program.objects.filter(
-                    enrollment__student__in=students, enrollment__active=True
-                ).distinct()
-            )
-            parent_travel_programs = list(
-                Program.objects.filter(
-                    enrollment__student__in=students,
-                    enrollment__active=True,
-                    features__key="travel",
-                ).distinct()
-            )
-        except (Adult.DoesNotExist, AttributeError):
-            pass
+    elif navbar_is_parent and org:
+        enrollments = _navbar_enrollments(request).filter(
+            student__in=_navbar_children(request), active=True
+        )
+        programs = Program.objects.for_organization(org).filter(
+            pk__in=enrollments.values("program_id")
+        )
+        carpool_map_programs = list(programs)
+        parent_travel_programs = list(
+            programs.filter(
+                features__key="travel", features__organization=org
+            ).distinct()
+        )
 
     return (
         student_outreach_programs,
@@ -100,29 +138,35 @@ def _navbar_badge_data(request, role, navbar_is_parent):
     except ImportError:
         return badge_count, has_any_badge_program
 
+    org = getattr(request, "organization", None)
+    if not org:
+        return badge_count, has_any_badge_program
+
     if role == "Student":
-        try:
-            student = request.user.student_profile
-        except (Student.DoesNotExist, AttributeError):
+        student = _navbar_profile(request, "student_profile")
+        if not student:
             return badge_count, has_any_badge_program
-        badge_count = StudentBadge.objects.filter(student=student).count()
-        has_any_badge_program = Enrollment.objects.filter(
-            student=student,
-            active=True,
-            program__features__key="badges",
-        ).exists()
+        children = Student.objects.for_organization(org).filter(pk=student.pk)
     elif navbar_is_parent:
-        try:
-            adult = request.user.adult_profile
-            children = adult.all_students()
-        except (Adult.DoesNotExist, AttributeError):
-            return badge_count, has_any_badge_program
-        badge_count = StudentBadge.objects.filter(student__in=children).count()
-        has_any_badge_program = Enrollment.objects.filter(
+        children = _navbar_children(request)
+    else:
+        return badge_count, has_any_badge_program
+
+    badge_count = (
+        StudentBadge.objects.for_organization(org)
+        .filter(student__in=children, badge__organization=org)
+        .count()
+    )
+    has_any_badge_program = (
+        _navbar_enrollments(request)
+        .filter(
             student__in=children,
             active=True,
             program__features__key="badges",
-        ).exists()
+            program__features__organization=org,
+        )
+        .exists()
+    )
 
     return badge_count, has_any_badge_program
 
@@ -158,31 +202,43 @@ def navbar_context(request):
             "is_platform_admin": is_platform_admin,
         }
 
-    role = get_user_role(request.user)
+    org = getattr(request, "organization", None)
+    roles = set()
+    if org:
+        roles = set(
+            UserOrganizationMembership.objects.filter(
+                user=request.user, organization=org, is_active=True
+            ).values_list("role", flat=True)
+        )
+    # Match get_user_role's membership priority without its legacy fallback.
+    role = (
+        "LeadMentor"
+        if request.user.is_superuser
+        else next(
+            (
+                candidate
+                for candidate in (
+                    "LeadMentor",
+                    "Mentor",
+                    "Parent",
+                    "Alumni",
+                    "Student",
+                    "Staff",
+                )
+                if candidate in roles
+            ),
+            None,
+        )
+    )
 
-    # Resolve the adult's role flags once per request. Django caches
-    # ``user.adult_profile`` on the instance after the first lookup (including
-    # the "no related object" case), and we fetch the user's group names in a
-    # single query, so the navbar adds at most two queries no matter how many
-    # flags the template reads. Superusers short-circuit ``get_user_role``
-    # without touching the profile, so we always do the one profile lookup here.
-    try:
-        adult_flags = {
-            "is_parent": request.user.adult_profile.is_parent,
-            "is_mentor": request.user.adult_profile.is_mentor,
-            "is_alumni": request.user.adult_profile.is_alumni,
-        }
-    except (Adult.DoesNotExist, AttributeError):
-        adult_flags = {}
-
-    if request.user.is_superuser:
-        group_names = set()
-    else:
-        group_names = set(request.user.groups.values_list("name", flat=True))
-
-    navbar_is_parent = bool(adult_flags.get("is_parent") or "Parent" in group_names)
-    navbar_is_mentor = bool(adult_flags.get("is_mentor") or "Mentor" in group_names)
-    navbar_is_alumni = bool(adult_flags.get("is_alumni") or "Alumni" in group_names)
+    adult = (
+        _navbar_profile(request, "adult_profile")
+        if role in {"Parent", "Alumni"}
+        else None
+    )
+    navbar_is_parent = "Parent" in roles
+    navbar_is_mentor = "Mentor" in roles
+    navbar_is_alumni = "Alumni" in roles
     # Students resolve their profile from the role rather than hitting
     # ``user.student_profile`` here (and in templates), which would otherwise
     # cost a query on every page for users who aren't students.
@@ -191,45 +247,34 @@ def navbar_context(request):
     # Try to extract a program pk from the URL path, e.g. /programs/42/...
     current_program = None
     match = re.match(r"^/programs/(\d+)/", request.path)
-    if match:
+    if match and org:
         program_pk = int(match.group(1))
-        try:
-            current_program = Program.objects.get(pk=program_pk)
-        except Program.DoesNotExist:
-            current_program = None
+        current_program = (
+            Program.objects.for_organization(org).filter(pk=program_pk).first()
+        )
 
     # If no program in URL, try to auto-select for Students/Parents who only have one
-    if current_program is None and role in ("Student", "Parent", "Mentor", "Alumni"):
-        try:
-            if role == "Student":
-                student = request.user.student_profile
-                enrollments = Enrollment.objects.filter(student=student).select_related(
-                    "program"
-                )
-                programs = [e.program for e in enrollments]
-            elif role in ("Parent", "Alumni", "Mentor"):
-                adult = request.user.adult_profile
-                if role == "Parent":
-                    students = adult.all_students()
-                    programs = list(
-                        Program.objects.filter(
-                            enrollment__student__in=students
-                        ).distinct()
-                    )
-                elif role == "Alumni" and adult.student_record:
-                    enrollments = Enrollment.objects.filter(
-                        student=adult.student_record
-                    ).select_related("program")
-                    programs = [e.program for e in enrollments]
-                else:
-                    programs = []
-            else:
-                programs = []
+    if current_program is None and org:
+        enrollments = _navbar_enrollments(request)
+        if role == "Student":
+            student = _navbar_profile(request, "student_profile")
+            enrollments = (
+                enrollments.filter(student=student) if student else enrollments.none()
+            )
+        elif role == "Parent" and adult:
+            enrollments = enrollments.filter(student__in=_navbar_children(request))
+        elif role == "Alumni" and adult and adult.student_record_id:
+            enrollments = enrollments.filter(student_id=adult.student_record_id)
+        else:
+            enrollments = enrollments.none()
 
-            if len(programs) == 1:
-                current_program = programs[0]
-        except (AttributeError, Exception):
-            pass
+        programs = list(
+            Program.objects.for_organization(org).filter(
+                pk__in=enrollments.values("program_id")
+            )[:2]
+        )
+        if len(programs) == 1:
+            current_program = programs[0]
 
     # Resolve the enabled feature keys once per request so template checks
     # like "has badges/outreach nav links" don't re-query per condition.
@@ -237,7 +282,9 @@ def navbar_context(request):
     # features (e.g. badges/outreach) are reflected in the nav too.
     if current_program is not None:
         program_feature_keys = set(
-            current_program.features.values_list("key", flat=True)
+            current_program.features.filter(organization=org).values_list(
+                "key", flat=True
+            )
         )
     else:
         program_feature_keys = set()
@@ -306,19 +353,14 @@ def impersonation_context(request):
     if impersonator_id:
         from django.contrib.auth.models import User
 
+        impersonator = None
         try:
-            impersonator = User.objects.filter(
-                pk=impersonator_id, is_superuser=True
-            ).first()
-            if impersonator:
-                return {
-                    "is_impersonating": True,
-                    "impersonator": impersonator,
-                }
+            impersonator = User.objects.filter(pk=impersonator_id).first()
         except Exception as e:
             logger.debug(
                 "Failed to resolve impersonator user %s: %s", impersonator_id, e
             )
+        return {"is_impersonating": True, "impersonator": impersonator}
     return {"is_impersonating": False, "impersonator": None}
 
 

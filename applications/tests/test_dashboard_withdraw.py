@@ -19,19 +19,33 @@ from django.utils import timezone
 
 from applications.models import Application
 from applications.services import PENDING_STATUSES, applications_for_user
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Student
 
 
+def _add_membership(user, role):
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role=role,
+        is_active=True,
+    )
+
+
 def _student_user(username="student_user"):
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username=username, password="password123"  # nosec B106
     )
+    _add_membership(user, "Student")
+    return user
 
 
 def _parent_user(username="parent_user"):
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username=username, password="password123"  # nosec B106
     )
+    _add_membership(user, "Parent")
+    return user
 
 
 class ApplicationsForUserTests(TestCase):
@@ -170,6 +184,12 @@ class ApplicationWithdrawViewTests(TestCase):
             personal_email="student@example.com",
         )
         self.other_user = _student_user(username="other_user")
+        Student.objects.create(
+            user=self.other_user,
+            preferred_first_name="Other",
+            last_name="Student",
+            personal_email="other@example.com",
+        )
         self.app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
@@ -196,6 +216,8 @@ class ApplicationWithdrawViewTests(TestCase):
 
     def test_unrelated_user_cannot_withdraw(self):
         self.client.force_login(self.other_user)
+        self.assertEqual(self.client.get(reverse("profile_dashboard")).status_code, 200)
+        self.assertNotIn(self.app, applications_for_user(self.other_user))
         response = self.client.post(
             reverse("apply_withdraw", kwargs={"app_id": self.app.application_id})
         )
@@ -253,9 +275,7 @@ class HandoffResumeFromDashboardTests(TestCase):
         self.assertContains(response, "Please provide the primary adult contact")
 
     def test_unrelated_parent_cannot_resume_handoff_app(self):
-        other = User.objects.create_user(
-            username="other_parent", password="password123"  # nosec B106
-        )
+        other = _parent_user(username="other_parent")
         Adult.objects.create(
             user=other,
             legal_first_name="Other",

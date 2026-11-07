@@ -2,6 +2,7 @@
 # Pin first-party packages only; pip resolves transitives.
 
 Django==6.1.2
+dnspython==2.9.1
 django-allauth==65.21.0
 django-formtools==2.7
 django-pghistory==3.9.2

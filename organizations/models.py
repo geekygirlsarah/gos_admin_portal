@@ -1,9 +1,12 @@
 import secrets
+import uuid
 from decimal import Decimal
 
 from django.apps import apps
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower, Trim
 from django.utils import timezone
 
 DEFAULT_ORGANIZATION_SETTINGS = {
@@ -46,6 +49,10 @@ DEFAULT_ORGANIZATION_SETTINGS = {
     "force_parent_org_email": False,
     "force_alumni_org_email": False,
 }
+
+
+def generate_domain_verification_token():
+    return secrets.token_urlsafe(32)
 
 
 class SettingsDict(dict):
@@ -419,6 +426,47 @@ class UserOrganizationMembership(models.Model):
         return self.user.email or self.user.username
 
 
+class SupportImpersonationHandoff(models.Model):
+    """One-use, short-lived bridge from a platform session to a tenant session."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="support_impersonation_handoffs_initiated",
+    )
+    initiator_session_hash = models.CharField(max_length=64)
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="support_impersonation_handoffs_received",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="support_impersonation_handoffs",
+    )
+    tenant_hostname = models.CharField(max_length=253)
+    token_hash = models.CharField(max_length=64, unique=True)
+    tenant_session_hash = models.CharField(max_length=64, blank=True)
+    tenant_challenge_hash = models.CharField(max_length=64, blank=True)
+    platform_token_hash = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    platform_confirmed_at = models.DateTimeField(null=True, blank=True)
+    platform_returned_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["expires_at", "redeemed_at"])]
+
+
 class OrganizationInvitation(models.Model):
     """Invitation for a user to join an organization with a pre-assigned role."""
 
@@ -574,6 +622,232 @@ class OrganizationInvitation(models.Model):
         self.accepted_by = user
         self.save(update_fields=["status", "accepted_at", "accepted_by"])
         return membership
+
+
+class OrganizationDomain(models.Model):
+    """A tenant-owned hostname with explicit DNS and operator activation states."""
+
+    STATUS_PENDING_VERIFICATION = "pending_verification"
+    STATUS_DNS_VERIFIED = "dns_verified"
+    STATUS_ACTIVE = "active"
+    STATUS_DISABLED = "disabled"
+    STATUS_CHOICES = [
+        (STATUS_PENDING_VERIFICATION, "Waiting for DNS verification"),
+        (STATUS_DNS_VERIFIED, "DNS verified; waiting for setup"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_DISABLED, "Disabled"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="domains",
+    )
+    hostname = models.CharField(max_length=253, unique=True)
+    verification_token = models.CharField(
+        max_length=64,
+        default=generate_domain_verification_token,
+        editable=False,
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING_VERIFICATION,
+    )
+    dns_verified_at = models.DateTimeField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_organization_domains",
+    )
+    activated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activated_organization_domains",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OrganizationManager()
+
+    class Meta:
+        ordering = ["hostname"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("hostname"), name="org_domain_hostname_ci_unique"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(hostname=Lower(Trim("hostname")))
+                    & ~models.Q(hostname__endswith=".")
+                ),
+                name="org_domain_hostname_canonical",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status="active") | models.Q(dns_verified_at__isnull=False)
+                ),
+                name="org_domain_active_requires_dns",
+            ),
+        ]
+
+    def clean(self):
+        from organizations.domain_utils import (
+            LEGACY_ORGANIZATION_HOSTNAMES,
+            get_legacy_custom_hostname,
+            is_momentum_hostname,
+            normalize_domain_hostname,
+        )
+
+        errors = {}
+        try:
+            self.hostname = normalize_domain_hostname(self.hostname)
+        except ValidationError as exc:
+            errors["hostname"] = exc.messages
+        else:
+            previous_identity = (
+                OrganizationDomain.objects.filter(pk=self.pk)
+                .values_list("hostname", "organization_id")
+                .first()
+                if self.pk
+                else None
+            )
+            if previous_identity and previous_identity != (
+                self.hostname,
+                self.organization_id,
+            ):
+                errors["hostname"] = (
+                    "A domain's hostname and organization cannot be changed after it is requested."
+                )
+            elif previous_identity is None:
+                if is_momentum_hostname(self.hostname):
+                    errors["hostname"] = (
+                        "Use the assigned Momentum address, not a subdomain."
+                    )
+                elif self.hostname in LEGACY_ORGANIZATION_HOSTNAMES and not (
+                    self.organization_id and self.organization.slug.lower() == "gos"
+                ):
+                    errors["hostname"] = (
+                        "This hostname is reserved for an existing portal."
+                    )
+                elif self.organization_id:
+                    for organization in Organization.objects.exclude(
+                        pk=self.organization_id
+                    ).only("id", "settings"):
+                        if (
+                            get_legacy_custom_hostname(organization.settings)
+                            == self.hostname
+                        ):
+                            errors["hostname"] = (
+                                "This hostname is already configured for another organization."
+                            )
+                            break
+
+        if self.status == self.STATUS_ACTIVE and not self.dns_verified_at:
+            errors["status"] = "A domain must pass DNS verification before activation."
+        elif self.status == self.STATUS_ACTIVE and (
+            not self.activated_at or not self.activated_by_id
+        ):
+            errors["status"] = "An operator must confirm activation of a domain."
+        if self.status == self.STATUS_DNS_VERIFIED and not self.dns_verified_at:
+            errors["status"] = "A domain must pass DNS verification first."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def verification_txt_name(self):
+        from organizations.domain_utils import DOMAIN_TXT_PREFIX
+
+        return f"{DOMAIN_TXT_PREFIX}.{self.hostname}"
+
+    @property
+    def verification_txt_value(self):
+        return f"momentum-domain-verification={self.verification_token}"
+
+    def __str__(self):
+        return self.hostname
+
+
+class OrganizationDomainRecovery(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_REVOKED = "revoked"
+    STATUS_APPROVED = "approved"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_REVOKED, "Revoked"),
+        (STATUS_APPROVED, "Approved"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.PROTECT, related_name="domain_recoveries"
+    )
+    domain = models.ForeignKey(
+        OrganizationDomain, on_delete=models.PROTECT, related_name="recoveries"
+    )
+    original_organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="original_domain_recoveries",
+    )
+    hostname = models.CharField(max_length=253)
+    original_token_digest = models.CharField(max_length=64, editable=False)
+    verification_token = models.CharField(
+        max_length=64, default=generate_domain_verification_token, editable=False
+    )
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+    dns_verified_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="requested_domain_recoveries",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_domain_recoveries",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OrganizationManager()
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "domain"],
+                condition=models.Q(status="pending"),
+                name="org_domain_recovery_pending_unique",
+            )
+        ]
+
+    @property
+    def verification_txt_name(self):
+        from organizations.domain_utils import DOMAIN_TXT_PREFIX
+
+        return f"{DOMAIN_TXT_PREFIX}.{self.hostname}"
+
+    @property
+    def verification_txt_value(self):
+        return f"momentum-domain-verification={self.verification_token}"
+
+    def __str__(self):
+        return self.hostname
 
 
 from contextlib import suppress

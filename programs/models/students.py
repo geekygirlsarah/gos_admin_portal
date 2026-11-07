@@ -1,5 +1,7 @@
 import datetime
 import logging
+import os
+import uuid
 
 import pghistory
 from django.conf import settings
@@ -22,7 +24,15 @@ logger = logging.getLogger(__name__)
 def _student_photo_upload_to(instance, filename):
     from programs.utils.files import build_upload_path
 
-    return build_upload_path("photos/students", instance=instance, filename=filename)
+    extension = os.path.splitext(filename or "")[1].lower()
+    if len(extension) > 10 or not extension[1:].isalnum():
+        extension = ""
+    return build_upload_path(
+        "private/student_photos",
+        instance=instance,
+        filename=f"{uuid.uuid4().hex}{extension}",
+        id_attr="organization_id",
+    )
 
 
 def _student_document_upload_to(instance, filename):

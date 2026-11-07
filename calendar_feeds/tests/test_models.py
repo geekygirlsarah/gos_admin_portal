@@ -14,6 +14,33 @@ from calendar_feeds.tests.factories import (
     make_parent_user,
     make_student_user,
 )
+from organizations.models import Organization, UserOrganizationMembership
+
+
+class LeadMentorFactoryTests(TestCase):
+    def test_lead_has_active_default_organization_membership(self):
+        lead = make_lead_mentor_user()
+
+        self.assertTrue(
+            UserOrganizationMembership.objects.filter(
+                user=lead,
+                organization=Organization.objects.get(slug="gos"),
+                role="LeadMentor",
+                is_active=True,
+            ).exists()
+        )
+
+    def test_inactive_lead_membership_does_not_bypass_feed_acl(self):
+        lead = make_lead_mentor_user()
+        membership = UserOrganizationMembership.objects.get(
+            user=lead, organization__slug="gos", role="LeadMentor"
+        )
+        membership.is_active = False
+        membership.save(update_fields=["is_active"])
+        feed = make_feed(acls={"Mentor": (False, False)})
+
+        self.assertFalse(feed.user_can_read(lead))
+        self.assertFalse(feed.user_can_write(lead))
 
 
 class CalendarFeedVisibilityChoicesTests(TestCase):

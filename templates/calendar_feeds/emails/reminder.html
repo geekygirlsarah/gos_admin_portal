@@ -30,6 +30,8 @@
 </table>
 {% endfor %}
 
-<p class="mt-4">Log in to the portal to view the full calendar: <a href="{{ calendar_url|default:'#' }}">Calendar</a></p>
+{% if calendar_url %}
+<p class="mt-4">Log in to the portal to view the full calendar: <a href="{{ calendar_url }}">Calendar</a></p>
+{% endif %}
 <p class="small text-muted">You are receiving this email because you have access to one or more calendar feeds in the portal.</p>
 {% endblock %}

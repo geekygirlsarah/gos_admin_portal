@@ -1,12 +1,20 @@
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from django.conf import settings
-from django.core.cache import cache
 from django.db import models
+from django.utils.functional import lazy
 
+from .domain_utils import (
+    LEGACY_ORGANIZATION_HOSTNAMES,
+    get_legacy_custom_hostname,
+    is_momentum_hostname,
+    is_valid_domain_label,
+)
 from .models import (
     DEFAULT_ORGANIZATION_SETTINGS,
     Organization,
+    OrganizationDomain,
     OrganizationSettings,
     SettingsDict,
 )
@@ -52,37 +60,8 @@ def get_site_base_url() -> str:
 
 
 def _resolve_portal_url(raw_cfg: Dict[str, Any], org: Optional[Organization]) -> str:
-    """Resolve the public portal URL from email config, custom domain, or site settings."""
-    portal_url = raw_cfg.get("portal_url") or ""
-    if not portal_url:
-        custom_domain_cfg = raw_cfg.get("custom_domain") or {}
-        if custom_domain_cfg.get("enabled") and custom_domain_cfg.get("domain"):
-            domain_val = str(custom_domain_cfg.get("domain")).strip()
-            if domain_val:
-                portal_url = (
-                    domain_val
-                    if domain_val.startswith(("http://", "https://"))
-                    else f"https://{domain_val}"
-                )
-    if (
-        not portal_url
-        and org
-        and getattr(org, "settings", None)
-        and isinstance(org.settings, dict)
-    ):
-        portal_url = (
-            org.settings.get("portal_url") or org.settings.get("site_url") or ""
-        )
-    if not portal_url:
-        portal_url = get_site_base_url()
-
-    if portal_url:
-        portal_url = str(portal_url).strip()
-        if not portal_url.startswith(("http://", "https://")):
-            portal_url = f"https://{portal_url}"
-        portal_url = portal_url.rstrip("/")
-
-    return portal_url
+    """Use the organization's canonical portal, not legacy email overrides."""
+    return get_organization_url(org) if org else ""
 
 
 def get_default_organization(slug: Optional[str] = None) -> Optional[Organization]:
@@ -103,213 +82,281 @@ def get_organization_url(organization: Optional[Organization] = None) -> str:
     """Return the canonical public URL for an organization."""
     if not organization:
         return get_site_base_url()
+    if not organization.pk or not organization.is_active:
+        return ""
 
-    org_settings = getattr(organization, "settings", {}) or {}
-    if isinstance(org_settings, dict):
-        custom_domain = (
-            org_settings.get("custom_domain") or org_settings.get("domain") or ""
+    root_domain = _configured_root_domain()
+    active_domains = getattr(organization, "_active_portal_domains", None)
+    if active_domains is None:
+        active_domains = (
+            OrganizationDomain.objects.for_organization(organization)
+            .filter(status=OrganizationDomain.STATUS_ACTIVE)
+            .order_by("created_at", "pk")
         )
-        if custom_domain:
-            custom_domain = str(custom_domain).strip()
-            return (
-                custom_domain
-                if custom_domain.startswith(("http://", "https://"))
-                else f"https://{custom_domain}"
+    for domain in active_domains:
+        if _hostname_routes_to_organization(organization, domain.hostname, root_domain):
+            return f"https://{domain.hostname}"
+
+    return get_organization_momentum_url(organization)
+
+
+def get_organization_momentum_url(organization: Optional[Organization] = None) -> str:
+    """Return an unambiguous Momentum subdomain URL for an organization."""
+    if not organization:
+        return get_site_base_url()
+    if not organization.pk or not organization.is_active:
+        return ""
+
+    root_domain = _configured_root_domain()
+    if not root_domain:
+        return ""
+    for label in dict.fromkeys((organization.subdomain, organization.slug)):
+        if not is_valid_tenant_label(label):
+            continue
+        hostname = f"{str(label).lower()}.{root_domain}"
+        if _hostname_routes_to_organization(organization, hostname, root_domain):
+            return f"https://{hostname}"
+    return ""
+
+
+def _normalize_hostname(value: str) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if "://" not in value:
+        value = f"//{value}"
+    try:
+        hostname = urlsplit(value).hostname
+    except ValueError:
+        return ""
+    return (hostname or "").rstrip(".").lower()
+
+
+def _organization_custom_hostname(organization: Organization) -> str:
+    return get_legacy_custom_hostname(getattr(organization, "settings", {}) or {})
+
+
+_RESERVED_SUBDOMAIN_LABELS = {
+    "www",
+    "api",
+    "app",
+    "admin",
+    "mail",
+    "portal",
+    "staging",
+    "dev",
+    "127",
+    "testserver",
+    "localhost",
+}
+
+
+def is_valid_tenant_label(label):
+    label = str(label or "").lower()
+    return label not in _RESERVED_SUBDOMAIN_LABELS and is_valid_domain_label(label)
+
+
+def _configured_root_domain():
+    return _normalize_hostname(
+        getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
+    )
+
+
+def _is_platform_hostname(host, root_domain):
+    return host in {
+        root_domain,
+        f"www.{root_domain}" if root_domain else "",
+        "momentumteam.app",
+        "www.momentumteam.app",
+        "localhost",
+        "127.0.0.1",
+    }
+
+
+def _tenant_label_for_hostname(host, root_domain):
+    for domain in {root_domain, "localhost"}:
+        if domain and host.endswith(f".{domain}"):
+            label = host[: -(len(domain) + 1)]
+            if is_valid_tenant_label(label):
+                return label
+    return ""
+
+
+def _hostname_claim_candidates(host, root_domain):
+    label = _tenant_label_for_hostname(host, root_domain)
+    query = models.Q(settings__has_key="custom_domain") | models.Q(
+        settings__has_key="domain"
+    )
+    if host in LEGACY_ORGANIZATION_HOSTNAMES:
+        query |= models.Q(slug="gos")
+    if label:
+        query |= models.Q(slug__iexact=label) | models.Q(subdomain__iexact=label)
+
+    candidates = {}
+    for organization in Organization.objects.filter(is_active=True).filter(query):
+        if (
+            _organization_custom_hostname(organization) == host
+            or (host in LEGACY_ORGANIZATION_HOSTNAMES and organization.slug == "gos")
+            or (
+                label
+                and label
+                in {
+                    str(organization.slug or "").lower(),
+                    str(organization.subdomain or "").lower(),
+                }
+            )
+        ):
+            candidates[organization.pk] = organization
+    return candidates
+
+
+def _select_hostname_organization(host, registered_domain, candidates):
+    candidates = dict(candidates)
+    if registered_domain:
+        if (
+            not registered_domain.organization.is_active
+            or registered_domain.status
+            not in {
+                OrganizationDomain.STATUS_PENDING_VERIFICATION,
+                OrganizationDomain.STATUS_DNS_VERIFIED,
+                OrganizationDomain.STATUS_ACTIVE,
+            }
+            or is_momentum_hostname(host)
+            or (
+                host in LEGACY_ORGANIZATION_HOSTNAMES
+                and registered_domain.organization.slug != "gos"
+            )
+            or (
+                registered_domain.status
+                in {
+                    OrganizationDomain.STATUS_DNS_VERIFIED,
+                    OrganizationDomain.STATUS_ACTIVE,
+                }
+                and not registered_domain.dns_verified_at
+            )
+            or (
+                registered_domain.status == OrganizationDomain.STATUS_ACTIVE
+                and not registered_domain.activated_at
+            )
+        ):
+            return None
+        if registered_domain.status == OrganizationDomain.STATUS_ACTIVE:
+            candidates[registered_domain.organization_id] = (
+                registered_domain.organization
             )
 
-    subdomain = getattr(organization, "subdomain", None) or getattr(
-        organization, "slug", None
-    )
-    root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
-    if subdomain and root_domain:
-        return f"https://{subdomain}.{root_domain}"
+    if len(candidates) != 1:
+        return None
+    organization = next(iter(candidates.values()))
+    if registered_domain and registered_domain.organization_id != organization.pk:
+        return None
+    return organization
 
-    return get_site_base_url()
+
+def _resolve_hostname(host, root_domain):
+    if _is_platform_hostname(host, root_domain):
+        return None
+    registered_domain = (
+        OrganizationDomain.objects.filter(hostname=host)
+        .select_related("organization")
+        .first()
+    )
+    return _select_hostname_organization(
+        host, registered_domain, _hostname_claim_candidates(host, root_domain)
+    )
+
+
+def build_organization_routing_snapshot(organizations, registered_domains):
+    """Build a query-free host-claim snapshot for an organization directory."""
+    root_domain = _configured_root_domain()
+    claims = {}
+
+    def add_claim(host, organization):
+        if host:
+            claims.setdefault(host, {})[organization.pk] = organization
+
+    for organization in organizations:
+        if not organization.is_active:
+            continue
+        add_claim(_organization_custom_hostname(organization), organization)
+        if organization.slug == "gos":
+            for host in LEGACY_ORGANIZATION_HOSTNAMES:
+                add_claim(host, organization)
+        for label in (organization.subdomain, organization.slug):
+            if is_valid_tenant_label(label):
+                for domain in {root_domain, "localhost"}:
+                    if domain:
+                        add_claim(f"{str(label).lower()}.{domain}", organization)
+
+    return (
+        root_domain,
+        claims,
+        {domain.hostname: domain for domain in registered_domains},
+    )
+
+
+def _hostname_routes_to_organization(organization, host, root_domain):
+    snapshot = getattr(organization, "_routing_snapshot", None)
+    if snapshot is not None and snapshot[0] == root_domain:
+        _, claims, domains = snapshot
+        routed = None
+        if not _is_platform_hostname(host, root_domain):
+            routed = _select_hostname_organization(
+                host, domains.get(host), claims.get(host, {})
+            )
+    else:
+        routed = _resolve_hostname(host, root_domain)
+    return bool(routed and routed.pk == organization.pk)
+
+
+def hostname_has_conflicting_claims(domain):
+    """Check whether a proposed activation conflicts with another tenant."""
+    root_domain = _configured_root_domain()
+    if (
+        _is_platform_hostname(domain.hostname, root_domain)
+        or is_momentum_hostname(domain.hostname)
+        or (
+            domain.hostname in LEGACY_ORGANIZATION_HOSTNAMES
+            and domain.organization.slug != "gos"
+        )
+    ):
+        return True
+    return any(
+        organization.pk != domain.organization_id
+        for organization in _hostname_claim_candidates(
+            domain.hostname, root_domain
+        ).values()
+    )
 
 
 def resolve_organization_from_request(request) -> Optional[Organization]:
-    """Resolve the active Organization from request headers, host/subdomain, session, or default fallback."""
+    """Resolve an active organization from the validated request hostname only."""
     if request is None:
-        return get_default_organization()
+        return None
 
-    cached = getattr(request, "_cached_organization", None)
-    if cached is not None:
-        return cached
+    if hasattr(request, "_cached_organization"):
+        return request._cached_organization
 
-    meta = getattr(request, "META", {}) or {}
+    # HttpRequest.get_host() enforces ALLOWED_HOSTS; do not trust raw Host metadata.
+    host = _normalize_hostname(request.get_host())
+    root_domain = _configured_root_domain()
+    request._is_platform_domain = _is_platform_hostname(host, root_domain)
 
-    # 1. Check HTTP headers (e.g. X-Organization, X-Org-Slug, X-Org-Subdomain)
-    header_val = (
-        meta.get("HTTP_X_ORGANIZATION")
-        or meta.get("HTTP_X_ORG_SLUG")
-        or meta.get("HTTP_X_ORG_SUBDOMAIN")
-        or ""
-    )
-    if header_val:
-        header_val = str(header_val).strip()
-        cache_key = f"org_resolve:header:{header_val.lower()}"
-        cached_id = cache.get(cache_key)
-        if cached_id is not None:
-            org = (
-                Organization.objects.filter(pk=cached_id, is_active=True).first()
-                if cached_id
-                else None
-            )
-            request._cached_organization = org
-            return org
+    # Keep Django's synthetic test host compatible with legacy tests only. It is
+    # never used as a fallback for a real hostname.
+    if host == "testserver" and getattr(settings, "TESTING", False):
+        organization = get_default_organization()
+        request._cached_organization = organization
+        request._is_platform_domain = organization is None
+        return organization
 
-        org = Organization.objects.filter(
-            models.Q(slug__iexact=header_val) | models.Q(subdomain__iexact=header_val),
-            is_active=True,
-        ).first()
-        cache.set(cache_key, org.pk if org else False, timeout=300)
-        if org:
-            request._cached_organization = org
-            return org
-
-    # 2. Check Host / Subdomain
-    host = meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or ""
-    if not host:
-        try:
-            host = request.get_host()
-        except Exception:
-            host = ""
-    host = host.split(":")[0].strip().lower()
-
-    root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app").lower()
-    root_domains = {
-        root_domain,
-        f"www.{root_domain}",
-        "momentumteam.app",
-        "www.momentumteam.app",
-    }
-
-    # The root platform domain (momentumteam.app / www) serves the marketing site
-    # and has no organization context.
-    if host in root_domains:
+    if request._is_platform_domain:
         request._cached_organization = None
         return None
 
-    # Check cache for host resolution
-    host_cache_key = f"org_resolve:host:{host}"
-    cached_host_org_id = cache.get(host_cache_key)
-    if cached_host_org_id is not None:
-        org = (
-            Organization.objects.filter(pk=cached_host_org_id, is_active=True).first()
-            if cached_host_org_id
-            else None
-        )
-        if org or cached_host_org_id is False:
-            request._cached_organization = org
-            return org
-
-    # Girls of Steel legacy domains / CNAME targets
-    gos_domains = {
-        "portal.girlsofsteelrobotics.org",
-        "girlsofsteelrobotics.org",
-        "gosadmin.com",
-    }
-    if host in gos_domains:
-        org = Organization.objects.filter(slug="gos", is_active=True).first()
-        cache.set(host_cache_key, org.pk if org else False, timeout=300)
-        if org:
-            request._cached_organization = org
-            return org
-
-    if host and host not in (
-        "testserver",
-        "localhost",
-        "127.0.0.1",
-    ):
-        # Check active organization custom domain settings
-        for active_org in Organization.objects.filter(is_active=True):
-            org_settings = getattr(active_org, "settings", {}) or {}
-            custom_domain_cfg = org_settings.get("custom_domain") or {}
-            custom_domain_val = ""
-            if isinstance(custom_domain_cfg, dict):
-                custom_domain_val = custom_domain_cfg.get("domain") or ""
-            elif isinstance(custom_domain_cfg, str):
-                custom_domain_val = custom_domain_cfg
-            if not custom_domain_val:
-                custom_domain_val = org_settings.get("domain") or ""
-            if custom_domain_val:
-                clean_custom = (
-                    custom_domain_val.replace("https://", "")
-                    .replace("http://", "")
-                    .split("/")[0]
-                    .split(":")[0]
-                    .strip()
-                    .lower()
-                )
-                if clean_custom and clean_custom == host:
-                    cache.set(host_cache_key, active_org.pk, timeout=300)
-                    request._cached_organization = active_org
-                    return active_org
-
-        parts = host.split(".")
-        if len(parts) >= 2:
-            candidate = parts[0]
-            reserved = {
-                "www",
-                "api",
-                "app",
-                "admin",
-                "mail",
-                "portal",
-                "staging",
-                "dev",
-                "127",
-                "testserver",
-                "localhost",
-            }
-            if candidate not in reserved:
-                org = Organization.objects.filter(
-                    models.Q(subdomain__iexact=candidate)
-                    | models.Q(slug__iexact=candidate),
-                    is_active=True,
-                ).first()
-                if org:
-                    cache.set(host_cache_key, org.pk, timeout=300)
-                    request._cached_organization = org
-                    return org
-        else:
-            org = Organization.objects.filter(
-                models.Q(subdomain__iexact=host) | models.Q(slug__iexact=host),
-                is_active=True,
-            ).first()
-            if org:
-                cache.set(host_cache_key, org.pk, timeout=300)
-                request._cached_organization = org
-                return org
-
-    # Cache negative host result (except for dev/test servers)
-    if host and host not in ("testserver", "localhost", "127.0.0.1"):
-        cache.set(host_cache_key, False, timeout=300)
-
-    # 3. Check session active organization
-    session = getattr(request, "session", None)
-    if session:
-        session_org_id = session.get("active_organization_id")
-        if session_org_id:
-            org = Organization.objects.filter(pk=session_org_id, is_active=True).first()
-            if org:
-                request._cached_organization = org
-                return org
-
-    # 4. Fallback: use the configured DEFAULT_ORGANIZATION_SLUG setting.
-    #    When set to "gos" (the default), behavior is backward-compatible:
-    #    the existing GoS organization is returned. When set to another value
-    #    or left unset, None is returned if no matching organization exists.
-    default_slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
-    org = Organization.objects.filter(slug__iexact=default_slug, is_active=True).first()
-    if org:
-        request._cached_organization = org
-        return org
-
-    # No matching organization found — return None instead of silently
-    # defaulting to GoS.
-    request._cached_organization = None
-    return None
+    organization = _resolve_hostname(host, root_domain)
+    request._cached_organization = organization
+    return organization
 
 
 def get_organization_settings(
@@ -417,7 +464,7 @@ def get_organization_email_settings(
         if "footer_text" in raw_cfg
         else "Thank you for being part of Girls of Steel Robotics!"
     )
-    portal_url = _resolve_portal_url(raw_cfg, org)
+    portal_url = lazy(_resolve_portal_url, str)(raw_cfg, org)
 
     contact_name = (
         raw_cfg.get("contact_name")
@@ -472,6 +519,11 @@ def update_organization_email_settings(
     )
     if not isinstance(org_settings.data, dict):
         org_settings.data = {}
+    previous = org_settings.data.get("email_settings") or {}
+    email_settings = dict(email_settings)
+    email_settings.pop("portal_url", None)
+    if isinstance(previous, dict) and "portal_url" in previous:
+        email_settings["portal_url"] = previous["portal_url"]
     org_settings.data["email_settings"] = email_settings
     org_settings.save(update_fields=["data", "updated_at"])
     return org_settings

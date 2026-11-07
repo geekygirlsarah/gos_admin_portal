@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult
 
 
@@ -10,6 +11,12 @@ class PortalDashboardTests(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="password123"
         )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Student",
+            is_active=True,
+        )
         self.client.login(username="testuser", password="password123")  # nosec B106
 
     def test_dashboard_comments_not_rendered(self):

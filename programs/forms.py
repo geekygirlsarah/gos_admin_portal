@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
@@ -24,6 +25,7 @@ from .models import (
     BackgroundCheckType,
     Crew,
     Fee,
+    FeeAssignment,
     Payment,
     Program,
     School,
@@ -39,7 +41,7 @@ from .widgets import DualListboxWidget
 class StudentForm(forms.ModelForm):
     # Expose reverse M2M to Adults so edits on Student reflect on Adult.students
     parents = forms.ModelMultipleChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         help_text="Select the parents/guardians for this student.",
         widget=DualListboxWidget(
@@ -51,13 +53,13 @@ class StudentForm(forms.ModelForm):
     # model; expose them as Adult pickers for backwards compatibility. The
     # model's property setters keep the through row and pointer in sync.
     primary_contact = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         label="Primary contact",
         help_text="Primary parent/guardian, e.g. the one to contact first.",
     )
     secondary_contact = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         label="Secondary contact",
         help_text="Secondary parent/guardian.",
@@ -98,6 +100,7 @@ class StudentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         include_user = kwargs.pop("include_user", False)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
 
         # Protect parents and primary/secondary contacts from being edited/removed
@@ -106,7 +109,7 @@ class StudentForm(forms.ModelForm):
         if user is not None:
             from .permission_views import user_is_lead_mentor
 
-            is_privileged = user_is_lead_mentor(user)
+            is_privileged = user_is_lead_mentor(user, org=organization)
             if not is_privileged:
                 for field in ["parents", "primary_contact", "secondary_contact"]:
                     if field in self.fields:
@@ -122,7 +125,12 @@ class StudentForm(forms.ModelForm):
             del self.fields["user"]
 
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
-        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+        qs_adults = Adult.objects.none()
+        if organization is not None:
+            qs_adults = Adult.objects.for_organization(organization).filter(
+                is_parent=True
+            )
+        qs_adults = qs_adults.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
@@ -140,9 +148,12 @@ class StudentForm(forms.ModelForm):
         # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
         if "org_email_sponsor" in self.fields:
-            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsor_qs = Adult.objects.none()
+            if organization is not None:
+                sponsor_qs = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["org_email_sponsor"].queryset = sponsor_qs.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -151,9 +162,12 @@ class StudentForm(forms.ModelForm):
                 Lower("last_name"),
             )
         elif "andrew_id_sponsor" in self.fields:
-            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsor_qs = Adult.objects.none()
+            if organization is not None:
+                sponsor_qs = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["andrew_id_sponsor"].queryset = sponsor_qs.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -314,6 +328,7 @@ class QuickCreateStudentForm(forms.ModelForm):
 class AdultForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
 
         # role has a model-level default so it should not be required in the form
@@ -325,7 +340,7 @@ class AdultForm(forms.ModelForm):
         if user is not None:
             from .permission_views import user_is_lead_mentor
 
-            is_privileged = user_is_lead_mentor(user)
+            is_privileged = user_is_lead_mentor(user, org=organization)
 
             if not is_privileged:
                 protected_fields = [
@@ -343,7 +358,12 @@ class AdultForm(forms.ModelForm):
         # Sort students by first name (Preferred, then legal if no preferred),
         # and exclude inactive (graduated) students.
         if "students" in self.fields:
-            self.fields["students"].queryset = active_students().order_by(
+            students = Student.objects.none()
+            if organization is not None:
+                students = Student.objects.for_organization(organization).filter(
+                    graduated=False
+                )
+            self.fields["students"].queryset = students.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -355,9 +375,12 @@ class AdultForm(forms.ModelForm):
         # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
         if "org_email_sponsor" in self.fields:
-            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsors = Adult.objects.none()
+            if organization is not None:
+                sponsors = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["org_email_sponsor"].queryset = sponsors.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -366,9 +389,12 @@ class AdultForm(forms.ModelForm):
                 Lower("last_name"),
             )
         elif "andrew_id_sponsor" in self.fields:
-            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsors = Adult.objects.none()
+            if organization is not None:
+                sponsors = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["andrew_id_sponsor"].queryset = sponsors.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -587,7 +613,7 @@ class SlidingScaleApplicationForm(forms.Form):
     )
 
 
-class SchoolForm(forms.ModelForm):
+class SchoolForm(OrganizationFormMixin, forms.ModelForm):
     class Meta:
         model = School
         fields = ["name", "district", "street_address", "city", "state", "zip_code"]
@@ -599,7 +625,7 @@ class SchoolDistrictForm(forms.ModelForm):
         fields = ["name"]
 
 
-class SchoolMergeForm(forms.Form):
+class SchoolMergeForm(OrganizationFormMixin, forms.Form):
     """Merge one school into another.
 
     ``keep`` is the canonical school that survives. ``source`` is the school
@@ -622,6 +648,8 @@ class SchoolMergeForm(forms.Form):
         source = cleaned.get("source")
         if keep and source and keep.pk == source.pk:
             self.add_error("source", "Choose a different school to merge in.")
+        elif keep and source and keep.organization_id != source.organization_id:
+            self.add_error("source", "Choose schools from the same organization.")
         return cleaned
 
 
@@ -642,8 +670,14 @@ class ParentMergeForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
-        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+        qs_adults = Adult.objects.none()
+        if organization is not None:
+            qs_adults = Adult.objects.for_organization(organization).filter(
+                is_parent=True
+            )
+        qs_adults = qs_adults.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
@@ -678,8 +712,12 @@ class StudentMergeForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
-        qs_students = Student.objects.all().order_by(
+        qs_students = Student.objects.none()
+        if organization is not None:
+            qs_students = Student.objects.for_organization(organization)
+        qs_students = qs_students.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
@@ -777,40 +815,58 @@ class ProgramEmailForm(forms.Form):
         # Allow passing a fixed program via kwarg program or filtering by user
         program = kwargs.pop("program", None)
         user = kwargs.pop("user", None)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
+        programs = (
+            Program.objects.for_organization(organization)
+            if organization
+            else Program.objects.none()
+        )
 
         if user:
             from .permission_views import can_user_read, get_user_role
 
-            role = get_user_role(user)
+            role = get_user_role(user, org=organization) if organization else None
             if role == "LeadMentor":
-                self.fields["program"].queryset = Program.objects.all().order_by(
-                    "-active", "name"
-                )
+                self.fields["program"].queryset = programs.order_by("-active", "name")
             elif role == "Mentor":
                 accessible = [
                     p.pk
-                    for p in Program.objects.filter(active=True)
-                    if can_user_read(user, "programs", p)
+                    for p in programs.filter(active=True)
+                    if can_user_read(user, "programs", p, org=organization)
                 ]
-                self.fields["program"].queryset = Program.objects.filter(
+                self.fields["program"].queryset = programs.filter(
                     pk__in=accessible
                 ).order_by("name")
             else:
                 self.fields["program"].queryset = Program.objects.none()
         else:
-            self.fields["program"].queryset = Program.objects.all().order_by(
-                "-active", "name"
+            self.fields["program"].queryset = programs.order_by("-active", "name")
+
+        if organization:
+            self.fields["teams"].queryset = Team.objects.for_organization(
+                organization
+            ).order_by("team_type", "number")
+            self.fields["crews"].queryset = (
+                Crew.objects.for_organization(organization)
+                .filter(program__organization=organization)
+                .order_by("name")
             )
+            self.fields["subteams"].queryset = (
+                SubTeam.objects.for_organization(organization)
+                .filter(program__organization=organization)
+                .order_by("name")
+            )
+        else:
+            self.fields["teams"].queryset = Team.objects.none()
+            self.fields["crews"].queryset = Crew.objects.none()
+            self.fields["subteams"].queryset = SubTeam.objects.none()
 
         # Build sender choices from organization settings
-        from organizations.utils import (
-            get_organization_email_settings,
-            get_sender_accounts,
-        )
+        from organizations.utils import get_organization_email_settings
 
-        accounts = get_sender_accounts()
-        org_cfg = get_organization_email_settings()
+        org_cfg = get_organization_email_settings(organization) if organization else {}
+        accounts = org_cfg.get("sender_accounts") or []
         choices = []
         initial_value = None
         if accounts:
@@ -855,7 +911,10 @@ class ProgramEmailForm(forms.Form):
             label="Sender identity",
             help_text="Select the sender identity and reply-to address.",
         )
-        if program is not None:
+        if (
+            program is not None
+            and self.fields["program"].queryset.filter(pk=program.pk).exists()
+        ):
             self.fields["program"].initial = program
 
     def clean(self):
@@ -880,20 +939,36 @@ class ProgramEmailForm(forms.Form):
 class StudentBalanceModelChoiceField(forms.ModelChoiceField):
     def __init__(self, *args, **kwargs):
         self.program = kwargs.pop("program", None)
+        self.statement_calculator = None
+        self.can_view_sliding = True
         super().__init__(*args, **kwargs)
 
     def label_from_instance(self, obj):
-        from .utils import get_student_program_balance
+        from .utils.balances import (
+            InconsistentBalanceStatementError,
+            TenantBalanceStatementCalculator,
+        )
 
         student = obj
         program = self.program
-        balance = get_student_program_balance(student, program)
-        return f"{student.preferred_first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
+        name = f"{student.preferred_first_name or student.legal_first_name} {student.last_name}"
+        if program is None:
+            return f"{name} (balance unavailable)"
+        calculator = self.statement_calculator or TenantBalanceStatementCalculator(
+            program.organization, [student], [program]
+        )
+        try:
+            balance = calculator.get_balance_data(
+                student, program, can_view_sliding=self.can_view_sliding
+            )["balance"]
+        except InconsistentBalanceStatementError:
+            return f"{name} (balance unavailable)"
+        return f"{name} (${balance:,.2f})"
 
 
 class ProgramEmailBalancesForm(forms.Form):
     program = GroupedProgramChoiceField(
-        queryset=Program.objects.all(),
+        queryset=Program.objects.none(),
         required=False,
         empty_label="--- Select a Program ---",
     )
@@ -929,15 +1004,21 @@ class ProgramEmailBalancesForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         program = kwargs.pop("program", None)
+        organization = kwargs.pop("organization", None)
+        can_view_sliding = kwargs.pop("can_view_sliding", True)
         super().__init__(*args, **kwargs)
+        self.organization = organization
+        self.statement_calculator = None
+        if organization is not None:
+            programs = Program.objects.for_organization(organization)
+            if program is not None:
+                programs = programs.filter(pk=program.pk)
+            self.fields["program"].queryset = programs
         # Sender choices from organization settings
-        from organizations.utils import (
-            get_organization_email_settings,
-            get_sender_accounts,
-        )
+        from .utils.balance_email import get_balance_email_settings
 
-        accounts = get_sender_accounts()
-        org_cfg = get_organization_email_settings()
+        org_cfg = get_balance_email_settings(organization) if organization else {}
+        accounts = org_cfg.get("sender_accounts") or []
         choices = []
         initial_value = None
         if accounts:
@@ -986,25 +1067,52 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["program"].initial = program
             self.fields["program"].widget = forms.HiddenInput()
             self.fields["program"].required = True
-            # Population and sorting for student field; only actively enrolled
-            # (non-graduated) students are selectable.
-            self.fields["student"].program = program
-            self.fields["student"].queryset = active_students_in_program(
-                program
-            ).order_by(
-                Lower(
-                    Coalesce(
-                        NullIf("preferred_first_name", Value("")), "legal_first_name"
-                    )
-                ),
-                Lower("last_name"),
+        if (
+            program is not None
+            and organization is not None
+            and program.organization_id == organization.pk
+        ):
+            from .utils.balances import TenantBalanceStatementCalculator
+
+            students = (
+                Student.objects.for_organization(organization)
+                .filter(
+                    enrollment__program=program,
+                    enrollment__organization=organization,
+                    enrollment__active=True,
+                    graduated=False,
+                )
+                .order_by(
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
+                )
             )
+            self.fields["student"].program = program
+            self.fields["student"].can_view_sliding = can_view_sliding
+            self.fields["student"].queryset = students
+            self.statement_calculator = TenantBalanceStatementCalculator(
+                organization, list(students), [program]
+            )
+            self.fields["student"].statement_calculator = self.statement_calculator
 
     def clean(self):
         cleaned = super().clean()
+        if self.organization is None:
+            raise forms.ValidationError("Organization context is required.")
         prog = cleaned.get("program")
         if self.fields["program"].widget.__class__ is forms.HiddenInput and not prog:
             raise forms.ValidationError("Program is required.")
+        if (
+            cleaned.get("recipient_filter") == "individual"
+            and not cleaned.get("student")
+            and "student" not in self.errors
+        ):
+            self.add_error("student", "Select a student for an individual statement.")
         return cleaned
 
 
@@ -1017,16 +1125,38 @@ def _save_fee_assignments(fee, students_queryset, selected_students):
     set (e.g. graduated/dropped ones) are preserved. An empty selection means
     the fee applies to everyone, so all assignments are cleared.
     """
-    from .models import FeeAssignment
+    organization_id = fee.organization_id
+    if not organization_id or fee.program.organization_id != organization_id:
+        raise ValidationError("Fee ownership does not match its program.")
 
     selectable_ids = list(students_queryset.values_list("id", flat=True))
-    # Delete assignments not in selection
-    FeeAssignment.objects.filter(fee=fee, student_id__in=selectable_ids).exclude(
-        student__in=selected_students
-    ).delete()
-    # Ensure assignments exist for selected
-    for s in selected_students:
-        FeeAssignment.objects.get_or_create(fee=fee, student=s)
+    if any(
+        student.organization_id != organization_id or student.pk not in selectable_ids
+        for student in selected_students
+    ):
+        raise ValidationError(
+            "Selected students must belong to this program's organization."
+        )
+
+    assignments = FeeAssignment.objects.filter(fee=fee)
+    if assignments.exclude(
+        organization_id=organization_id,
+        student__organization_id=organization_id,
+    ).exists():
+        raise ValidationError("Fee assignments need review before they can be changed.")
+
+    FeeAssignment.objects.filter(
+        fee=fee,
+        organization_id=organization_id,
+        student__organization_id=organization_id,
+        student_id__in=selectable_ids,
+    ).exclude(student__in=selected_students).delete()
+    for student in selected_students:
+        FeeAssignment.objects.get_or_create(
+            fee=fee,
+            student=student,
+            defaults={"organization_id": organization_id},
+        )
     return fee
 
 
@@ -1038,25 +1168,67 @@ class FeeAssignmentEditForm(forms.Form):
         widget=forms.SelectMultiple(attrs={"size": 15}),
     )
 
-    def __init__(self, *args, program: Program, fee: Fee, **kwargs):
+    def __init__(self, *args, program: Program, fee: Fee, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
+        self.organization = organization or getattr(program, "organization", None)
         # Limit to actively enrolled students in the program, sorted by display
         # name then last name (case-insensitive; uses legal_first_name as
         # fallback). Inactive (graduated/dropped) students are excluded.
         self.fields["students"].queryset = self._students_queryset()
         # Preselect currently assigned students (if any)
-        self.fields["students"].initial = fee.assignments.values_list(
-            "student_id", flat=True
-        )
+        if self.organization and fee.organization_id == self.organization.pk:
+            self.fields["students"].initial = FeeAssignment.objects.filter(
+                fee=fee,
+                organization=self.organization,
+                student__organization=self.organization,
+            ).values_list("student_id", flat=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        if (
+            not self.organization
+            or self.program.organization_id != self.organization.pk
+            or self.fee.organization_id != self.organization.pk
+            or self.fee.program_id != self.program.pk
+        ):
+            raise forms.ValidationError("Organization context is required.")
+        if (
+            FeeAssignment.objects.filter(fee=self.fee)
+            .exclude(
+                organization=self.organization,
+                student__organization=self.organization,
+            )
+            .exists()
+        ):
+            raise forms.ValidationError(
+                "Fee assignments need review before they can be changed."
+            )
+        return cleaned
 
     def _students_queryset(self):
-        return active_students_in_program(self.program).order_by(
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
+        if (
+            not self.organization
+            or self.program.organization_id != self.organization.pk
+            or self.fee.organization_id != self.organization.pk
+        ):
+            return Student.objects.none()
+        return (
+            active_students_in_program(self.program, organization=self.organization)
+            .filter(
+                enrollment__organization=self.organization,
+                enrollment__program__organization=self.organization,
+            )
+            .distinct()
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
+                Lower("last_name"),
+            )
         )
 
     def save(self):
@@ -1098,20 +1270,49 @@ class FeeForm(forms.ModelForm):
             self.fields["program"].required = True
         prog = self.instance.program if self.instance and self.instance.pk else program
         if prog is not None:
-            self.fields["students"].queryset = active_students_in_program(
-                prog
-            ).order_by(
-                Lower(
-                    Coalesce(
-                        NullIf("preferred_first_name", Value("")), "legal_first_name"
-                    )
-                ),
-                Lower("last_name"),
+            self.fields["program"].queryset = Program.objects.for_organization(
+                prog.organization
+            ).filter(pk=prog.pk)
+            self.fields["students"].queryset = (
+                active_students_in_program(prog, organization=prog.organization)
+                .filter(
+                    enrollment__organization=prog.organization,
+                    enrollment__program__organization=prog.organization,
+                )
+                .distinct()
+                .order_by(
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
+                )
             )
             if self.instance and self.instance.pk:
-                self.fields["students"].initial = self.instance.assignments.values_list(
-                    "student_id", flat=True
+                self.fields["students"].initial = FeeAssignment.objects.filter(
+                    fee=self.instance,
+                    organization=prog.organization,
+                    student__organization=prog.organization,
+                ).values_list("student_id", flat=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        program = cleaned.get("program")
+        if self.instance and self.instance.pk and program:
+            if (
+                FeeAssignment.objects.filter(fee=self.instance)
+                .exclude(
+                    organization=program.organization,
+                    student__organization=program.organization,
                 )
+                .exists()
+            ):
+                raise forms.ValidationError(
+                    "Fee assignments need review before they can be changed."
+                )
+        return cleaned
 
     def _save_m2m(self):
         selected_students = list(self.cleaned_data.get("students", []))
@@ -1350,9 +1551,15 @@ class BackgroundChecksForm(forms.Form):
         ]
 
     def _existing_rows(self, student, adult):
+        holder = student or adult
+        organization = getattr(holder, "organization", None)
+        if organization is None:
+            return {}
         return {
             bc.check_type_id: bc
             for bc in BackgroundCheck.objects.filter(
+                organization=organization,
+                check_type__organization=organization,
                 student=student if student else None,
                 adult=adult if adult else None,
             ).select_related("check_type")

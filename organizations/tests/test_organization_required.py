@@ -1,5 +1,5 @@
 from django.db import IntegrityError, transaction
-from django.db.models import PROTECT
+from django.db.models import PROTECT, SET_NULL
 from django.test import TestCase
 
 from organizations.models import Organization
@@ -46,6 +46,11 @@ class OrganizationRequiredTests(TestCase):
             if field is None or field.related_model is not Organization:
                 continue
             with self.subTest(model=model._meta.label):
+                if model._meta.label == "organizations.SupportImpersonationHandoff":
+                    # Handoffs survive deletion for history but cannot be redeemed.
+                    self.assertTrue(field.null)
+                    self.assertIs(field.remote_field.on_delete, SET_NULL)
+                    continue
                 self.assertFalse(field.null)
                 if model._meta.label in NON_PROTECT_MODELS:
                     continue

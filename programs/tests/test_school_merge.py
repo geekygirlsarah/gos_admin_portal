@@ -1,7 +1,11 @@
 from django.contrib.auth.models import Permission, User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from audit.events import AuditEvent
+from audit.models import AuditLog
+from organizations.models import Organization, UserOrganizationMembership
+from programs.forms import SchoolMergeForm
 from programs.models import School, SchoolDistrict, Student
 
 
@@ -11,6 +15,11 @@ class SchoolMergeTest(TestCase):
             username="admin",
             password="password",
         )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+        )
         perm = Permission.objects.get(codename="change_school")
         self.user.user_permissions.add(perm)
         self.client = Client()
@@ -103,3 +112,156 @@ class SchoolMergeTest(TestCase):
         self.assertContains(response, 'name="source" value="%s"' % school_b.pk)
         self.assertContains(response, "Plum Senior High School")
         self.assertContains(response, "Plum SHS")
+
+
+class SchoolMergeOrganizationIsolationTest(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.get(slug="gos")
+        self.other_org = Organization.objects.create(name="Other", slug="other")
+        self.user = User.objects.create_user(username="school_merger")
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=self.org, role="Mentor"
+        )
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="programs", codename="change_school"
+            )
+        )
+        self.client.force_login(self.user)
+        self.local_district = SchoolDistrict.objects.create(
+            organization=self.org, name="Local District"
+        )
+        self.other_district = SchoolDistrict.objects.create(
+            organization=self.other_org, name="Foreign District"
+        )
+        self.keep = School.objects.create(organization=self.org, name="Local Keep")
+        self.source = School.objects.create(
+            organization=self.org, name="Local Source", district=self.local_district
+        )
+        self.foreign = School.objects.create(
+            organization=self.other_org, name="Foreign School", city="Foreign City"
+        )
+        self.student = Student.objects.create(
+            organization=self.org,
+            legal_first_name="Test",
+            last_name="Student",
+            graduation_year=2026,
+            school=self.source,
+        )
+
+    def test_merge_page_and_choices_hide_foreign_schools_and_districts(self):
+        self.source.district = self.other_district
+        self.source.save(update_fields=["district"])
+        response = self.client.get(reverse("school_merge"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Local Keep")
+        self.assertContains(response, "Local Source")
+        self.assertNotContains(response, "Foreign School")
+        self.assertNotContains(response, "Foreign District")
+        for field in ("keep", "source"):
+            self.assertEqual(
+                set(response.context["form"].fields[field].queryset),
+                {self.keep, self.source},
+            )
+
+    def test_foreign_keep_and_source_are_rejected_without_changes_or_audit(self):
+        for keep, source, field in (
+            (self.foreign, self.source, "keep"),
+            (self.keep, self.foreign, "source"),
+        ):
+            with self.subTest(field=field):
+                response = self.client.post(
+                    reverse("school_merge"), {"keep": keep.pk, "source": source.pk}
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context["form"].errors)
+                self.assertTrue(School.objects.filter(pk=keep.pk).exists())
+                self.assertTrue(School.objects.filter(pk=source.pk).exists())
+                self.keep.refresh_from_db()
+                self.foreign.refresh_from_db()
+                self.student.refresh_from_db()
+                self.assertIsNone(self.keep.city)
+                self.assertEqual(self.foreign.city, "Foreign City")
+                self.assertEqual(self.student.school_id, self.source.pk)
+                self.assertFalse(
+                    AuditLog.objects.filter(event=AuditEvent.RECORDS_MERGED).exists()
+                )
+
+    def test_global_form_still_rejects_schools_from_different_organizations(self):
+        form = SchoolMergeForm({"keep": self.keep.pk, "source": self.foreign.pk})
+        self.assertFalse(form.is_valid())
+
+    @override_settings(ALLOWED_HOSTS=["testserver", "other.localhost"])
+    def test_other_organization_can_merge_its_own_schools(self):
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=self.other_org, role="Mentor"
+        )
+        other_source = School.objects.create(
+            organization=self.other_org, name="Other Source", city="Other City"
+        )
+        response = self.client.get(reverse("school_merge"), HTTP_HOST="other.localhost")
+        self.assertContains(response, "Foreign School")
+        self.assertNotContains(response, "Local Source")
+        response = self.client.post(
+            reverse("school_merge"),
+            {"keep": self.foreign.pk, "source": other_source.pk},
+            HTTP_HOST="other.localhost",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(School.objects.filter(pk=other_source.pk).exists())
+        self.assertTrue(School.objects.filter(pk=self.source.pk).exists())
+
+    def test_merge_rejects_foreign_student_link_without_changes(self):
+        foreign_student = Student.objects.create(
+            organization=self.other_org,
+            legal_first_name="Other",
+            last_name="Student",
+            graduation_year=2026,
+            school=self.source,
+        )
+        response = self.client.post(
+            reverse("school_merge"), {"keep": self.keep.pk, "source": self.source.pk}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The source school has conflicting links.")
+        self.assertTrue(School.objects.filter(pk=self.source.pk).exists())
+        self.student.refresh_from_db()
+        foreign_student.refresh_from_db()
+        self.keep.refresh_from_db()
+        self.assertEqual(self.student.school_id, self.source.pk)
+        self.assertEqual(foreign_student.school_id, self.source.pk)
+        self.assertIsNone(self.keep.district_id)
+        self.assertFalse(
+            AuditLog.objects.filter(event=AuditEvent.RECORDS_MERGED).exists()
+        )
+
+    def test_merge_rejects_foreign_source_district_without_changes(self):
+        self.source.district = self.other_district
+        self.source.save(update_fields=["district"])
+        response = self.client.post(
+            reverse("school_merge"), {"keep": self.keep.pk, "source": self.source.pk}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The source school has conflicting links.")
+        self.assertTrue(School.objects.filter(pk=self.source.pk).exists())
+        self.keep.refresh_from_db()
+        self.student.refresh_from_db()
+        self.assertIsNone(self.keep.district_id)
+        self.assertEqual(self.student.school_id, self.source.pk)
+        self.assertFalse(
+            AuditLog.objects.filter(event=AuditEvent.RECORDS_MERGED).exists()
+        )
+
+    def test_local_merge_preserves_audit_and_reassigns_students(self):
+        response = self.client.post(
+            reverse("school_merge"), {"keep": self.keep.pk, "source": self.source.pk}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(School.objects.filter(pk=self.source.pk).exists())
+        self.keep.refresh_from_db()
+        self.student.refresh_from_db()
+        self.assertEqual(self.keep.district_id, self.local_district.pk)
+        self.assertEqual(self.student.school_id, self.keep.pk)
+        log = AuditLog.objects.get(event=AuditEvent.RECORDS_MERGED, actor=self.user)
+        self.assertEqual(log.before["source_pk"], self.source.pk)
+        self.assertEqual(log.after["keep_pk"], self.keep.pk)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
@@ -11,6 +12,7 @@ from django.utils import timezone
 
 from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Program, School, Student
 
 # Step 5 rejects applicants older than 18, so DOBs are anchored to today rather
@@ -363,6 +365,16 @@ class Step9ConfirmTests(TestCase):
 
     def test_post_confirms_and_submits_application(self):
         app = self._verified_with_data()
+        lead = get_user_model().objects.create_user(
+            username="step9-confirmation-lead",
+            email="step9-lead@example.test",
+        )
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=app.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         response = self.client.post(
             reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {"confirm": "on"},
@@ -379,12 +391,8 @@ class Step9ConfirmTests(TestCase):
         recipients = {addr for m in mail.outbox for addr in m.to}
         self.assertIn(app.email, recipients)
         self.assertIn("parent@example.com", recipients)
-        self.assertTrue(
-            any("leads@girlsofsteelrobotics.org" in addr for addr in recipients)
-        )
-        confirm_msgs = [
-            m for m in mail.outbox if "leads@girlsofsteelrobotics.org" not in m.to
-        ]
+        self.assertTrue(any("step9-lead@example.test" in addr for addr in recipients))
+        confirm_msgs = [m for m in mail.outbox if "step9-lead@example.test" not in m.to]
         self.assertEqual(len(confirm_msgs), 1)
         confirm = confirm_msgs[0]
         self.assertIn(app.email, confirm.to)

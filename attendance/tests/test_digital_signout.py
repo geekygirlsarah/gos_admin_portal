@@ -2,15 +2,21 @@
 
 import base64
 import json
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import DigitalSignout, DigitalSignoutConfig, StudentPresence
+from attendance.signout_utils import _is_unlocked, _otp_cache_key, _set_unlocked
 from attendance.signout_views import _decode_signature
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -32,6 +38,24 @@ from .base import (
 TEST_FILE_KEY = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
 TEST_TOSEND_KEY = "ts_test_key_12345"
 
+_test_storage_override = override_settings(
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    }
+)
+
+
+def setUpModule():
+    _test_storage_override.enable()
+
+
+def tearDownModule():
+    _test_storage_override.disable()
+
+
 # A tiny valid 1x1 PNG (bytes) for signature upload tests.
 TINY_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
@@ -45,7 +69,12 @@ def _enroll(student, program, active=True):
 
 
 def _unlock(client, config_id):
-    client.cookies[f"signout_unlocked_{config_id}"] = "1"
+    config = DigitalSignoutConfig.objects.get(pk=config_id)
+    response = HttpResponse()
+    _set_unlocked(response, config)
+    client.cookies[f"signout_unlocked_{config_id}"] = response.cookies[
+        f"signout_unlocked_{config_id}"
+    ].value
 
 
 @override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
@@ -560,8 +589,13 @@ class DigitalSignoutManagementTests(TestCase):
         client.force_login(make_lead_mentor_user())
         response = client.post(self.url, {"action": "unlock"})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            client.cookies[f"signout_unlocked_{self.config.pk}"].value, "1"
+        cookie_name = f"signout_unlocked_{self.config.pk}"
+        cookie_value = client.cookies[cookie_name].value
+        self.assertNotEqual(cookie_value, "1")
+        self.assertTrue(
+            _is_unlocked(
+                SimpleNamespace(COOKIES={cookie_name: cookie_value}), self.config
+            )
         )
 
     def test_lock_clears_cookie(self):
@@ -718,19 +752,39 @@ class DecodeSignatureTests(TestCase):
 @override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutUnlockEndpointTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = Client()
         self.program = make_program("Signout Unlock Program")
         self.config = DigitalSignoutConfig.objects.create(
-            label="Front Door Station", program=self.program
+            organization=self.program.organization,
+            label="Front Door Station",
+            program=self.program,
+        )
+        self.user = User.objects.create_user(
+            username="signout-mentor", email="mentor@andrew.cmu.edu"
         )
         self.mentor = Adult.objects.create(
+            organization=self.program.organization,
+            user=self.user,
             legal_first_name="Mentor",
             last_name="Joe",
             andrew_email="mentor@andrew.cmu.edu",
             is_mentor=True,
+            mentor_active=True,
+            login_enabled=True,
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.user,
+            organization=self.program.organization,
+            role="Mentor",
+            defaults={"is_active": True},
         )
 
-    def test_signout_request_code_success(self):
+    @patch("api.signout_views.get_adapter")
+    def test_signout_request_code_success(self, get_adapter):
+        adapter = get_adapter.return_value
+        adapter.generate_login_code.return_value = "123456"
+        adapter.send_mail.return_value = None
         url = reverse("api_signout_request_code", args=[self.config.id])
         response = self.client.post(
             url,
@@ -739,8 +793,9 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
-        cache_key = f"signout_otp_{self.config.id}_mentor@andrew.cmu.edu"
-        self.assertIsNotNone(cache.get(cache_key))
+        cache_record = cache.get(_otp_cache_key(self.config, self.user.email))
+        self.assertEqual(cache_record["code"], "123456")
+        adapter.send_mail.assert_called_once()
 
     def test_signout_request_code_unauthorized_email(self):
         url = reverse("api_signout_request_code", args=[self.config.id])
@@ -762,37 +817,68 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(response.json()["success"])
 
-    def test_signout_unlock_success(self):
-        cache_key = f"signout_otp_{self.config.id}_mentor@andrew.cmu.edu"
-        cache.set(cache_key, "123456", 600)
+    @patch("api.signout_views.get_adapter")
+    def test_signout_unlock_success_and_replay_is_denied(self, get_adapter):
+        adapter = get_adapter.return_value
+        adapter.generate_login_code.return_value = "123456"
+        adapter.send_mail.return_value = None
+        request_url = reverse("api_signout_request_code", args=[self.config.id])
+        requested = self.client.post(
+            request_url,
+            data=json.dumps({"email": self.user.email}),
+            content_type="application/json",
+        )
+        self.assertEqual(requested.status_code, 200)
+        cache_key = _otp_cache_key(self.config, self.user.email)
         url = reverse("api_signout_unlock", args=[self.config.id])
         response = self.client.post(
             url,
-            data=json.dumps({"email": "mentor@andrew.cmu.edu", "code": "123456"}),
+            data=json.dumps({"email": self.user.email, "code": "123456"}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         cookie_name = f"signout_unlocked_{self.config.id}"
-        self.assertEqual(response.cookies[cookie_name].value, "1")
+        cookie_value = response.cookies[cookie_name].value
+        self.assertNotEqual(cookie_value, "1")
+        self.assertTrue(
+            _is_unlocked(
+                SimpleNamespace(COOKIES={cookie_name: cookie_value}), self.config
+            )
+        )
         self.assertEqual(response.cookies[cookie_name]["max-age"], 8 * 60 * 60)
-        self.assertIsNone(cache.get(cache_key))
+        self.assertIsNotNone(cache.get(cache_key))
+        replay = self.client.post(
+            url,
+            data=json.dumps({"email": self.user.email, "code": "123456"}),
+            content_type="application/json",
+        )
+        self.assertEqual(replay.status_code, 403)
 
-    def test_signout_unlock_invalid_code(self):
-        cache_key = f"signout_otp_{self.config.id}_mentor@andrew.cmu.edu"
-        cache.set(cache_key, "123456", 600)
+    @patch("api.signout_views.get_adapter")
+    def test_signout_unlock_invalid_code(self, get_adapter):
+        adapter = get_adapter.return_value
+        adapter.generate_login_code.return_value = "123456"
+        adapter.send_mail.return_value = None
+        requested = self.client.post(
+            reverse("api_signout_request_code", args=[self.config.id]),
+            data=json.dumps({"email": self.user.email}),
+            content_type="application/json",
+        )
+        self.assertEqual(requested.status_code, 200)
         url = reverse("api_signout_unlock", args=[self.config.id])
         response = self.client.post(
             url,
-            data=json.dumps({"email": "mentor@andrew.cmu.edu", "code": "wrong"}),
+            data=json.dumps({"email": self.user.email, "code": "654321"}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
         self.assertFalse(response.json()["success"])
+        self.assertNotIn(f"signout_unlocked_{self.config.pk}", response.cookies)
 
     def test_signout_lock_clears_cookie(self):
         cookie_name = f"signout_unlocked_{self.config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _unlock(self.client, self.config.pk)
         url = reverse("api_signout_lock", args=[self.config.pk])
         response = self.client.post(url)
         self.assertEqual(response.status_code, 200)
@@ -810,12 +896,24 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
 
     def test_signout_direct_unlock_when_authenticated_mentor(self):
         mentor_user = make_mentor_user()
+        UserOrganizationMembership.objects.get_or_create(
+            user=mentor_user,
+            organization=self.program.organization,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
         self.client.force_login(mentor_user)
         url = reverse("digital_signout", args=[self.config.pk])
         response = self.client.post(url, {"action": "direct_unlock"})
         self.assertEqual(response.status_code, 302)
         cookie_name = f"signout_unlocked_{self.config.pk}"
-        self.assertEqual(self.client.cookies[cookie_name].value, "1")
+        cookie_value = self.client.cookies[cookie_name].value
+        self.assertNotEqual(cookie_value, "1")
+        self.assertTrue(
+            _is_unlocked(
+                SimpleNamespace(COOKIES={cookie_name: cookie_value}), self.config
+            )
+        )
 
     def test_signout_direct_unlock_denied_for_unauthenticated_or_parent(self):
         parent_user = make_parent_user()
@@ -827,7 +925,7 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
 
     def test_signout_direct_lock_action(self):
         cookie_name = f"signout_unlocked_{self.config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _unlock(self.client, self.config.pk)
         url = reverse("digital_signout", args=[self.config.pk])
         response = self.client.post(url, {"action": "lock"})
         self.assertEqual(response.status_code, 302)

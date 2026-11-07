@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -85,6 +86,12 @@ class StudentDocumentDownloadViewTests(TestCase):
             username="lead", email="lead@example.com", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.mentor_user = User.objects.create_user(
             username="mentor",

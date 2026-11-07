@@ -17,6 +17,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Crew, Enrollment, Program, Student, SubTeam, Team
 
 
@@ -39,6 +40,12 @@ class MessagingUIImprovementsTests(TestCase):
             password="password123",  # nosec B106
         )
         self.mentor_user.groups.add(self.mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+            is_active=True,
+        )
 
         # Create programs
         self.active_program = Program.objects.create(name="FRC 2026-2027", active=True)
@@ -164,6 +171,13 @@ class MessagingUIImprovementsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Show past &amp; archived programs")
         self.assertNotContains(response, "js-toggle-past-programs")
+
+    def test_mentor_cannot_email_inactive_program(self):
+        self.client.force_login(self.mentor_user)
+        response = self.client.get(
+            reverse("program_email", args=[self.inactive_program.pk])
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
     def test_preselection_via_program_email_url(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106

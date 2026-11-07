@@ -10,8 +10,8 @@
     an adult contact to finish it.
 </p>
 <p>
-    <strong>Application ID:</strong> <code>{{ application.application_id }}</code><br>
-    <a href="{{ resume_url }}">Continue the application</a>
+    <strong>Application ID:</strong> <code>{{ application.application_id }}</code>
+    {% if resume_url %}<br><a href="{{ resume_url }}">Continue the application</a>{% endif %}
 </p>
 <p style="color:#666;font-size:0.9em">
     If you weren't expecting this email, you can safely ignore it. If you have any questions, please hit reply and let us know.

@@ -38,3 +38,10 @@ class RootDomainGuardTests(TestCase):
         )
         response = self.client.get("/programs/", HTTP_HOST=f"guard-org.{ROOT}")
         self.assertNotEqual(response.status_code, 404)
+
+    def test_unknown_host_is_rejected_instead_of_redirected(self):
+        response = self.client.get(
+            "/accounts/login/", HTTP_HOST="unknown.momentumteam.app"
+        )
+
+        self.assertEqual(response.status_code, 404)

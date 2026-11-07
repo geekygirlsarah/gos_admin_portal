@@ -1,13 +1,41 @@
 """Monthly balance update service for students and parents."""
 
 import datetime
+import logging
+from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
-from programs.models import Enrollment, Student
-from programs.utils import active_students, get_student_balance_data
+from programs.models import AdultStudentRelationship, Enrollment, Student
+from programs.utils.balances import (
+    InconsistentBalanceStatementError,
+    TenantBalanceStatementCalculator,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _scoped_active_enrollments(organization, students):
+    enrollments = defaultdict(list)
+    rows = Enrollment.objects.filter(
+        student_id__in=[student.pk for student in students],
+        student__organization=organization,
+        active=True,
+        program__active=True,
+    ).select_related("program")
+    for enrollment in rows:
+        if (
+            enrollment.organization_id != organization.pk
+            or enrollment.program.organization_id != organization.pk
+        ):
+            logger.warning(
+                "Monthly balance enrollment skipped due to inconsistent ownership."
+            )
+            continue
+        enrollments[enrollment.student_id].append(enrollment)
+    return enrollments
 
 
 def collect_monthly_balances_data(
@@ -21,14 +49,25 @@ def collect_monthly_balances_data(
     If ``include_paid_off`` is False, programs that are fully paid off ($0 balance) and have no
     transactions within the past ``days_back`` days are excluded.
     """
+    if not student.organization_id:
+        raise InconsistentBalanceStatementError
+    organization = student.organization
+    active_enrollments = _scoped_active_enrollments(organization, [student])[student.pk]
+    calculator = TenantBalanceStatementCalculator(
+        organization,
+        [student],
+        [enrollment.program for enrollment in active_enrollments],
+    )
+    return _collect_balances_for_enrollments(
+        student, active_enrollments, calculator, as_of_date, days_back, include_paid_off
+    )
+
+
+def _collect_balances_for_enrollments(
+    student, active_enrollments, calculator, as_of_date, days_back, include_paid_off
+):
     as_of = as_of_date or timezone.localdate()
     cutoff_date = as_of - datetime.timedelta(days=days_back)
-
-    active_enrollments = list(
-        Enrollment.objects.filter(
-            student=student, active=True, program__active=True
-        ).select_related("program")
-    )
 
     program_balances = []
     total_balance = Decimal("0.00")
@@ -37,7 +76,15 @@ def collect_monthly_balances_data(
     total_sliding_all = Decimal("0.00")
 
     for e in active_enrollments:
-        b_data = get_student_balance_data(student, e.program, can_view_sliding=True)
+        try:
+            b_data = calculator.get_balance_data(
+                student, e.program, can_view_sliding=True
+            )
+        except InconsistentBalanceStatementError:
+            logger.warning(
+                "Monthly balance statement unavailable; financial records need review."
+            )
+            continue
         prog_balance = b_data["balance"]
 
         # Check for recent transactions within the days_back window
@@ -94,14 +141,50 @@ def collect_monthly_balances_data(
     }
 
 
-def _get_student_parent_emails(student: Student) -> List[tuple[Any, str]]:
+def _get_student_parent_emails(
+    student: Student, relationships=None
+) -> List[tuple[Any, str]]:
     """Resolve opted-in or fallback parent notification emails for a student."""
-    parents = student.all_parents
+    if not student.organization_id:
+        return []
+    if relationships is None:
+        relationships = (
+            AdultStudentRelationship.objects.filter(
+                organization_id=student.organization_id,
+                student=student,
+                adult__organization_id=student.organization_id,
+            )
+            .select_related("adult__user")
+            .order_by("adult__last_name", "adult__legal_first_name", "pk")
+        )
+    local_relationships = [
+        relationship
+        for relationship in relationships
+        if relationship.organization_id == student.organization_id
+        and relationship.student_id == student.pk
+        and relationship.adult.organization_id == student.organization_id
+    ]
+    by_id = {relationship.pk: relationship for relationship in local_relationships}
+    primary = by_id.get(student.primary_contact_relationship_id)
+    ordered = [
+        by_id[relationship_id]
+        for relationship_id in (
+            student.primary_contact_relationship_id,
+            student.secondary_contact_relationship_id,
+        )
+        if relationship_id in by_id
+    ] + local_relationships
+    parents = []
+    seen = set()
+    for relationship in ordered:
+        if relationship.adult_id not in seen:
+            parents.append(relationship.adult)
+            seen.add(relationship.adult_id)
     opted_in = [
         p for p in parents if p.email_updates and getattr(p, "login_enabled", True)
     ]
     if not opted_in:
-        fallback = student.primary_contact or (parents[0] if parents else None)
+        fallback = primary.adult if primary else (parents[0] if parents else None)
         if fallback and getattr(fallback, "login_enabled", True):
             opted_in = [fallback]
 
@@ -122,8 +205,10 @@ def get_monthly_balance_recipients(
 ) -> List[Dict[str, Any]]:
     """Determine all recipient targets for monthly balance statements."""
     active_student_qs = (
-        active_students()
-        .filter(enrollment__active=True, enrollment__program__active=True)
+        Student.objects.filter(
+            graduated=False, enrollment__active=True, enrollment__program__active=True
+        )
+        .select_related("organization")
         .distinct()
     )
 
@@ -132,33 +217,83 @@ def get_monthly_balance_recipients(
 
     targets = []
     include_paid_off = not positive_only
-    for st in active_student_qs:
-        data = collect_monthly_balances_data(
-            st,
-            as_of_date=as_of_date,
-            days_back=days_back,
-            include_paid_off=include_paid_off,
-        )
-        if positive_only:
-            if (
-                data["total_balance"] <= Decimal("0.00")
-                and not data["has_recent_activity"]
-            ):
-                continue
-            if not data["program_balances"]:
-                continue
-        elif not data["program_balances"] and not data["has_balance"]:
-            continue
-
-        parent_emails = _get_student_parent_emails(st)
-        for adult, email in parent_emails:
-            targets.append(
-                {
-                    "student": st,
-                    "adult": adult,
-                    "email": email,
-                    "data": data,
-                }
+    students_by_org = defaultdict(list)
+    for student in active_student_qs:
+        if not student.organization_id:
+            logger.warning(
+                "Monthly balance student skipped due to missing organization."
             )
+            continue
+        students_by_org[student.organization_id].append(student)
+
+    for students in students_by_org.values():
+        organization = students[0].organization
+        enrollments = _scoped_active_enrollments(organization, students)
+        programs = {
+            enrollment.program_id: enrollment.program
+            for rows in enrollments.values()
+            for enrollment in rows
+        }
+        calculator = TenantBalanceStatementCalculator(
+            organization, students, programs.values()
+        )
+        relationships = defaultdict(list)
+        for relationship in (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                student_id__in=[student.pk for student in students],
+                student__organization=organization,
+                adult__organization=organization,
+            )
+            .select_related("adult__user")
+            .order_by("student_id", "adult__last_name", "adult__legal_first_name", "pk")
+        ):
+            relationships[relationship.student_id].append(relationship)
+
+        for student in students:
+            data = _collect_balances_for_enrollments(
+                student,
+                enrollments[student.pk],
+                calculator,
+                as_of_date,
+                days_back,
+                include_paid_off,
+            )
+            eligible_programs = [
+                balance
+                for balance in data["program_balances"]
+                if not positive_only
+                or balance["balance"] > Decimal("0.00")
+                or balance["has_recent_transactions"]
+            ]
+            if not eligible_programs:
+                continue
+            parent_emails = _get_student_parent_emails(
+                student, relationships[student.pk]
+            )
+            for balance in eligible_programs:
+                statement_data = {
+                    "student": student,
+                    "program_balances": [balance],
+                    "total_balance": balance["balance"],
+                    "total_fees": balance["total_fees"],
+                    "total_payments": balance["total_payments"],
+                    "total_sliding": balance["total_sliding"],
+                    "has_balance": bool(
+                        balance["balance"] != Decimal("0.00")
+                        or balance["total_fees"] > Decimal("0.00")
+                    ),
+                    "has_recent_activity": balance["has_recent_transactions"],
+                }
+                for adult, email in parent_emails:
+                    targets.append(
+                        {
+                            "student": student,
+                            "program": balance["program"],
+                            "adult": adult,
+                            "email": email,
+                            "data": statement_data,
+                        }
+                    )
 
     return targets

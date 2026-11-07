@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse, Http404
@@ -21,6 +22,7 @@ from ..forms import (
 )
 from ..models import (
     Adult,
+    AdultStudentRelationship,
     Crew,
     Enrollment,
     Program,
@@ -785,7 +787,12 @@ class ProgramEnrollmentUpdateView(
         crew_id = request.POST.get("crew_id")
         subteam_id = request.POST.get("subteam_id")
         active = request.POST.get("active")
-        enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
+        enrollment = get_object_or_404(
+            Enrollment.objects.for_organization(request.organization),
+            id=enrollment_id,
+            program_id=pk,
+            student__organization=request.organization,
+        )
 
         updated_fields = []
         # Only LeadMentors may toggle active status; mentors limited to team/crew/subteam
@@ -802,7 +809,9 @@ class ProgramEnrollmentUpdateView(
 
         if team_id is not None:
             if team_id:
-                team = get_object_or_404(Team, id=team_id)
+                team = get_object_or_404(
+                    Team.objects.for_organization(request.organization), id=team_id
+                )
                 enrollment.team = team
             else:
                 enrollment.team = None
@@ -810,7 +819,11 @@ class ProgramEnrollmentUpdateView(
 
         if crew_id is not None:
             if crew_id:
-                crew = get_object_or_404(Crew, id=crew_id, program_id=pk)
+                crew = get_object_or_404(
+                    Crew.objects.for_organization(request.organization),
+                    id=crew_id,
+                    program_id=pk,
+                )
                 enrollment.crew = crew
             else:
                 enrollment.crew = None
@@ -818,7 +831,11 @@ class ProgramEnrollmentUpdateView(
 
         if subteam_id is not None:
             if subteam_id:
-                subteam = get_object_or_404(SubTeam, id=subteam_id, program_id=pk)
+                subteam = get_object_or_404(
+                    SubTeam.objects.for_organization(request.organization),
+                    id=subteam_id,
+                    program_id=pk,
+                )
                 enrollment.subteam = subteam
             else:
                 enrollment.subteam = None
@@ -901,9 +918,12 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
     template_name = "programs/assignment.html"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = get_object_or_404(
+            Program.objects.for_organization(request.organization), pk=pk
+        )
         enrollments = (
-            Enrollment.objects.filter(program=program)
+            Enrollment.objects.for_organization(request.organization)
+            .filter(program=program, student__organization=request.organization)
             .select_related("student", "team", "crew", "subteam")
             .annotate(
                 sort_first=Lower(
@@ -915,9 +935,17 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 sort_last=Lower("student__last_name"),
             )
         )
-        teams = Team.objects.all().order_by("number")
-        crews = Crew.objects.filter(program=program).order_by("name")
-        subteams = SubTeam.objects.filter(program=program).order_by("name")
+        teams = Team.objects.for_organization(request.organization).order_by("number")
+        crews = (
+            Crew.objects.for_organization(request.organization)
+            .filter(program=program)
+            .order_by("name")
+        )
+        subteams = (
+            SubTeam.objects.for_organization(request.organization)
+            .filter(program=program)
+            .order_by("name")
+        )
 
         # Separate inactive students (inactive enrollment or graduated) so they
         # don't get mixed in with the active ones being assigned.
@@ -959,13 +987,18 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
         )
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = get_object_or_404(
+            Program.objects.for_organization(request.organization), pk=pk
+        )
 
         # Single-student "Clear All Tags" button
         clear_enrollment_id = request.POST.get("clear_enrollment_id")
         if clear_enrollment_id:
             enrollment = get_object_or_404(
-                Enrollment, pk=clear_enrollment_id, program=program
+                Enrollment.objects.for_organization(request.organization),
+                pk=clear_enrollment_id,
+                program=program,
+                student__organization=request.organization,
             )
             cleared = []
             if enrollment.team_id:
@@ -997,8 +1030,10 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             messages.warning(request, "No students selected.")
             return redirect("program_assignment", pk=pk)
 
-        enrollments = Enrollment.objects.filter(
-            program=program, student_id__in=student_ids
+        enrollments = Enrollment.objects.for_organization(request.organization).filter(
+            program=program,
+            student__organization=request.organization,
+            student_id__in=student_ids,
         )
 
         if not target_id:
@@ -1021,19 +1056,29 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                     f"Unassigned subteam from {len(student_ids)} student(s).",
                 )
         elif assignment_type == "team":
-            team = get_object_or_404(Team, id=target_id)
+            team = get_object_or_404(
+                Team.objects.for_organization(request.organization), id=target_id
+            )
             enrollments.update(team=team)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to team {team}."
             )
         elif assignment_type == "crew":
-            crew = get_object_or_404(Crew, id=target_id, program=program)
+            crew = get_object_or_404(
+                Crew.objects.for_organization(request.organization),
+                id=target_id,
+                program=program,
+            )
             enrollments.update(crew=crew)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to crew {crew}."
             )
         elif assignment_type == "subteam":
-            subteam = get_object_or_404(SubTeam, id=target_id, program=program)
+            subteam = get_object_or_404(
+                SubTeam.objects.for_organization(request.organization),
+                id=target_id,
+                program=program,
+            )
             enrollments.update(subteam=subteam)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to subteam {subteam}."
@@ -1054,7 +1099,11 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            role = get_user_role(request.user, org=request.organization)
+            organization = getattr(request, "organization", None)
+            if organization is None:
+                raise Http404
+
+            role = get_user_role(request.user, org=organization)
             pk = (
                 kwargs.get("pk")
                 or request.GET.get("program")
@@ -1062,23 +1111,24 @@ class ProgramEmailView(LoginRequiredMixin, View):
             )
             if pk:
                 try:
-                    program = Program.objects.get(pk=pk)
+                    program = Program.objects.for_organization(organization).get(pk=pk)
                 except (Program.DoesNotExist, ValueError):
-                    program = None
-                if program:
-                    allowed = (role == "LeadMentor") or (
-                        role == "Mentor"
-                        and can_user_read(request.user, "programs", program)
+                    raise Http404
+                allowed = (role == "LeadMentor") or (
+                    role == "Mentor"
+                    and can_user_read(
+                        request.user, "programs", program, org=organization
                     )
-                else:
-                    allowed = role == "LeadMentor"
+                )
             else:
                 if role == "LeadMentor":
                     allowed = True
                 elif role == "Mentor":
                     allowed = any(
-                        can_user_read(request.user, "programs", p)
-                        for p in Program.objects.filter(active=True)
+                        can_user_read(request.user, "programs", p, org=organization)
+                        for p in Program.objects.for_organization(organization).filter(
+                            active=True
+                        )
                     )
                 else:
                     allowed = False
@@ -1089,36 +1139,46 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 return redirect("home")
         return super().dispatch(request, *args, **kwargs)
 
-    def _get_accessible_programs(self, user):
-        role = get_user_role(user)
+    def _get_accessible_programs(self, user, organization):
+        if organization is None:
+            return Program.objects.none()
+
+        programs = Program.objects.for_organization(organization)
+        role = get_user_role(user, org=organization)
         if role == "LeadMentor":
-            return Program.objects.all().order_by("-active", "name")
+            return programs.order_by("-active", "name")
         elif role == "Mentor":
             return [
                 p
-                for p in Program.objects.filter(active=True).order_by("name")
-                if can_user_read(user, "programs", p)
+                for p in programs.filter(active=True).order_by("name")
+                if can_user_read(user, "programs", p, org=organization)
             ]
         return []
 
     def get(self, request, pk=None):
-        role = get_user_role(request.user, org=request.organization)
-        accessible_programs = self._get_accessible_programs(request.user)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        role = get_user_role(request.user, org=organization)
+        accessible_programs = self._get_accessible_programs(request.user, organization)
 
         program_id = pk or request.GET.get("program") or request.GET.get("program_id")
         program = None
         if program_id:
             try:
-                program = Program.objects.get(pk=program_id)
+                program = Program.objects.for_organization(organization).get(
+                    pk=program_id
+                )
                 if role == "Mentor" and not can_user_read(
-                    request.user, "programs", program
+                    request.user, "programs", program, org=organization
                 ):
                     messages.error(
                         request, "You do not have permission to view that program."
                     )
                     return redirect("home")
             except (Program.DoesNotExist, ValueError):
-                program = None
+                raise Http404
 
         if not program and accessible_programs:
             program = (
@@ -1130,15 +1190,27 @@ class ProgramEmailView(LoginRequiredMixin, View):
         form = ProgramEmailForm(
             user=request.user,
             program=program,
+            organization=organization,
             initial={"program": program} if program else None,
         )
         return self._render(form, program, pk=pk)
 
     def post(self, request, pk=None):
-        role = get_user_role(request.user, org=request.organization)
-        program_from_url = get_object_or_404(Program, pk=pk) if pk else None
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        role = get_user_role(request.user, org=organization)
+        program_from_url = (
+            get_object_or_404(Program.objects.for_organization(organization), pk=pk)
+            if pk
+            else None
+        )
         form = ProgramEmailForm(
-            request.POST, user=request.user, program=program_from_url
+            request.POST,
+            user=request.user,
+            program=program_from_url,
+            organization=organization,
         )
         if form.is_valid():
             prog = form.cleaned_data.get("program")
@@ -1146,7 +1218,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             if (
                 prog
                 and role == "Mentor"
-                and not can_user_read(request.user, "programs", prog)
+                and not can_user_read(request.user, "programs", prog, org=organization)
             ):
                 messages.error(
                     request, "You do not have permission to email that program."
@@ -1165,43 +1237,77 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # extracts inline CID image attachments.
             inlined_html_body, text_body, inline_images = build_email_parts(
                 html_body,
-                organization=prog.organization if prog else None,
+                organization=prog.organization if prog else organization,
                 subject=subject,
             )
 
             if prog:
                 enrollments = Enrollment.objects.filter(
-                    program=prog, active=True, student__graduated=False
+                    organization=organization,
+                    program=prog,
+                    program__organization=organization,
+                    student__organization=organization,
+                    active=True,
+                    student__graduated=False,
                 )
                 if teams:
                     enrollments = enrollments.filter(team__in=teams)
                 if crews:
-                    enrollments = enrollments.filter(crew__in=crews)
+                    enrollments = enrollments.filter(
+                        crew__in=crews,
+                        crew__organization=organization,
+                        crew__program=prog,
+                    )
                 if subteams:
-                    enrollments = enrollments.filter(subteam__in=subteams)
+                    enrollments = enrollments.filter(
+                        subteam__in=subteams,
+                        subteam__organization=organization,
+                        subteam__program=prog,
+                    )
 
-                filtered_student_ids = enrollments.values_list("student_id", flat=True)
+                filtered_student_ids = enrollments.values_list(
+                    "student_id", flat=True
+                ).distinct()
             else:
                 filtered_student_ids = []
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
+                for s in (
+                    Student.objects.for_organization(organization)
+                    .filter(id__in=filtered_student_ids)
+                    .distinct()
+                ):
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.org_email:
                         recipients.add(s.org_email)
             if "parents" in groups:
-                for parent in Adult.objects.filter(
-                    students__id__in=filtered_student_ids,
-                    email_updates=True,
-                    login_enabled=True,
-                ).distinct():
+                parent_ids = (
+                    AdultStudentRelationship.objects.for_organization(organization)
+                    .filter(
+                        student_id__in=filtered_student_ids,
+                        student__organization=organization,
+                        adult__organization=organization,
+                    )
+                    .values_list("adult_id", flat=True)
+                )
+                for parent in (
+                    Adult.objects.for_organization(organization)
+                    .filter(
+                        id__in=parent_ids,
+                        email_updates=True,
+                        login_enabled=True,
+                    )
+                    .distinct()
+                ):
                     e = parent.personal_email or parent.org_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
-                for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
+                for m in Adult.objects.for_organization(organization).filter(
+                    is_mentor=True, mentor_active=True
+                ):
                     e = m.personal_email or m.org_email
                     if e:
                         recipients.add(e)
@@ -1218,7 +1324,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
             connection, from_email, reply_to = get_sender_connection(
-                selected, organization=prog.organization if prog else None
+                selected, organization=prog.organization if prog else organization
             )
 
             messages_to_send = []
@@ -1284,29 +1390,47 @@ class ProgramEmailView(LoginRequiredMixin, View):
             try:
                 prog_val = form.data.get("program")
                 if prog_val:
-                    prog = Program.objects.get(pk=prog_val)
-            except Exception:
+                    prog = Program.objects.for_organization(organization).get(
+                        pk=prog_val
+                    )
+            except (Program.DoesNotExist, ValueError):
                 prog = None
         return self._render(form, prog or program_from_url, pk=pk)
 
     def _render(self, form, program, pk=None):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
         active_assignments = Enrollment.objects.filter(
-            active=True, student__graduated=False
+            organization=organization,
+            program__organization=organization,
+            student__organization=organization,
+            active=True,
+            student__graduated=False,
         )
         teams = (
-            Team.objects.filter(enrollments__in=active_assignments)
+            Team.objects.for_organization(organization)
+            .filter(enrollments__in=active_assignments)
             .distinct()
             .order_by("team_type", "number")
         )
         crews = (
-            Crew.objects.select_related("program")
-            .filter(enrollments__in=active_assignments)
+            Crew.objects.for_organization(organization)
+            .select_related("program")
+            .filter(
+                program__organization=organization,
+                enrollments__in=active_assignments,
+            )
             .distinct()
             .order_by("name")
         )
         subteams = (
-            SubTeam.objects.select_related("program")
-            .filter(enrollments__in=active_assignments)
+            SubTeam.objects.for_organization(organization)
+            .select_related("program")
+            .filter(
+                program__organization=organization,
+                enrollments__in=active_assignments,
+            )
             .distinct()
             .order_by("name")
         )
@@ -1460,6 +1584,17 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
         return render(request, self.template_name, ctx)
 
 
+def _signout_tenant_program_or_404(request, program_id):
+    organization = getattr(request, "organization", None)
+    if organization is None or not organization.is_active:
+        raise Http404("Program not found.")
+    return get_object_or_404(
+        Program.objects.select_related("organization"),
+        pk=program_id,
+        organization=organization,
+    )
+
+
 class ProgramDigitalSignoutView(LoginRequiredMixin, View):
     """Manage a program's digital sign-out station.
 
@@ -1473,7 +1608,7 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            program = get_object_or_404(Program, pk=kwargs.get("pk"))
+            program = _signout_tenant_program_or_404(request, kwargs.get("pk"))
             role = get_user_role(request.user, org=request.organization)
             if role not in ("LeadMentor", "Mentor") or not can_user_read(
                 request.user, "programs", program
@@ -1487,31 +1622,44 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
     def _ensure_config(self, program):
         config, _ = DigitalSignoutConfig.objects.get_or_create(
             program=program,
-            defaults={"label": f"Digital Sign-out — {program.name}"},
+            defaults={
+                "organization": program.organization,
+                "label": f"Digital Sign-out — {program.name}",
+            },
         )
+        if config.organization_id != program.organization_id:
+            raise Http404("Sign-out station not found.")
         return config
 
     def _recent_signouts(self, program):
         return (
-            DigitalSignout.objects.filter(program=program)
+            DigitalSignout.objects.filter(
+                organization=program.organization,
+                program=program,
+                config__organization=program.organization,
+                config__program=program,
+            )
+            .filter(
+                Q(student__isnull=True) | Q(student__organization=program.organization)
+            )
             .select_related("student", "config")
             .order_by("-signed_at")[:20]
         )
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = _signout_tenant_program_or_404(request, pk)
         config = self._ensure_config(program)
         action = request.POST.get("action")
 
         response = redirect(reverse("program_digital_signout", args=[program.pk]))
         if action == "unlock":
-            _set_unlocked(response, config.pk)
+            _set_unlocked(response, config)
             messages.success(
                 request,
                 "Sign-out unlocked. It will stay open on the tablet for 8 hours.",
             )
         elif action == "lock":
-            _clear_unlocked(response, config.pk)
+            _clear_unlocked(response, config)
             messages.success(request, "Sign-out station locked.")
         elif action in ("mark_present", "mark_absent"):
             self._mark_presence(request, program, action)
@@ -1533,12 +1681,26 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             )
         if student is None:
             return
-        StudentPresence.objects.update_or_create(
-            program=program,
-            student=student,
-            date=timezone.localdate(),
-            defaults={"status": status, "marked_by": request.user},
-        )
+        today = timezone.localdate()
+        try:
+            with transaction.atomic():
+                StudentPresence.objects.update_or_create(
+                    organization=program.organization,
+                    program=program,
+                    student=student,
+                    date=today,
+                    defaults={"status": status, "marked_by": request.user},
+                )
+        except IntegrityError:
+            if (
+                StudentPresence.objects.filter(
+                    program=program, student=student, date=today
+                )
+                .exclude(organization=program.organization)
+                .exists()
+            ):
+                return
+            raise
         messages.success(
             request,
             "{} marked {}".format(
@@ -1547,26 +1709,58 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
         )
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = _signout_tenant_program_or_404(request, pk)
         config = self._ensure_config(program)
         public_url = reverse("digital_signout", args=[config.pk])
         today = timezone.localdate()
         today_presence = {
             p.student_id: p
             for p in StudentPresence.objects.filter(
-                program=program, date=today
+                organization=program.organization,
+                program=program,
+                student__organization=program.organization,
+                date=today,
             ).select_related("student")
         }
         presence_students = list(_active_students(program))
-        # Team/crew/subteam live on the program enrollment, so pull this
-        # program's enrollments in one query and hand each student theirs for
-        # the group badges next to their name.
-        enrollments_by_student = {
-            e.student_id: e
-            for e in Enrollment.objects.filter(
-                program=program, active=True
-            ).select_related("team", "crew", "subteam")
+        enrollments = list(
+            Enrollment.objects.filter(
+                organization=program.organization,
+                program=program,
+                student__organization=program.organization,
+                active=True,
+            )
+        )
+        teams = {
+            team.pk: team
+            for team in Team.objects.filter(
+                organization=program.organization,
+                pk__in=[e.team_id for e in enrollments if e.team_id],
+            )
         }
+        crews = {
+            crew.pk: crew
+            for crew in Crew.objects.filter(
+                organization=program.organization,
+                program=program,
+                pk__in=[e.crew_id for e in enrollments if e.crew_id],
+            )
+        }
+        subteams = {
+            subteam.pk: subteam
+            for subteam in SubTeam.objects.filter(
+                organization=program.organization,
+                program=program,
+                pk__in=[e.subteam_id for e in enrollments if e.subteam_id],
+            )
+        }
+        enrollments_by_student = {}
+        # These instances are only used for display; omit unsafe group references.
+        for enrollment in enrollments:
+            enrollment.team = teams.get(enrollment.team_id)
+            enrollment.crew = crews.get(enrollment.crew_id)
+            enrollment.subteam = subteams.get(enrollment.subteam_id)
+            enrollments_by_student[enrollment.student_id] = enrollment
         for student in presence_students:
             student.today_presence = today_presence.get(student.pk)
             student.program_enrollment = enrollments_by_student.get(student.pk)
@@ -1576,7 +1770,7 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             {
                 "program": program,
                 "config": config,
-                "is_unlocked": _is_unlocked(request, config.pk),
+                "is_unlocked": _is_unlocked(request, config),
                 "public_url": public_url,
                 "recent_signouts": self._recent_signouts(program),
                 "presence_students": presence_students,
@@ -1589,7 +1783,7 @@ class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
     """Serve a decrypted signature PNG image for authorized staff."""
 
     def get(self, request, program_id, pk):
-        program = get_object_or_404(Program, pk=program_id)
+        program = _signout_tenant_program_or_404(request, program_id)
         role = get_user_role(request.user, org=request.organization)
         if role not in ("LeadMentor", "Mentor") or not can_user_read(
             request.user, "programs", program
@@ -1599,7 +1793,15 @@ class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
             )
             return redirect("home")
 
-        signout = get_object_or_404(DigitalSignout, pk=pk, program=program)
+        signout = get_object_or_404(
+            DigitalSignout,
+            pk=pk,
+            organization=program.organization,
+            program=program,
+            config__organization=program.organization,
+            config__program=program,
+            student__organization=program.organization,
+        )
         if not signout.signature:
             raise Http404("No signature image recorded.")
 

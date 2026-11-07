@@ -1,10 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db.models import Count
+from django.db import transaction
+from django.db.models import Case, CharField, Count, Prefetch, Q, Value, When
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, FormView, ListView, UpdateView, View
+
+from organizations.mixins import OrganizationScopeMixin
 
 from ..forms import SchoolDistrictForm, SchoolForm, SchoolMergeForm
 from ..models import School, SchoolDistrict
@@ -19,35 +22,65 @@ class SchoolListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     sort_fields = {
         "name": Lower("name"),
-        "district": Lower("district__name"),
+        "district": "_district_sort",
         "city": Lower("city"),
         "state": "state",
     }
     default_sort_field = "name"
 
     def get_queryset(self):
-        return self.apply_sorting(super().get_queryset().select_related("district"))
+        organization = getattr(self.request, "organization", None)
+        districts = SchoolDistrict.objects.for_organization(organization)
+        district_sort = Lower("district__name")
+        if organization is not None:
+            district_sort = Case(
+                When(district__organization=organization, then=district_sort),
+                default=Value(None),
+                output_field=CharField(),
+            )
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(organization)
+            .annotate(_district_sort=district_sort)
+            .prefetch_related(Prefetch("district", queryset=districts))
+        )
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["total_schools_count"] = School.objects.count()
-        context["districts_count"] = SchoolDistrict.objects.count()
-        context["assigned_schools_count"] = School.objects.filter(
+        organization = getattr(self.request, "organization", None)
+        schools = School.objects.for_organization(organization)
+        context["total_schools_count"] = schools.count()
+        context["districts_count"] = SchoolDistrict.objects.for_organization(
+            organization
+        ).count()
+        context["assigned_schools_count"] = schools.filter(
             district__isnull=False
         ).count()
-        context["unassigned_schools_count"] = School.objects.filter(
+        context["unassigned_schools_count"] = schools.filter(
             district__isnull=True
         ).count()
         return context
 
 
 class SchoolCreateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
+    OrganizationScopeMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
 ):
     model = School
     form_class = SchoolForm
     template_name = "schools/form.html"
     permission_required = "programs.add_school"
+
+    def form_valid(self, form):
+        organization = self.get_organization()
+        if organization is not None:
+            form.instance.organization = organization
+        return super().form_valid(form)
 
     def get_success_url(self):
         # After creating a School, return to the Schools listing
@@ -55,12 +88,23 @@ class SchoolCreateView(
 
 
 class SchoolUpdateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    OrganizationScopeMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
 ):
     model = School
     form_class = SchoolForm
     template_name = "schools/form.html"
     permission_required = "programs.change_school"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+        )
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
@@ -70,7 +114,9 @@ class SchoolUpdateView(
         return reverse("school_edit", args=[self.object.pk])
 
 
-class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+class SchoolMergeView(
+    OrganizationScopeMixin, LoginRequiredMixin, PermissionRequiredMixin, FormView
+):
     """Merge one school into another, reassigning students and preserving
     contact data.
 
@@ -96,7 +142,15 @@ class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["schools"] = list(School.objects.all())
+        organization = self.get_organization()
+        context["schools"] = list(
+            School.objects.for_organization(organization).prefetch_related(
+                Prefetch(
+                    "district",
+                    queryset=SchoolDistrict.objects.for_organization(organization),
+                )
+            )
+        )
         return context
 
     def form_valid(self, form):
@@ -104,10 +158,33 @@ class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         from audit.service import log_event
         from programs.utils.merges import perform_school_merge
 
-        keep = form.cleaned_data["keep"]
-        source = form.cleaned_data["source"]
-
-        meta = perform_school_merge(keep, source)
+        keep_id = form.cleaned_data["keep"].pk
+        source_id = form.cleaned_data["source"].pk
+        with transaction.atomic():
+            schools = {
+                school.pk: school
+                for school in School.objects.for_organization(self.get_organization())
+                .filter(pk__in=[keep_id, source_id])
+                .order_by("pk")
+                .select_for_update()
+            }
+            keep = schools.get(keep_id)
+            source = schools.get(source_id)
+            if not keep or not source or keep.organization_id != source.organization_id:
+                form.add_error(None, "The selected schools are no longer available.")
+                return self.form_invalid(form)
+            if source.district_id:
+                district = SchoolDistrict.objects.select_for_update().get(
+                    pk=source.district_id
+                )
+                if district.organization_id != source.organization_id:
+                    form.add_error(None, "The source school has conflicting links.")
+                    return self.form_invalid(form)
+            list(source.students.select_for_update().values_list("pk", flat=True))
+            if source.students.exclude(organization_id=source.organization_id).exists():
+                form.add_error(None, "The source school has conflicting links.")
+                return self.form_invalid(form)
+            meta = perform_school_merge(keep, source)
 
         log_event(
             request=self.request,
@@ -138,26 +215,49 @@ class DistrictListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = super().get_queryset().annotate(school_count=Count("schools"))
+        organization = getattr(self.request, "organization", None)
+        school_filter = Q()
+        if organization is not None:
+            school_filter = Q(schools__organization=organization)
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(organization)
+            .annotate(school_count=Count("schools", filter=school_filter))
+        )
         return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["districts_count"] = SchoolDistrict.objects.count()
-        context["school_count"] = School.objects.filter(district__isnull=False).count()
-        context["unspecified_school_count"] = School.objects.filter(
+        organization = getattr(self.request, "organization", None)
+        schools = School.objects.for_organization(organization)
+        context["districts_count"] = SchoolDistrict.objects.for_organization(
+            organization
+        ).count()
+        context["school_count"] = schools.filter(district__isnull=False).count()
+        context["unspecified_school_count"] = schools.filter(
             district__isnull=True
         ).count()
         return context
 
 
 class DistrictCreateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
+    OrganizationScopeMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
 ):
     model = SchoolDistrict
     form_class = SchoolDistrictForm
     template_name = "schools/district_form.html"
     permission_required = "programs.add_schooldistrict"
+
+    def form_valid(self, form):
+        organization = self.get_organization()
+        if organization is not None:
+            form.instance.organization = organization
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse("school_district_list")
@@ -170,6 +270,13 @@ class DistrictUpdateView(
     form_class = SchoolDistrictForm
     template_name = "schools/district_form.html"
     permission_required = "programs.change_schooldistrict"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+        )
 
     def get_success_url(self):
         return reverse("school_district_list")
@@ -184,28 +291,52 @@ class DistrictDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
     template_name = "schools/district_confirm_delete.html"
 
     def get(self, request, *args, **kwargs):
-        district = get_object_or_404(SchoolDistrict, pk=kwargs["pk"])
+        organization = getattr(request, "organization", None)
+        district = get_object_or_404(
+            SchoolDistrict.objects.for_organization(organization), pk=kwargs["pk"]
+        )
         return render(
             request,
             self.template_name,
-            {"district": district, "schools": district.schools.all()},
+            {
+                "district": district,
+                "schools": district.schools.for_organization(organization),
+            },
         )
 
     def post(self, request, *args, **kwargs):
         from audit.service import log_deletion
 
-        district = get_object_or_404(SchoolDistrict, pk=kwargs["pk"])
-        name = district.name
-        school_count = district.schools.count()
-        log_deletion(
-            resource=district,
-            request=request,
-            before={"name": name, "school_count": school_count},
-            notes=(
-                f"District '{name}' deleted; {school_count} school(s) left unassigned."
-            ),
-        )
-        district.delete()
+        organization = getattr(request, "organization", None)
+        with transaction.atomic():
+            district = get_object_or_404(
+                SchoolDistrict.objects.for_organization(
+                    organization
+                ).select_for_update(),
+                pk=kwargs["pk"],
+            )
+            list(district.schools.select_for_update().values_list("pk", flat=True))
+            if (
+                organization is not None
+                and district.schools.exclude(organization=organization).exists()
+            ):
+                messages.error(
+                    request,
+                    "This district cannot be deleted because of conflicting links.",
+                )
+                return redirect("school_district_list")
+            name = district.name
+            school_count = district.schools.for_organization(organization).count()
+            with transaction.atomic():
+                log_deletion(
+                    resource=district,
+                    request=request,
+                    before={"name": name, "school_count": school_count},
+                    notes=(
+                        f"District '{name}' deleted; {school_count} school(s) left unassigned."
+                    ),
+                )
+            district.delete()
         messages.success(
             request, f'Deleted district "{name}". Schools in it were unassigned.'
         )

@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.exceptions import SuspiciousFileOperation
+from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -23,21 +24,26 @@ def mentor_agreement_view(request):
            redirect to the next URL (or dashboard).
     POST action=disagree: Log out and redirect to login.
     """
-    active = MentorAgreement.get_all_active()
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
 
     # Determine which agreements are still pending for this user
     adult = getattr(request.user, "adult_profile", None)
+    if adult is not None and adult.organization_id != organization.pk:
+        return HttpResponseForbidden("Forbidden")
+    active = MentorAgreement.get_all_active(organization=organization)
     if adult is not None:
         accepted_ids = set(
             MentorAgreementAcceptance.objects.filter(
-                adult=adult, agreement__in=active
+                organization=organization, adult=adult, agreement__in=active
             ).values_list("agreement_id", flat=True)
         )
         # Map agreement_id -> submission for PDF agreements
         submissions_by_agreement = {
             s.agreement_id: s
             for s in MentorAgreementSubmission.objects.filter(
-                adult=adult, agreement__in=active
+                organization=organization, adult=adult, agreement__in=active
             )
         }
     else:
@@ -102,6 +108,12 @@ def _handle_agree(
     request, adult, pending, pending_details, already_accepted, submissions_by_agreement
 ):
     """Record acceptances for all pending agreements after verifying uploads."""
+    if (
+        MentorAgreementAcceptance.objects.filter(adult=adult, agreement__in=pending)
+        .exclude(organization=request.organization)
+        .exists()
+    ):
+        return HttpResponseForbidden("Forbidden")
     missing = [
         a.title for a in pending if a.document and a.id not in submissions_by_agreement
     ]
@@ -123,6 +135,7 @@ def _handle_agree(
     ip = request.META.get("REMOTE_ADDR")
     for agreement in pending:
         MentorAgreementAcceptance.objects.get_or_create(
+            organization=request.organization,
             adult=adult,
             agreement=agreement,
             defaults={"ip_address": ip},
@@ -151,7 +164,7 @@ def _handle_upload(request, adult, pending, pending_details):
         return redirect("mentor_agreement")
 
     submission, _created = MentorAgreementSubmission.objects.get_or_create(
-        adult=adult, agreement=agreement
+        organization=request.organization, adult=adult, agreement=agreement
     )
     submission.file = uploaded_file
     try:

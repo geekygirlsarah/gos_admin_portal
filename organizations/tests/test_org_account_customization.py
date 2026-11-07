@@ -209,7 +209,7 @@ class PortalOrgAccountSettingsViewTests(TestCase):
                 "force_parent_org_email": "",
                 "force_alumni_org_email": "",
             },
-            HTTP_X_ORGANIZATION="apex",
+            HTTP_HOST="apex.localhost",
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
@@ -228,7 +228,7 @@ class PortalOrgAccountSettingsViewTests(TestCase):
             {
                 "org_account_name": "Hacked SSO",
             },
-            HTTP_X_ORGANIZATION="apex",
+            HTTP_HOST="apex.localhost",
         )
         # Should be redirected or denied by LeadMentorRequiredMixin
         self.assertIn(response.status_code, [302, 403])
@@ -302,7 +302,7 @@ class AndrewIdManagementViewTenantTests(TestCase):
                 "person_id": self.student.pk,
                 "andrew_id": "sconnor",
             },
-            HTTP_X_ORGANIZATION="somewhere-hs",
+            HTTP_HOST="somewhere-hs.localhost",
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
@@ -338,7 +338,7 @@ class OrganizationContextProcessorAndLoginTemplateTests(TestCase):
                 "force_student_org_email": True,
             },
         )
-        response = self.client.get("/accounts/login/", HTTP_X_ORGANIZATION="sciencey")
+        response = self.client.get("/accounts/login/", HTTP_HOST="sciencey.localhost")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "@scienceyrobotics.org")
         self.assertContains(response, "Sciencey SSO")

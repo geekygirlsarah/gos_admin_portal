@@ -38,7 +38,7 @@ must have the class "js-email-send-confirm".
         <div class="form-check">
           <input class="form-check-input" type="checkbox" id="email-confirm-on-behalf">
           <label class="form-check-label" for="email-confirm-on-behalf">
-            This message is written on behalf of Girls of Steel Robotics.
+            This message is written on behalf of {{ email_confirm_organization_name|default:"Girls of Steel Robotics" }}.
           </label>
         </div>
       </div>

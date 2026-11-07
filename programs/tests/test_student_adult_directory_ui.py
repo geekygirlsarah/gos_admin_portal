@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -35,6 +36,12 @@ class StudentAdultDirectoryUITests(TestCase):
         self.program = Program.objects.create(
             name="Girls of Steel FRC",
             active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
         self.school = School.objects.create(name="Carnegie Mellon High")

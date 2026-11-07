@@ -51,6 +51,11 @@ SECRET_KEY_FALLBACKS = [_old_secret_key] if _old_secret_key else []
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() in ["1", "true", "yes"]
+MAINTENANCE_MODE = os.getenv("MAINTENANCE_MODE", "False").lower() in [
+    "1",
+    "true",
+    "yes",
+]
 
 # Security settings for deployment
 # https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -176,6 +181,7 @@ MIDDLEWARE = [
     # CSP must run early
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "GoSAdminPortal.middleware.MaintenanceModeMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -195,6 +201,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
+    "GoSAdminPortal.middleware.TenantMembershipGuardMiddleware",
     "GoSAdminPortal.middleware.MentorAgreementMiddleware",
     # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
     "audit.middleware.AuditHistoryMiddleware",
@@ -720,7 +727,7 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": DJANGO_LOG_LEVEL,
-            "propagate": True,
+            "propagate": False,
         },
         # Server errors (HTTP 500 etc.) -> email admins and console
         "django.request": {

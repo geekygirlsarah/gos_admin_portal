@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -34,6 +35,12 @@ class LeadMentorAdminDropdownSplitTests(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(lm_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
     def _login(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
@@ -97,6 +104,12 @@ class CurrentProgramDropdownTests(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(lm_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.program = Program.objects.create(name="Robotics 101", active=True)
 
     def test_program_links_grouped_into_single_dropdown(self):
@@ -156,6 +169,12 @@ class PreviouslyOrphanedPagesNowLinkedTests(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(lm_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
     def _login(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106

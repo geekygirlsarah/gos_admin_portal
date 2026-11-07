@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-06
+
+### Added
+- Added an opt-in `MAINTENANCE_MODE` environment variable that serves a non-cacheable `503` page for application requests while preserving static assets and the real health check.
+
+### Fixed
+- Student and parent merges and alumni conversion now stay within the current organization; inconsistent cross-organization relationships block changes before records are transferred or deleted.
+
+## 2026-11-05
+
+### Changed
+- Monthly balance emails are sent separately for each eligible program, with neutral guidance to contact the program for payment instructions.
+- Balance emails use saved organization branding or Momentum fallbacks; monthly command logs and dry-run summaries no longer include family identities or balances.
+
+### Fixed
+- Calendar source synchronization and reminder emails now respect organization ownership; reminders use each organization's branding and canonical calendar address.
+- Private calendar feeds fail closed when ACL rows belong to another organization; ACL editing and feed deletion no longer expose or cascade foreign-owned records. Calendar pages and event APIs reject missing tenant context.
+- Calendar event and exception operations validate the ownership chain, exclude foreign exceptions from recurrence and subscriptions, and prevent event deletion from cascading to foreign-owned exceptions.
+- Program Messaging now limits programs, sender choices, subgroups, and broadcast recipients to the current organization.
+- Applicant bulk messaging now scopes program choices, sender identities, branding, and recipients to the request organization, including all-program sends.
+- Manual and monthly balance statements use tenant-scoped selections, contacts, sender settings and validated financial records; inconsistent program statements are not sent, and the fixed debugging BCC has been removed.
+- Application review actions and stale cleanup now scope applications and program choices to the request organization; inconsistent foreign-owned document submissions are not exposed, overwritten, or cascaded away.
+- Student/adult profile details, edits, linked relationships, and sensitive background-check/document paths now enforce the request organization's ownership; mismatched objects are denied before role permissions are evaluated.
+- Portal Settings now scopes team, crew, subteam, program, and kiosk configuration data to the current organization; new child configurations require a local program, and deletes preserve foreign-owned enrollments.
+- Email Settings now distinguishes an organization's sender override from the shared default, so unrelated settings saves do not pin the current default.
+- Attendance kiosks now isolate kiosk, person, RFID, and attendance data by organization. Unlocking requires an eligible active account, rate-limited one-use codes, and a signed tenant-bound cookie; previously unlocked kiosks must be unlocked again.
+- Digital sign-out stations now enforce organization ownership, require eligible accounts for rate-limited one-use unlock codes, and use signed station-bound cookies; previously unlocked stations must be unlocked again.
+
+## 2026-11-04
+
+### Changed
+- Portal settings now show each organization's Momentum address separately from email sender settings, and email branding has its own tab. Custom sending-domain preferences are clearly identified as requests that do not configure DNS or change delivery.
+- Authenticated tenant access now requires an active membership in that organization, except for platform superusers and limited sign-in, invitation, and integration routes. Legacy group-only accounts and suspended memberships must be reviewed before deployment.
+- Email branding no longer has a separate portal URL override. Login and application emails use the organization's canonical portal address; previously saved overrides remain stored but are ignored.
+- Support impersonation now uses a one-use, five-minute tenant-host handoff with explicit organization selection and confirmation; platform superuser sessions are not transferred to tenant hosts.
+
+### Fixed
+- Mentor agreement settings, acceptance, enforcement, and digest action items are scoped to the current organization; mismatched adult profiles cannot accept another organization's agreements.
+- Tenant routing now uses Django-validated hostnames, ignores organization-routing headers, constrains subdomains to the configured root or `.localhost`, and returns 404 for unresolved non-platform hosts instead of applying session/default organization fallbacks.
+- Cached host mappings are checked against the organization's current active state and domain configuration before reuse.
+- Scoped team assignments, school directories and merges, dashboard data, and navigation to the current organization. Global legacy lead groups no longer override existing organization memberships.
+
+### Added
+- Added a custom portal-domain registry with normalized unique hostnames, DNS TXT ownership checks, tenant-facing setup instructions, and operator-gated activation after DNS, HTTPS, and trusted host admission are confirmed. Existing legacy domain routes are retained temporarily and are not auto-migrated as verified.
+
+## 2026-11-03
+
+### Fixed
+- **Marketing portal links and dashboard logging**:
+  - Team directory links now use each active organization's configured custom domain or tenant subdomain, and the displayed/searchable destination matches the link.
+  - Alumni dashboards without a linked student record now receive an empty program history instead of resolving a missing template variable.
+  - Django template and other core Django log records no longer propagate to the root console handler and appear twice.
+
 ## 2026-11-02
 
 ### Fixed

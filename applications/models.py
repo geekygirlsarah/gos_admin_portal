@@ -8,7 +8,9 @@ parents and prospective mentors.
 from __future__ import annotations
 
 import enum
+import os
 import secrets
+import uuid
 
 import pghistory
 from django.contrib.auth.hashers import check_password, make_password
@@ -451,13 +453,17 @@ class Application(models.Model):
 
 
 def _application_doc_upload_to(instance, filename):
-    """Files land at MEDIA_ROOT/application_documents/<application_id>/<filename>."""
+    """Store signed uploads under the owning organization's private directory."""
     from programs.utils.files import build_upload_path
 
     aid = (
         instance.application.application_id if instance.application_id else "unassigned"
     )
-    return build_upload_path(f"application_documents/{aid}", filename=filename)
+    extension = os.path.splitext(filename or "")[1].lower()
+    if len(extension) > 10 or not extension[1:].isalnum():
+        extension = ""
+    prefix = f"private/application_documents/{instance.organization_id}/{aid}"
+    return build_upload_path(prefix, filename=f"{uuid.uuid4().hex}{extension}")
 
 
 class ApplicationDocumentSubmission(models.Model):

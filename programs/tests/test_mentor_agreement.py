@@ -15,13 +15,25 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     MentorAgreement,
     MentorAgreementAcceptance,
     MentorAgreementSubmission,
 )
+
+
+def _grant_memberships(user, *roles):
+    organization = Organization.objects.get(slug="gos")
+    for role in roles:
+        UserOrganizationMembership.objects.update_or_create(
+            user=user,
+            organization=organization,
+            role=role,
+            defaults={"is_active": True},
+        )
+
 
 # ---------------------------------------------------------------------------
 # Model tests
@@ -324,6 +336,7 @@ class MentorAgreementMiddlewareTests(TestCase):
             last_name="User",
             is_mentor=True,
         )
+        _grant_memberships(self.mentor, "Mentor")
 
         self.parent_mentor = User.objects.create_user(
             username="parent_mentor", password="password123"  # nosec B106
@@ -335,6 +348,7 @@ class MentorAgreementMiddlewareTests(TestCase):
             is_mentor=True,
             is_parent=True,
         )
+        _grant_memberships(self.parent_mentor, "Mentor", "Parent")
 
         self.lead_mentor = User.objects.create_user(
             username="lead_mentor", password="password123"  # nosec B106
@@ -347,6 +361,7 @@ class MentorAgreementMiddlewareTests(TestCase):
             last_name="Mentor",
             is_mentor=True,
         )
+        _grant_memberships(self.lead_mentor, "Mentor", "LeadMentor")
 
         self.parent_only = User.objects.create_user(
             username="parent_only", password="password123"  # nosec B106
@@ -357,6 +372,7 @@ class MentorAgreementMiddlewareTests(TestCase):
             last_name="Only",
             is_parent=True,
         )
+        _grant_memberships(self.parent_only, "Parent")
 
         self.student = User.objects.create_user(
             username="student", password="password123"  # nosec B106
@@ -368,6 +384,7 @@ class MentorAgreementMiddlewareTests(TestCase):
             legal_first_name="Student",
             last_name="User",
         )
+        _grant_memberships(self.student, "Student")
 
     def test_mentor_without_agreement_redirected(self):
         self.client.force_login(self.mentor)
@@ -477,6 +494,7 @@ class MentorAgreementMiddlewareDisabledTests(TestCase):
         Adult.objects.create(
             user=user, legal_first_name="Mentor", last_name="User", is_mentor=True
         )
+        _grant_memberships(user, "Mentor")
         self.client.force_login(user)
         response = self.client.get(reverse("profile_dashboard"))
         self.assertEqual(response.status_code, 200)
@@ -507,6 +525,7 @@ class MentorAgreementViewTests(TestCase):
             last_name="User",
             is_mentor=True,
         )
+        _grant_memberships(self.mentor, "Mentor")
 
     def test_get_renders_pending_agreement(self):
         self.client.force_login(self.mentor)
@@ -537,7 +556,9 @@ class MentorAgreementViewTests(TestCase):
             is_active=True,
         )
         self.client.force_login(self.mentor)
-        self.client.post(reverse("mentor_agreement"), {"action": "agree"})
+        response = self.client.post(reverse("mentor_agreement"), {"action": "agree"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/profile/")
         self.assertTrue(
             MentorAgreementAcceptance.objects.filter(
                 adult=self.adult, agreement=self.agreement
@@ -570,6 +591,8 @@ class MentorAgreementViewTests(TestCase):
     def test_post_disagree_shows_message(self):
         self.client.force_login(self.mentor)
         response = self.client.post(reverse("mentor_agreement"), {"action": "disagree"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
         login_response = self.client.get(response.url)
         self.assertContains(login_response, "must agree")
 
@@ -671,10 +694,11 @@ class PortalAgreementViewTests(TestCase):
             last_name="Mentor",
             is_mentor=True,
         )
+        _grant_memberships(self.lead, "Mentor", "LeadMentor")
         self.client.force_login(self.lead)
 
     def test_add_agreement_creates_new(self):
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {
                 "action": "add_agreement",
@@ -685,6 +709,8 @@ class PortalAgreementViewTests(TestCase):
                 "is_active": "on",
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         agreement = MentorAgreement.objects.get(slug="new-policy", version=1)
         self.assertEqual(agreement.title, "New Policy")
         self.assertTrue(agreement.is_active)
@@ -698,7 +724,7 @@ class PortalAgreementViewTests(TestCase):
             effective_date="2025-01-01",
             is_active=True,
         )
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {
                 "action": "add_agreement",
@@ -709,6 +735,8 @@ class PortalAgreementViewTests(TestCase):
                 "is_active": "on",
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         v2 = MentorAgreement.objects.get(slug="test-slug", version=2)
         self.assertEqual(v2.title, "Test v2")
 
@@ -721,7 +749,7 @@ class PortalAgreementViewTests(TestCase):
             effective_date="2025-01-01",
             is_active=True,
         )
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {
                 "action": "update_agreement",
@@ -733,6 +761,8 @@ class PortalAgreementViewTests(TestCase):
                 "is_active": "on",
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         v2 = MentorAgreement.objects.get(slug="test-slug", version=2)
         self.assertEqual(v2.content, "new content")
         self.assertTrue(v2.is_active)
@@ -748,7 +778,7 @@ class PortalAgreementViewTests(TestCase):
             effective_date="2025-01-01",
             is_active=True,
         )
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {
                 "action": "update_agreement",
@@ -760,6 +790,8 @@ class PortalAgreementViewTests(TestCase):
                 "is_active": "on",
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         self.assertEqual(MentorAgreement.objects.filter(slug="test-slug").count(), 1)
         agreement.refresh_from_db()
         self.assertEqual(agreement.title, "Test v1 (renamed)")
@@ -773,10 +805,12 @@ class PortalAgreementViewTests(TestCase):
             effective_date="2025-01-01",
             is_active=True,
         )
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {"action": "toggle_agreement", "agreement_id": agreement.id},
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         agreement.refresh_from_db()
         self.assertFalse(agreement.is_active)
 
@@ -797,10 +831,12 @@ class PortalAgreementViewTests(TestCase):
             effective_date="2025-06-01",
             is_active=False,
         )
-        self.client.post(
+        response = self.client.post(
             reverse("portal_agreements"),
             {"action": "delete_agreement", "agreement_id": agreement.id},
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/programs/settings/?tab=agreements")
         self.assertEqual(MentorAgreement.objects.filter(slug="test-slug").count(), 0)
 
     def test_non_lead_cannot_access(self):
@@ -811,6 +847,7 @@ class PortalAgreementViewTests(TestCase):
         Adult.objects.create(
             user=user, legal_first_name="Regular", last_name="User", is_mentor=True
         )
+        _grant_memberships(user, "Mentor")
         self.client.force_login(user)
         response = self.client.get("/programs/settings/?tab=agreements")
         self.assertIn(response.status_code, (403, 302))
@@ -897,7 +934,15 @@ class MentorAgreementSubmissionTests(TestCase):
 # ---------------------------------------------------------------------------
 
 
-@override_settings(MENTOR_AGREEMENT_ENABLED=True)
+@override_settings(
+    MENTOR_AGREEMENT_ENABLED=True,
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    },
+)
 class MentorAgreementUploadViewTests(TestCase):
     def setUp(self):
         self.pdf_agreement = MentorAgreement.objects.create(
@@ -926,6 +971,7 @@ class MentorAgreementUploadViewTests(TestCase):
             last_name="User",
             is_mentor=True,
         )
+        _grant_memberships(self.mentor, "Mentor")
 
     def test_get_shows_upload_form_for_pdf_agreement(self):
         self.client.force_login(self.mentor)
@@ -945,7 +991,7 @@ class MentorAgreementUploadViewTests(TestCase):
     def test_upload_creates_submission(self):
         self.client.force_login(self.mentor)
         uploaded = SimpleUploadedFile("signed.pdf", b"%PDF-1.4 fake content")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -953,6 +999,8 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         self.assertTrue(
             MentorAgreementSubmission.objects.filter(
                 adult=self.adult, agreement=self.pdf_agreement
@@ -976,7 +1024,7 @@ class MentorAgreementUploadViewTests(TestCase):
     def test_upload_shows_success_message(self):
         self.client.force_login(self.mentor)
         uploaded = SimpleUploadedFile("signed.pdf", b"%PDF-1.4 fake content")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -984,13 +1032,15 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         response = self.client.get(reverse("mentor_agreement"))
         self.assertContains(response, "Signed copy uploaded")
 
     def test_upload_replaces_existing(self):
         self.client.force_login(self.mentor)
         uploaded1 = SimpleUploadedFile("signed1.pdf", b"%PDF-1.4 first")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -998,8 +1048,10 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded1,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         uploaded2 = SimpleUploadedFile("signed2.pdf", b"%PDF-1.4 second")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -1007,6 +1059,8 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded2,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         self.assertEqual(
             MentorAgreementSubmission.objects.filter(
                 adult=self.adult, agreement=self.pdf_agreement
@@ -1024,7 +1078,7 @@ class MentorAgreementUploadViewTests(TestCase):
     def test_agree_succeeds_after_upload(self):
         self.client.force_login(self.mentor)
         uploaded = SimpleUploadedFile("signed.pdf", b"%PDF-1.4 fake content")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -1032,6 +1086,8 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         response = self.client.post(reverse("mentor_agreement"), {"action": "agree"})
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
@@ -1055,7 +1111,7 @@ class MentorAgreementUploadViewTests(TestCase):
     def test_upload_shows_timestamp_after_upload(self):
         self.client.force_login(self.mentor)
         uploaded = SimpleUploadedFile("signed.pdf", b"%PDF-1.4 fake content")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -1063,6 +1119,8 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         response = self.client.get(reverse("mentor_agreement"))
         self.assertContains(response, "Signed copy uploaded")
 
@@ -1070,7 +1128,7 @@ class MentorAgreementUploadViewTests(TestCase):
         """After upload, the checkbox for the PDF agreement should be enabled."""
         self.client.force_login(self.mentor)
         uploaded = SimpleUploadedFile("signed.pdf", b"%PDF-1.4 fake content")
-        self.client.post(
+        response = self.client.post(
             reverse("mentor_agreement"),
             {
                 "action": "upload",
@@ -1078,6 +1136,8 @@ class MentorAgreementUploadViewTests(TestCase):
                 "file_{}".format(self.pdf_agreement.id): uploaded,
             },
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("mentor_agreement"))
         response = self.client.get(reverse("mentor_agreement"))
         # The checkbox should not be disabled after upload
         self.assertNotContains(

@@ -8,11 +8,12 @@ Usage:
 import logging
 from datetime import timedelta
 
-from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
-from calendar_feeds.models import CalendarFeed
+from calendar_feeds.models import CalendarFeed, CalendarFeedACL
+from organizations.models import UserOrganizationMembership
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,29 @@ class Command(BaseCommand):
 
     def _collect_events(self, start, end):
         events_by_feed = {}
-        for feed in CalendarFeed.objects.filter(is_active=True):
+        foreign_acls = CalendarFeedACL.objects.filter(feed_id=OuterRef("pk")).exclude(
+            organization_id=OuterRef("organization_id")
+        )
+        feeds = (
+            CalendarFeed.objects.filter(
+                is_active=True,
+                organization__is_active=True,
+            )
+            .select_related("organization", "program")
+            .annotate(has_foreign_acl=Exists(foreign_acls))
+        )
+        for feed in feeds:
+            if feed.program_id and feed.program.organization_id != feed.organization_id:
+                logger.warning(
+                    "Skipping calendar feed %s with cross-organization program",
+                    feed.pk,
+                )
+                continue
+            if not feed.is_public and feed.has_foreign_acl:
+                logger.warning(
+                    "Skipping calendar feed %s with cross-organization ACL", feed.pk
+                )
+                continue
             instances = feed.get_events_for_date_range(start, end)
             if instances:
                 events_by_feed[feed] = instances
@@ -55,8 +78,14 @@ class Command(BaseCommand):
                     body_lines.append(f"    Location: {inst['location']}")
         return "\n".join(body_lines)
 
-    def _send(self, user, feed_events, days_ahead):
+    def _send(self, user, organization, feed_events, days_ahead):
+        from organizations.utils import get_organization_email_settings
         from programs.utils.notifications import send_templated_notification
+
+        portal_url = str(
+            get_organization_email_settings(organization).get("portal_url") or ""
+        ).rstrip("/")
+        calendar_url = f"{portal_url}/calendar/" if portal_url else ""
 
         try:
             send_templated_notification(
@@ -66,9 +95,10 @@ class Command(BaseCommand):
                     "user": user,
                     "feed_events": feed_events,
                     "days_ahead": days_ahead,
-                    "calendar_url": "https://portal.girlsofsteel.org/calendar/",
+                    "calendar_url": calendar_url,
                 },
                 recipient_list=[user.email],
+                organization=organization,
             )
             logger.info(
                 "Sent calendar reminder to user %s <%s>",
@@ -106,16 +136,34 @@ class Command(BaseCommand):
             logger.info("No upcoming calendar events found.")
             return
 
-        # Collect all users who should receive reminders
-        users = User.objects.filter(
-            is_active=True,
-            email__isnull=False,
-        ).exclude(email="")
+        organization_ids = {feed.organization_id for feed in events_by_feed}
+        memberships = (
+            UserOrganizationMembership.objects.filter(
+                organization_id__in=organization_ids,
+                organization__is_active=True,
+                is_active=True,
+                user__is_active=True,
+                user__email__gt="",
+            )
+            .select_related("user", "organization")
+            .order_by("organization_id", "user_id", "role")
+        )
 
         total_sent = 0
-        for user in users:
-            # Determine which feeds this user can read
-            user_feeds = [feed for feed in events_by_feed if feed.user_can_read(user)]
+        processed_user_organizations = set()
+        for membership in memberships:
+            user = membership.user
+            organization = membership.organization
+            user_organization = (user.pk, organization.pk)
+            if user_organization in processed_user_organizations:
+                continue
+            processed_user_organizations.add(user_organization)
+
+            user_feeds = [
+                feed
+                for feed in events_by_feed
+                if feed.organization_id == organization.pk and feed.user_can_read(user)
+            ]
             if not user_feeds:
                 continue
 
@@ -129,7 +177,7 @@ class Command(BaseCommand):
                     user.username,
                     user.email,
                 )
-            elif self._send(user, feed_events, days_ahead):
+            elif self._send(user, organization, feed_events, days_ahead):
                 total_sent += 1
 
         if dry_run:

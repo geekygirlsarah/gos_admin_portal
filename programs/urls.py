@@ -27,6 +27,7 @@ from .views import (
     PortalAgreementView,
     PortalBackgroundCheckTypeView,
     PortalCrewView,
+    PortalDomainView,
     PortalEmailSettingsView,
     PortalKioskView,
     PortalLeadMentorView,
@@ -97,6 +98,7 @@ from .views import (
     StudentListView,
     StudentMergeView,
     StudentPhotoListView,
+    StudentPhotoView,
     StudentsByGradeView,
     StudentsBySchoolView,
     StudentUpdateView,
@@ -255,6 +257,11 @@ urlpatterns = [
         name="attendance_sample_csv",
     ),
     path("students/", login_required(StudentListView.as_view()), name="student_list"),
+    path(
+        "students/<int:pk>/photo/",
+        login_required(StudentPhotoView.as_view()),
+        name="student_photo",
+    ),
     path(
         "students/emergency-contacts/",
         login_required(StudentEmergencyContactsView.as_view()),
@@ -698,6 +705,11 @@ urlpatterns = [
         "settings/email/",
         PortalEmailSettingsView.as_view(),
         name="portal_email_settings",
+    ),
+    path(
+        "settings/domains/",
+        PortalDomainView.as_view(),
+        name="portal_domains",
     ),
     path(
         "settings/org-accounts/",

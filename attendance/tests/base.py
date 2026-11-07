@@ -4,6 +4,8 @@ from django.contrib.auth.models import Group, User
 from django.test import Client
 from django.utils import timezone
 
+from organizations.models import UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import (
     Adult,
     Enrollment,
@@ -33,6 +35,12 @@ def make_lead_mentor_user(username="lead_mentor", password="password123"):  # no
     user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=get_default_organization(),
+        role="LeadMentor",
+        is_active=True,
+    )
     return user
 
 

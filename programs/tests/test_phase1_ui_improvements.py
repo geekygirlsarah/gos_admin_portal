@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -71,6 +72,12 @@ class Phase1UIImprovementsTests(TestCase):
             active=True,
             start_date=today - datetime.timedelta(days=180),
             end_date=today + datetime.timedelta(days=180),
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
         f_att, _ = ProgramFeature.objects.get_or_create(
             key="attendance", defaults={"name": "Attendance"}

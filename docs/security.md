@@ -78,10 +78,13 @@ Sensitive uploads must not be publicly accessible through direct media URLs.
 
 Protected files are delivered through authorized application endpoints:
 
+- `student_photo` (`/programs/students/<pk>/photo/`)
 - `student_document_download`
   (`/programs/documents/<pk>/download/`)
 - `program_digital_signout_signature`
   (`/attendance/signout/<pk>/signature/`)
+- `apply_step10_document_download` and
+  `application_review_document_download` for signed application submissions.
 
 Every protected-file endpoint must enforce:
 
@@ -92,6 +95,33 @@ Every protected-file endpoint must enforce:
 
 Storage, reverse-proxy, CDN, and deployment configuration must not expose the
 underlying paths of protected uploads publicly.
+
+The application's `/media/` handler rejects the sensitive legacy photo and
+application-document directories and all `private/` paths in both debug and
+production configurations. This guard is database-free; private files are
+streamed only by the authorized endpoints above. New student photos and signed
+application uploads use organization-scoped random storage paths under the
+existing `MEDIA_ROOT`; these paths are not authorization tokens. Existing files
+are not moved automatically, and their direct legacy URLs remain blocked.
+
+The opt-in `transition_private_media` management command can copy existing
+student photos and signed application submissions into those private paths. It
+defaults to a read-only inventory, checks tenant ownership and verifies each
+copy before updating its record, and retains every original. Random filenames
+and organization directories are organizational safeguards only; authorized
+delivery checks remain mandatory before and after a transition.
+
+Applicant access to Step 10 requires a fresh email OTP. Successful verification
+is bound to the tenant, application, current email, browser session, and OTP
+expiry; requesting and verifying codes use the existing rate limits. Staff
+downloads require the tenant-scoped application review permission. Approved,
+submitted, converted, and declined applications cannot be changed through the
+earlier public wizard steps.
+
+Any proxy, CDN, or storage origin that serves media without passing through the
+Django handler must independently deny the protected legacy and private
+prefixes. Cached copies of files previously served through public URLs require
+separate operational review.
 
 ### Zero-Database Request Rule for Static and Media Paths
 

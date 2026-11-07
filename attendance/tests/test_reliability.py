@@ -7,7 +7,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from attendance.kiosk_utils import _cookie_name
+from attendance.kiosk_utils import _cookie_name, _make_unlock_token
 from attendance.models import (
     AttendanceEvent,
     AttendanceSession,
@@ -114,18 +114,26 @@ class KioskApiReliabilityTests(TestCase):
         self.client = Client()
         self.program = make_program("Kiosk Program")
         self.kiosk = KioskConfig.objects.create(
-            label="Main Kiosk", program=self.program
+            label="Main Kiosk",
+            program=self.program,
+            organization=self.program.organization,
         )
         self.cookie_name = _cookie_name(self.kiosk.pk)
         self.student = make_student(
-            preferred_first_name="Kiosk", last_name="Student", graduation_year=2027
+            preferred_first_name="Kiosk",
+            last_name="Student",
+            graduation_year=2027,
+            organization=self.program.organization,
         )
         Enrollment.objects.create(
-            student=self.student, program=self.program, active=True
+            student=self.student,
+            program=self.program,
+            active=True,
+            organization=self.program.organization,
         )
 
     def test_kiosk_tap_invalid_json_returns_400(self):
-        self.client.cookies[self.cookie_name] = "1"
+        self.client.cookies[self.cookie_name] = _make_unlock_token(self.kiosk)
         response = self.client.post(
             reverse("api_kiosk_tap", args=[self.kiosk.pk]),
             data="{",
@@ -135,7 +143,7 @@ class KioskApiReliabilityTests(TestCase):
         self.assertEqual(response.json()["error"], "Invalid JSON.")
 
     def test_kiosk_tap_unknown_student_id_returns_404(self):
-        self.client.cookies[self.cookie_name] = "1"
+        self.client.cookies[self.cookie_name] = _make_unlock_token(self.kiosk)
         response = self.client.post(
             reverse("api_kiosk_tap", args=[self.kiosk.pk]),
             data=json.dumps({"student_id": 999999, "event_type": "AUTO"}),
@@ -145,7 +153,7 @@ class KioskApiReliabilityTests(TestCase):
         self.assertEqual(response.json()["error"], "Student not found or inactive.")
 
     def test_kiosk_tap_unknown_rfid_member_returns_400(self):
-        self.client.cookies[self.cookie_name] = "1"
+        self.client.cookies[self.cookie_name] = _make_unlock_token(self.kiosk)
         response = self.client.post(
             reverse("api_kiosk_tap", args=[self.kiosk.pk]),
             data=json.dumps({"rfid_uid": "UNKNOWN-UID", "event_type": "AUTO"}),
@@ -156,9 +164,12 @@ class KioskApiReliabilityTests(TestCase):
 
     def test_kiosk_lookup_leading_zero_uid_resolves_and_normalizes_card(self):
         card = RFIDCard.objects.create(
-            uid="12345", student=self.student, is_active=True
+            uid="12345",
+            student=self.student,
+            is_active=True,
+            organization=self.program.organization,
         )
-        self.client.cookies[self.cookie_name] = "1"
+        self.client.cookies[self.cookie_name] = _make_unlock_token(self.kiosk)
 
         response = self.client.get(
             reverse("api_kiosk_lookup", args=[self.kiosk.pk]),

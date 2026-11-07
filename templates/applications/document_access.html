@@ -1,0 +1,26 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_heading %}Verify your email to view signed documents{% endblock %}
+
+{% block wizard_body %}
+  <p class="text-muted">
+    To protect these documents, we’ll send a short-lived code to the email address on this application.
+  </p>
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="send">
+    <button type="submit" class="btn btn-outline-primary">Send verification code</button>
+  </form>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="verify">
+    <div class="mb-3">
+      <label for="id_code" class="form-label">Verification code</label>
+      {{ form.code }}
+      {% for error in form.code.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary">Verify and continue</button>
+  </form>
+{% endblock %}

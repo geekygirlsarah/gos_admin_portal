@@ -13,8 +13,10 @@ We've received your application:
   Application ID:   {{ application.application_id }}
 
 Our lead mentors have been notified and will review your application.
+{% if resume_url %}
 You can check back at any time using your application ID:
 
   {{ resume_url }}
+{% endif %}
 
 If you have questions, contact leads@girlsofsteelrobotics.org.

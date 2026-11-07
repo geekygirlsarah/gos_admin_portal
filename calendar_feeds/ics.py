@@ -6,6 +6,8 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.views import View
 
+from organizations.models import UserOrganizationMembership
+
 from .models import CalendarFeed, UserCalendarToken
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,12 @@ def _to_localtime(dt):
     return timezone.localtime(dt, timezone.get_current_timezone())
 
 
+def _event_owned_exceptions(event):
+    if event.organization_id != event.feed.organization_id:
+        return event.exceptions.none()
+    return event.exceptions.filter(organization_id=event.organization_id)
+
+
 def _dt_lines(start, end):
     tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     local_start = _to_localtime(start)
@@ -42,7 +50,7 @@ def _dt_lines(start, end):
 def _exdate_list(event):
     """EXDATEs from the event's exdate_ical plus deleted exceptions."""
     exdates = list(event.exdate_list)
-    for exc in event.exceptions.filter(change_type="deleted"):
+    for exc in _event_owned_exceptions(event).filter(change_type="deleted"):
         if exc.original_date not in exdates:
             exdates.append(exc.original_date)
     return sorted(exdates)
@@ -92,7 +100,7 @@ def _vevent_lines(event):
     if exdates:
         lines.append(f"EXDATE:{','.join(d.strftime('%Y%m%d') for d in exdates)}")
 
-    for exc in event.exceptions.all():
+    for exc in _event_owned_exceptions(event):
         if exc.change_type == exc.CHANGE_MOVED and exc.new_start_datetime:
             lines.extend(_exception_lines(event, exc))
 
@@ -128,7 +136,11 @@ class PublicICSFeedView(View):
     """Public ICS feed for all active public-visibility feeds."""
 
     def get(self, request):
-        feeds = CalendarFeed.objects.filter(
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            return HttpResponse("Organization not found", status=404)
+
+        feeds = CalendarFeed.objects.for_organization(organization).filter(
             is_active=True, visibility=CalendarFeed.VISIBILITY_ANONYMOUS
         )
         today = date.today()
@@ -163,7 +175,15 @@ class FeedICSView(View):
     """
 
     def get(self, request, slug, token=None):
-        feed = CalendarFeed.objects.filter(slug=slug, is_active=True).first()
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            return HttpResponse("Organization not found", status=404)
+
+        feed = (
+            CalendarFeed.objects.for_organization(organization)
+            .filter(slug=slug, is_active=True)
+            .first()
+        )
         if not feed:
             return HttpResponse("Feed not found", status=404)
 
@@ -211,6 +231,10 @@ class PersonalICSFeedView(View):
     """
 
     def get(self, request, token):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            return HttpResponse("Organization not found", status=404)
+
         try:
             token_obj = UserCalendarToken.objects.select_related("user").get(
                 token=token
@@ -219,7 +243,19 @@ class PersonalICSFeedView(View):
             return HttpResponse("Feed not found", status=404)
 
         user = token_obj.user
-        feeds = CalendarFeed.objects.filter(is_active=True)
+        if not user.is_active:
+            return HttpResponse("Access denied", status=403)
+        if (
+            not user.is_superuser
+            and not UserOrganizationMembership.objects.filter(
+                user=user, organization=organization, is_active=True
+            ).exists()
+        ):
+            return HttpResponse("Access denied", status=403)
+
+        feeds = CalendarFeed.objects.for_organization(organization).filter(
+            is_active=True
+        )
         today = date.today()
         start = today - timedelta(days=30)
         end = today + timedelta(days=365)

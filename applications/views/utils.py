@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 
 from programs.utils import calculate_grade
@@ -40,8 +41,26 @@ def _mentor_progress(view_key: str) -> tuple[int, int]:
     return mapping.get(view_key, 1), MENTOR_TOTAL_STEPS
 
 
-def _get_application_or_404(app_id: str) -> Application:
-    return get_object_or_404(Application, application_id=(app_id or "").upper())
+def _require_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+def _get_application_or_404(app_id: str, organization) -> Application:
+    if organization is None:
+        raise Http404
+    application = get_object_or_404(
+        Application.objects.for_organization(organization).select_related("program"),
+        application_id=(app_id or "").upper(),
+    )
+    if (
+        application.program_id
+        and application.program.organization_id != organization.pk
+    ):
+        raise Http404
+    return application
 
 
 def _issue_and_send(application: Application, request) -> bool:
@@ -118,15 +137,37 @@ def _redirect_to_current_step(application: Application):
 def _redirect_after_email_verified(application: Application):
     """Determine where to send the user immediately after email verification."""
     if _is_mentor(application):
-        if find_existing_mentor_by_email(application.email):
+        if find_existing_mentor_by_email(
+            application.email, organization=application.organization
+        ):
             return redirect("apply_mentor_blocked", app_id=application.application_id)
         return redirect("apply_mentor_info", app_id=application.application_id)
     return redirect("apply_step4", app_id=application.application_id)
 
 
 def _require_verified_email(application: Application):
+    locked_redirect = _locked_application_redirect(application)
+    if locked_redirect is not None:
+        return locked_redirect
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
+    return None
+
+
+def _locked_application_redirect(application: Application):
+    if application.status in (
+        Application.Status.APPROVED,
+        Application.Status.APPROVED_SIGNED,
+    ):
+        if _is_mentor(application):
+            return redirect("apply_submitted", app_id=application.application_id)
+        return redirect("apply_step10", app_id=application.application_id)
+    if application.status in (
+        Application.Status.SUBMITTED,
+        Application.Status.CONVERTED,
+        Application.Status.DECLINED,
+    ):
+        return redirect("apply_submitted", app_id=application.application_id)
     return None
 
 
@@ -168,7 +209,7 @@ def _auto_authorize_handoff(request, application: Application) -> None:
     if not user or not user.is_authenticated:
         return
     adult = getattr(user, "adult_profile", None)
-    if adult is None:
+    if adult is None or adult.organization_id != application.organization_id:
         return
     adult_emails = {
         email.strip().lower()
@@ -239,7 +280,9 @@ def _student_initial_for(application: Application) -> dict:
         return saved
     # Try to prefill from an existing Student record.
     if application.applicant_type == Application.Type.STUDENT:
-        existing = find_student_by_email(application.email)
+        existing = find_student_by_email(
+            application.email, organization=application.organization
+        )
         if existing:
             initial = student_to_prefill(existing)
             initial["personal_email"] = application.email
@@ -268,12 +311,17 @@ def _require_mentor(application: Application):
 
 def _require_mentor_verified(application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
+    locked_redirect = _locked_application_redirect(application)
+    if locked_redirect is not None:
+        return locked_redirect
     guard = _require_mentor(application)
     if guard is not None:
         return guard
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
     # Block existing-mentor applicants from continuing past OTP.
-    if find_existing_mentor_by_email(application.email):
+    if find_existing_mentor_by_email(
+        application.email, organization=application.organization
+    ):
         return redirect("apply_mentor_blocked", app_id=application.application_id)
     return None

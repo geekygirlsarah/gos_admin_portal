@@ -1,8 +1,14 @@
 import logging
 
 from django.conf import settings
-from django.http import Http404
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseForbidden,
+    HttpResponseNotFound,
+)
 from django.shortcuts import redirect
+from django.template.loader import render_to_string
 from django.urls import Resolver404, resolve, reverse
 
 from applications.rate_limiting import (
@@ -27,6 +33,34 @@ def _default_organization():
     return Organization.objects.filter(slug=slug).first()
 
 
+class MaintenanceModeMiddleware:
+    """Show a standalone maintenance page before session or tenant access."""
+
+    HEALTH_PATHS = frozenset({"/health", "/health/"})
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            not getattr(settings, "MAINTENANCE_MODE", False)
+            or request.path in self.HEALTH_PATHS
+            or (settings.STATIC_URL and request.path.startswith(settings.STATIC_URL))
+        ):
+            return self.get_response(request)
+
+        response = HttpResponse(
+            render_to_string("maintenance.html"),
+            status=503,
+        )
+        response["Cache-Control"] = (
+            "private, no-store, no-cache, max-age=0, must-revalidate"
+        )
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
+        return response
+
+
 EXEMPT_URL_NAMES = {
     "account_login",
     "account_logout",
@@ -41,6 +75,10 @@ EXEMPT_URL_NAMES = {
     "api_tosend_webhook",
     "landing",
     "about",
+    "organizations:support_impersonation_handoff",
+    "organizations:support_impersonation_redeem",
+    "organizations:support_impersonation_resume",
+    "organizations:support_impersonation_confirm",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -115,11 +153,71 @@ class LoginRequiredMiddleware:
         return False
 
 
+class TenantMembershipGuardMiddleware:
+    """Require active host-organization membership for authenticated users."""
+
+    EXEMPT_URL_NAMES = {
+        "account_login",
+        "account_logout",
+        "account_signup",
+        "account_confirm_email",
+        "account_email_verification_sent",
+        "account_request_login_code",
+        "account_confirm_login_code",
+        "account_reset_password",
+        "account_reset_password_done",
+        "account_reset_password_from_key",
+        "account_reset_password_from_key_done",
+        "account_confirm_password_reset_code",
+        "account_complete_password_reset",
+        "account_password_reset_completed",
+        "organizations:accept_invitation",
+        "organizations:support_impersonation_handoff",
+        "organizations:support_impersonation_redeem",
+        "organizations:support_impersonation_resume",
+        "organizations:support_impersonation_confirm",
+        "platform_admin:impersonate_stop",
+        "tosend_webhook",
+        "api_tosend_webhook",
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+        if (
+            (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+            or (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
+            or path in ("/health", "/health/")
+            or getattr(request, "organization", None) is None
+        ):
+            return self.get_response(request)
+
+        for candidate in (path, path + "/"):
+            try:
+                if resolve(candidate).view_name in self.EXEMPT_URL_NAMES:
+                    return self.get_response(request)
+            except Resolver404:
+                continue
+
+        user = request.user
+        if not user.is_authenticated or user.is_superuser:
+            return self.get_response(request)
+
+        from organizations.models import UserOrganizationMembership
+
+        if UserOrganizationMembership.objects.filter(
+            user=user, organization=request.organization, is_active=True
+        ).exists():
+            return self.get_response(request)
+        return HttpResponseForbidden("Forbidden")
+
+
 class OrganizationMiddleware:
     """Attach the active organization to every request as ``request.organization``.
 
-    Resolves the organization from HTTP headers (e.g. X-Organization), request
-    subdomain / hostname, or falls back to the default organization row.
+    Resolves the organization from the validated request hostname.
     """
 
     def __init__(self, get_response):
@@ -143,10 +241,8 @@ class RootDomainGuardMiddleware:
     """Keep tenant data unreachable when no organization is resolved.
 
     The root platform domain has no organization context: it serves the
-    marketing site, auth, and platform-admin tooling only. Every other path
-    holds org-owned data, so it redirects to the landing page rather than
-    letting a view run
-    with ``request.organization = None`` (which would skip tenant scoping).
+    marketing site, auth, and platform-admin tooling only. Unknown hosts are
+    rejected before views can run without tenant scoping.
     """
 
     ALLOWED_PREFIXES = (
@@ -164,12 +260,21 @@ class RootDomainGuardMiddleware:
 
     def __call__(self, request):
         path = request.path
+        is_static_or_media = (
+            settings.MEDIA_URL and path.startswith(settings.MEDIA_URL)
+        ) or (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+        if (
+            getattr(request, "organization", None) is None
+            and not getattr(request, "_is_platform_domain", False)
+            and not is_static_or_media
+        ):
+            return HttpResponseNotFound("Not Found")
+
         if (
             getattr(request, "organization", None) is None
             and path != "/"
             and not path.startswith(self.ALLOWED_PREFIXES)
-            and not (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
-            and not (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+            and not is_static_or_media
         ):
             return redirect("home")
         return self.get_response(request)
@@ -230,6 +335,17 @@ class MentorAgreementMiddleware:
         for prefix in EXEMPT_PATH_PREFIXES:
             if prefix and request.path.startswith(prefix):
                 return self.get_response(request)
+        if request.path.startswith("/organizations/support-impersonation/"):
+            try:
+                if resolve(request.path).view_name in {
+                    "organizations:support_impersonation_handoff",
+                    "organizations:support_impersonation_redeem",
+                    "organizations:support_impersonation_resume",
+                    "organizations:support_impersonation_confirm",
+                }:
+                    return self.get_response(request)
+            except Resolver404:
+                pass
         if not request.user.is_authenticated:
             return self.get_response(request)
         # Don't redirect away from the agreement page itself.
@@ -239,12 +355,15 @@ class MentorAgreementMiddleware:
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor
 
-        if not user_is_mentor(request.user, org=request.organization):
+        organization = getattr(request, "organization", None)
+        if organization is None or not user_is_mentor(request.user, org=organization):
             return self.get_response(request)
 
         from programs.models import MentorAgreementAcceptance
 
-        if MentorAgreementAcceptance.has_accepted_for_user(request.user):
+        if MentorAgreementAcceptance.has_accepted_for_user(
+            request.user, organization=organization
+        ):
             return self.get_response(request)
 
         # User has not accepted — redirect to the agreement page.

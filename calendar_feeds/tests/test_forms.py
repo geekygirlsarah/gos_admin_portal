@@ -12,25 +12,30 @@ from calendar_feeds.forms import (
 )
 from calendar_feeds.models import CalendarFeed, CalendarFeedACL
 from calendar_feeds.tests.factories import make_feed
+from organizations.models import Organization
 from programs.models import Program
 
 
 class CalendarFeedFormProgramGroupingTests(TestCase):
     def setUp(self):
         today = timezone.localdate()
+        self.organization = Organization.objects.get(slug="gos")
         self.active_prog = Program.objects.create(
+            organization=self.organization,
             name="Active FTC Season",
             active=True,
             start_date=today - timedelta(days=30),
             end_date=today + timedelta(days=60),
         )
         self.upcoming_prog = Program.objects.create(
+            organization=self.organization,
             name="Upcoming FRC Season",
             active=True,
             start_date=today + timedelta(days=90),
             end_date=today + timedelta(days=180),
         )
         self.past_prog = Program.objects.create(
+            organization=self.organization,
             name="Past FLL Season",
             active=False,
             start_date=today - timedelta(days=300),
@@ -38,7 +43,7 @@ class CalendarFeedFormProgramGroupingTests(TestCase):
         )
 
     def test_program_field_grouped_optgroups(self):
-        form = CalendarFeedForm()
+        form = CalendarFeedForm(organization=self.organization)
         rendered = str(form["program"])
 
         self.assertIn("Org-wide (no program)", rendered)
@@ -59,13 +64,48 @@ class CalendarFeedFormProgramGroupingTests(TestCase):
             "program": self.active_prog.pk,
             "is_active": True,
         }
-        form = CalendarFeedForm(data=data)
+        form = CalendarFeedForm(data=data, organization=self.organization)
         self.assertTrue(form.is_valid(), form.errors)
-        feed = form.save()
+        feed = form.save(commit=False)
+        feed.organization = self.organization
+        feed.save()
         self.assertEqual(feed.program, self.active_prog)
 
 
 class CalendarFeedACLInlineFormSetTests(TestCase):
+    def test_new_acl_rows_inherit_feed_organization(self):
+        organization = Organization.objects.create(
+            name="ACL Organization", slug="acl-organization-test"
+        )
+        feed = CalendarFeed.objects.create(
+            organization=organization,
+            name="ACL Organization Feed",
+            slug="acl-organization-feed-test",
+        )
+        data = {
+            "acls-TOTAL_FORMS": "4",
+            "acls-INITIAL_FORMS": "0",
+            "acls-MIN_NUM_FORMS": "0",
+            "acls-MAX_NUM_FORMS": "1000",
+            "acls-0-role": "Mentor",
+            "acls-0-can_read": "on",
+            "acls-0-can_write": "on",
+            "acls-1-role": "Parent",
+            "acls-1-can_read": "on",
+            "acls-2-role": "Student",
+            "acls-2-can_read": "on",
+            "acls-3-role": "Alumni",
+        }
+
+        formset = CalendarFeedACLInlineFormSet(data=data, instance=feed, prefix="acls")
+        self.assertTrue(formset.is_valid(), formset.errors)
+        saved_acls = formset.save()
+
+        self.assertEqual(len(saved_acls), 4)
+        self.assertTrue(
+            all(acl.organization_id == organization.pk for acl in saved_acls)
+        )
+
     def test_unbound_new_feed_generates_all_four_role_forms(self):
         formset = CalendarFeedACLInlineFormSet(prefix="acls")
         self.assertFalse(formset.can_delete)

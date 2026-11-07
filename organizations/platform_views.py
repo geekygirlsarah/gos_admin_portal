@@ -1,21 +1,29 @@
 """Views for Platform Administration (Superuser Dashboard, Org Health, Metrics, Impersonation, and Support)."""
 
+import hashlib
 import logging
+import secrets
+import uuid
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
+from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.db import connection
-from django.db.models import Count, Q, Sum
-from django.http import Http404
+from django.db import connection, transaction
+from django.db.models import Count, Prefetch, Q, Sum
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -27,10 +35,15 @@ from django.views.generic import (
 from audit.events import AuditEvent
 from audit.models import AuditLog
 from audit.service import log_event
+from organizations import domain_recovery
+from organizations.domain_verification import verify_domain_txt
 from organizations.models import (
     Organization,
+    OrganizationDomain,
+    OrganizationDomainRecovery,
     OrganizationInvitation,
     OrganizationSettings,
+    SupportImpersonationHandoff,
     UserOrganizationMembership,
 )
 from organizations.platform_forms import (
@@ -39,7 +52,11 @@ from organizations.platform_forms import (
     PlatformOrganizationForm,
     PlatformUserSearchForm,
 )
-from organizations.utils import get_site_base_url
+from organizations.utils import (
+    get_organization_url,
+    get_site_base_url,
+    hostname_has_conflicting_claims,
+)
 from programs.models import (
     Adult,
     BackgroundCheck,
@@ -442,11 +459,134 @@ class PlatformOrganizationDetailView(SuperuserRequiredMixin, DetailView):
                 "memberships": memberships,
                 "programs": programs,
                 "invitations": invitations,
+                "organization_domains": OrganizationDomain.objects.for_organization(
+                    org
+                ),
+                "domain_recoveries": (
+                    OrganizationDomainRecovery.objects.for_organization(org)
+                    .filter(status=OrganizationDomainRecovery.STATUS_PENDING)
+                    .select_related("original_organization")
+                ),
                 "settings": settings,
                 "member_form": PlatformMemberForm(organization=org),
             }
         )
         return context
+
+
+class PlatformOrganizationDomainActionView(SuperuserRequiredMixin, View):
+    """Activate or disable a verified portal hostname after operator review."""
+
+    def post(self, request, pk, domain_pk):
+        organization = get_object_or_404(Organization, pk=pk)
+        with transaction.atomic():
+            domain = get_object_or_404(
+                OrganizationDomain.objects.for_organization(
+                    organization
+                ).select_for_update(),
+                pk=domain_pk,
+            )
+
+            action = request.POST.get("action")
+            if action == "activate":
+                if domain.status == OrganizationDomain.STATUS_ACTIVE:
+                    messages.info(request, f"{domain.hostname} is already active.")
+                elif not organization.is_active:
+                    messages.error(
+                        request, "Activate the organization before its portal domain."
+                    )
+                elif (
+                    domain.status
+                    not in (
+                        OrganizationDomain.STATUS_DNS_VERIFIED,
+                        OrganizationDomain.STATUS_DISABLED,
+                    )
+                    or not domain.dns_verified_at
+                ):
+                    messages.error(
+                        request,
+                        "Verify DNS ownership before activating this domain.",
+                    )
+                elif request.POST.get("confirm_infrastructure_ready") not in (
+                    "1",
+                    "true",
+                    "on",
+                ):
+                    messages.error(
+                        request,
+                        "Confirm that DNS routing, HTTPS, and trusted host admission are ready.",
+                    )
+                elif hostname_has_conflicting_claims(domain):
+                    messages.error(
+                        request,
+                        "This hostname conflicts with another organization's address. Resolve the conflict before activation.",
+                    )
+                elif not verify_domain_txt(domain):
+                    messages.error(
+                        request,
+                        "The DNS ownership check no longer matches. Ask the organization to restore the TXT "
+                        "record and verify it again.",
+                    )
+                else:
+                    domain.status = OrganizationDomain.STATUS_ACTIVE
+                    domain.activated_at = timezone.now()
+                    domain.activated_by = request.user
+                    domain.save(
+                        update_fields=[
+                            "status",
+                            "activated_at",
+                            "activated_by",
+                            "updated_at",
+                        ]
+                    )
+                    log_event(
+                        event=AuditEvent.ORGANIZATION_UPDATED,
+                        actor=request.user,
+                        resource=organization,
+                        notes=f"Activated portal hostname {domain.hostname} after operator readiness confirmation.",
+                    )
+                    messages.success(
+                        request,
+                        f"Portal hostname {domain.hostname} is active.",
+                    )
+            elif action == "disable":
+                domain.status = OrganizationDomain.STATUS_DISABLED
+                domain.save(update_fields=["status", "updated_at"])
+                log_event(
+                    event=AuditEvent.ORGANIZATION_UPDATED,
+                    actor=request.user,
+                    resource=organization,
+                    notes=f"Disabled portal hostname {domain.hostname}.",
+                )
+                messages.success(request, f"Disabled {domain.hostname}.")
+            else:
+                messages.error(request, "Unknown domain action.")
+
+        return redirect("platform_admin:organization_detail", pk=organization.pk)
+
+
+class PlatformOrganizationDomainRecoveryActionView(SuperuserRequiredMixin, View):
+    def post(self, request, pk, recovery_pk):
+        organization = get_object_or_404(Organization, pk=pk)
+        if (
+            not OrganizationDomainRecovery.objects.for_organization(organization)
+            .filter(pk=recovery_pk)
+            .exists()
+        ):
+            messages.error(request, "Recovery request not found.")
+        elif request.POST.get("action") != "approve":
+            messages.error(request, "Unknown recovery action.")
+        else:
+            try:
+                domain_recovery.approve_recovery(request, organization, recovery_pk)
+            except domain_recovery.RecoveryError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    "Recovery approved. Activate the domain separately after infrastructure review.",
+                )
+        return redirect("platform_admin:organization_detail", pk=organization.pk)
 
 
 class PlatformOrganizationUpdateView(SuperuserRequiredMixin, UpdateView):
@@ -803,10 +943,23 @@ class PlatformUserSupportView(SuperuserRequiredMixin, ListView):
             elif status == "inactive":
                 qs = qs.filter(is_active=False)
 
-        return qs
+        return qs.prefetch_related(
+            Prefetch(
+                "organization_memberships",
+                queryset=UserOrganizationMembership.objects.select_related(
+                    "organization"
+                ),
+            )
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        for user in context.get("users", []):
+            organizations = {}
+            for membership in user.organization_memberships.all():
+                if membership.is_active and membership.organization.is_active:
+                    organizations[membership.organization_id] = membership.organization
+            user.support_organizations = list(organizations.values())
         context["search_form"] = PlatformUserSearchForm(self.request.GET)
         return context
 
@@ -892,105 +1045,575 @@ class PlatformAuditLogView(SuperuserRequiredMixin, ListView):
         return context
 
 
+SUPPORT_HANDOFF_LIFETIME = timedelta(minutes=5)
+
+
+def _hash_support_secret(value):
+    return hashlib.sha256(f"support-impersonation:{value}".encode("utf-8")).hexdigest()
+
+
+def _canonical_tenant_hostname(organization):
+    canonical_url = get_organization_url(organization)
+    try:
+        parsed = urlsplit(canonical_url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.port is not None
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+        ):
+            return ""
+    except ValueError:
+        return ""
+    return parsed.hostname.rstrip(".").lower()
+
+
+def _request_hostname(request):
+    try:
+        return (urlsplit(f"//{request.get_host()}").hostname or "").rstrip(".").lower()
+    except ValueError:
+        return ""
+
+
+def _handoff_has_live_access(handoff):
+    organization = handoff.organization
+    target_user = handoff.target_user
+    initiator = handoff.initiated_by
+    if not organization or not target_user or not initiator:
+        return False
+    if (
+        not organization.is_active
+        or not target_user.is_active
+        or target_user.is_superuser
+        or not initiator.is_active
+        or not initiator.is_superuser
+    ):
+        return False
+    if _canonical_tenant_hostname(organization) != handoff.tenant_hostname:
+        return False
+    return UserOrganizationMembership.objects.filter(
+        user=target_user, organization=organization, is_active=True
+    ).exists()
+
+
+def _handoff_is_authorized_for_request(handoff, request):
+    if not _handoff_has_live_access(handoff):
+        return False
+    organization = handoff.organization
+    if getattr(request, "organization", None) != organization:
+        return False
+    request_host = _request_hostname(request)
+    if not request_host or request_host != handoff.tenant_hostname:
+        return False
+    return True
+
+
+def _pending_support_handoff(request, lock=False):
+    raw_id = request.session.get("support_handoff_id")
+    challenge = request.session.get("support_handoff_challenge")
+    if not raw_id or not challenge or not request.session.session_key:
+        return None
+    try:
+        handoff_id = uuid.UUID(str(raw_id))
+    except (TypeError, ValueError):
+        return None
+
+    queryset = SupportImpersonationHandoff.objects.all()
+    if lock:
+        queryset = queryset.select_for_update()
+    else:
+        queryset = queryset.select_related(
+            "initiated_by", "target_user", "organization"
+        )
+    handoff = queryset.filter(pk=handoff_id).first()
+    if not handoff:
+        return None
+    if (
+        not handoff.redeemed_at
+        or handoff.confirmed_at
+        or handoff.ended_at
+        or handoff.expires_at <= timezone.now()
+        or not constant_time_compare(
+            handoff.tenant_session_hash,
+            _hash_support_secret(request.session.session_key),
+        )
+        or not constant_time_compare(
+            handoff.tenant_challenge_hash, _hash_support_secret(challenge)
+        )
+        or not _handoff_is_authorized_for_request(handoff, request)
+    ):
+        return None
+
+    initial_authenticated = request.session.get(
+        "support_handoff_initial_authenticated", False
+    )
+    initial_user_id = request.session.get("support_handoff_initial_user_id")
+    current_authenticated = request.user.is_authenticated
+    current_user_id = request.user.pk if current_authenticated else None
+    if (
+        current_authenticated != initial_authenticated
+        or current_user_id != initial_user_id
+    ):
+        return None
+    return handoff
+
+
+def _clear_pending_support_session(session):
+    for key in (
+        "support_handoff_id",
+        "support_handoff_challenge",
+        "support_handoff_initial_authenticated",
+        "support_handoff_initial_user_id",
+    ):
+        session.pop(key, None)
+
+
 class PlatformImpersonateUserView(SuperuserRequiredMixin, View):
-    """Start impersonating a regular user for testing or troubleshooting."""
+    """Create a one-use handoff to impersonate a tenant member on that tenant's host."""
 
     def post(self, request, pk):
         target_user = get_object_or_404(User, pk=pk)
-
-        # Guard: Superusers cannot be impersonated to prevent privilege loops/escalation
-        if target_user.is_superuser:
-            messages.error(request, "Superusers cannot be impersonated.")
-            return redirect(
-                request.POST.get("next") or reverse("platform_admin:user_support")
+        organization_id = request.POST.get("organization_id")
+        membership = (
+            UserOrganizationMembership.objects.select_related("organization")
+            .filter(
+                user=target_user,
+                organization_id=organization_id,
+                organization__is_active=True,
+                is_active=True,
             )
-
-        if not target_user.is_active:
+            .first()
+        )
+        if (
+            target_user.is_superuser
+            or not target_user.is_active
+            or not membership
+            or not request.session.session_key
+        ):
             messages.error(
                 request,
-                f"User '{target_user.username}' is inactive and cannot be impersonated.",
+                "Choose an active organization membership for an active, non-admin account.",
             )
-            return redirect(
-                request.POST.get("next") or reverse("platform_admin:user_support")
+            return redirect("platform_admin:user_support")
+
+        organization = membership.organization
+        tenant_hostname = _canonical_tenant_hostname(organization)
+        if not tenant_hostname:
+            messages.error(
+                request,
+                "This organization does not currently have a safe portal address for support access.",
             )
+            return redirect("platform_admin:user_support")
 
-        original_superuser = request.user
-        superuser_id = original_superuser.pk
-
-        # Log audit event before switching session
-        log_event(
-            event=AuditEvent.USER_IMPERSONATED,
-            actor=original_superuser,
-            resource=target_user,
-            notes=f"Superuser '{original_superuser.username}' initiated impersonation of '{target_user.username}' ({target_user.email}).",
+        handoff_token = secrets.token_urlsafe(32)
+        handoff = SupportImpersonationHandoff.objects.create(
+            initiated_by=request.user,
+            initiator_session_hash=_hash_support_secret(request.session.session_key),
+            target_user=target_user,
+            organization=organization,
+            tenant_hostname=tenant_hostname,
+            token_hash=_hash_support_secret(handoff_token),
+            expires_at=timezone.now() + SUPPORT_HANDOFF_LIFETIME,
         )
-
-        # Log in target user
-        auth_login(
-            request, target_user, backend="django.contrib.auth.backends.ModelBackend"
-        )
-
-        # Save impersonation flag and original superuser ID in session
-        request.session["impersonator_id"] = superuser_id
-
-        # Set active organization if target user has memberships
-        membership = UserOrganizationMembership.objects.filter(
-            user=target_user, is_active=True
-        ).first()
-        if membership:
-            request.session["active_organization_id"] = membership.organization_id
-
-        messages.info(
+        handoff_path = reverse("organizations:support_impersonation_handoff")
+        response = render(
             request,
-            f"You are now impersonating {target_user.get_full_name() or target_user.username} ({target_user.email}).",
+            "platform_admin/users/impersonation_handoff.html",
+            {
+                "handoff": handoff,
+                "handoff_id": handoff.pk,
+                "handoff_token": handoff_token,
+                "tenant_post_url": f"https://{tenant_hostname}{handoff_path}",
+            },
         )
+        response["Cache-Control"] = "no-store"
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+
+def _platform_pending_support_handoff(request, handoff_id, lock=False):
+    if not request.session.session_key:
+        return None
+    queryset = SupportImpersonationHandoff.objects.all()
+    if lock:
+        queryset = queryset.select_for_update()
+    else:
+        queryset = queryset.select_related(
+            "initiated_by", "target_user", "organization"
+        )
+    handoff = queryset.filter(pk=handoff_id).first()
+    if (
+        not handoff
+        or handoff.initiated_by_id != request.user.pk
+        or not constant_time_compare(
+            handoff.initiator_session_hash,
+            _hash_support_secret(request.session.session_key),
+        )
+        or not handoff.redeemed_at
+        or handoff.platform_returned_at
+        or handoff.confirmed_at
+        or handoff.ended_at
+        or handoff.expires_at <= timezone.now()
+        or not _handoff_has_live_access(handoff)
+    ):
+        return None
+    return handoff
+
+
+class PlatformImpersonationAuthorizeView(SuperuserRequiredMixin, View):
+    """Reconfirm the initiating platform session after the tenant session is bound."""
+
+    def get(self, request, handoff_id):
+        handoff = _platform_pending_support_handoff(request, handoff_id)
+        if not handoff:
+            return HttpResponse(status=404)
+        response = render(
+            request,
+            "platform_admin/users/impersonation_authorize.html",
+            {"handoff": handoff},
+        )
+        response["Cache-Control"] = "no-store"
+        return response
+
+    def post(self, request, handoff_id):
+        with transaction.atomic():
+            handoff = _platform_pending_support_handoff(request, handoff_id, lock=True)
+            if not handoff:
+                return HttpResponse(status=404)
+            token = secrets.token_urlsafe(32)
+            handoff.platform_token_hash = _hash_support_secret(token)
+            handoff.platform_confirmed_at = timezone.now()
+            handoff.save(update_fields=["platform_token_hash", "platform_confirmed_at"])
+
+        handoff_path = reverse("organizations:support_impersonation_handoff")
+        response = render(
+            request,
+            "platform_admin/users/impersonation_authorize.html",
+            {
+                "handoff": handoff,
+                "return_url": f"https://{handoff.tenant_hostname}{handoff_path}",
+                "handoff_token": token,
+            },
+        )
+        response["Cache-Control"] = "no-store"
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+
+# The cross-host POST cannot carry a tenant CSRF cookie; this view only validates
+# the capability token and renders a same-origin, CSRF-protected redemption form.
+@method_decorator(csrf_exempt, name="dispatch")
+class SupportImpersonationHandoffView(View):
+    """Validate the cross-host token without changing the existing tenant session."""
+
+    def post(self, request):
+        stage = request.POST.get("stage", "initial")
+        if stage == "initial":
+            handoff = _load_unredeemed_support_handoff(request)
+            redeem_url = reverse("organizations:support_impersonation_redeem")
+        elif stage == "platform_return":
+            handoff = _load_platform_return_handoff(request)
+            redeem_url = reverse("organizations:support_impersonation_resume")
+        else:
+            return HttpResponse(status=404)
+        if not handoff:
+            return HttpResponse(status=404)
+
+        response = render(
+            request,
+            "organizations/support_impersonation_continue.html",
+            {
+                "handoff_id": handoff.pk,
+                "handoff_token": request.POST.get("handoff_token"),
+                "redeem_url": redeem_url,
+            },
+        )
+        response["Cache-Control"] = "no-store"
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+
+def _load_unredeemed_support_handoff(request, lock=False):
+    raw_id = request.POST.get("handoff_id")
+    token = request.POST.get("handoff_token")
+    try:
+        handoff_id = uuid.UUID(str(raw_id))
+    except (TypeError, ValueError):
+        return None
+    if not token:
+        return None
+
+    queryset = SupportImpersonationHandoff.objects.all()
+    if lock:
+        queryset = queryset.select_for_update()
+    else:
+        queryset = queryset.select_related(
+            "initiated_by", "target_user", "organization"
+        )
+    handoff = queryset.filter(pk=handoff_id).first()
+    if (
+        not handoff
+        or handoff.redeemed_at
+        or handoff.confirmed_at
+        or handoff.ended_at
+        or handoff.expires_at <= timezone.now()
+        or not constant_time_compare(handoff.token_hash, _hash_support_secret(token))
+        or not _handoff_is_authorized_for_request(handoff, request)
+    ):
+        return None
+    return handoff
+
+
+def _load_platform_return_handoff(request):
+    raw_id = request.POST.get("handoff_id")
+    token = request.POST.get("handoff_token")
+    try:
+        handoff_id = uuid.UUID(str(raw_id))
+    except (TypeError, ValueError):
+        return None
+    if not token:
+        return None
+    handoff = (
+        SupportImpersonationHandoff.objects.select_related(
+            "initiated_by", "target_user", "organization"
+        )
+        .filter(pk=handoff_id)
+        .first()
+    )
+    if (
+        not handoff
+        or not handoff.redeemed_at
+        or not handoff.platform_confirmed_at
+        or handoff.platform_returned_at
+        or handoff.confirmed_at
+        or handoff.ended_at
+        or handoff.expires_at <= timezone.now()
+        or not constant_time_compare(
+            handoff.platform_token_hash, _hash_support_secret(token)
+        )
+        or not _handoff_is_authorized_for_request(handoff, request)
+    ):
+        return None
+    return handoff
+
+
+class SupportImpersonationRedeemView(View):
+    """Consume the handoff on the tenant origin and bind it to the browser session."""
+
+    def post(self, request):
+        platform_base_url = get_site_base_url().rstrip("/")
+        if not platform_base_url:
+            return HttpResponse(status=503)
+        with transaction.atomic():
+            handoff = _load_unredeemed_support_handoff(request, lock=True)
+            if not handoff or request.session.get("impersonator_id"):
+                return HttpResponse(status=404)
+
+            previous_id = request.session.get("support_handoff_id")
+            try:
+                previous_id = uuid.UUID(str(previous_id)) if previous_id else None
+            except (TypeError, ValueError):
+                previous_id = None
+            if previous_id:
+                previous = (
+                    SupportImpersonationHandoff.objects.select_for_update()
+                    .filter(pk=previous_id)
+                    .first()
+                )
+                if previous and not previous.confirmed_at and not previous.ended_at:
+                    previous.ended_at = timezone.now()
+                    previous.save(update_fields=["ended_at"])
+            _clear_pending_support_session(request.session)
+
+            if not request.session.session_key:
+                request.session.create()
+            challenge = secrets.token_urlsafe(32)
+            request.session["support_handoff_id"] = str(handoff.pk)
+            request.session["support_handoff_challenge"] = challenge
+            request.session["support_handoff_initial_authenticated"] = bool(
+                request.user.is_authenticated
+            )
+            request.session["support_handoff_initial_user_id"] = (
+                request.user.pk if request.user.is_authenticated else None
+            )
+            request.session.save()
+
+            handoff.redeemed_at = timezone.now()
+            handoff.tenant_session_hash = _hash_support_secret(
+                request.session.session_key
+            )
+            handoff.tenant_challenge_hash = _hash_support_secret(challenge)
+            handoff.save(
+                update_fields=[
+                    "redeemed_at",
+                    "tenant_session_hash",
+                    "tenant_challenge_hash",
+                ]
+            )
+
+        authorize_path = reverse(
+            "platform_admin:impersonation_authorize",
+            kwargs={"handoff_id": handoff.pk},
+        )
+        response = render(
+            request,
+            "organizations/support_impersonation_platform_return.html",
+            {"platform_confirm_url": f"{platform_base_url}{authorize_path}"},
+        )
+        response["Cache-Control"] = "no-store"
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+
+class SupportImpersonationResumeView(View):
+    """Bind the platform's return proof to the original tenant session."""
+
+    def post(self, request):
+        token = request.POST.get("handoff_token")
+        with transaction.atomic():
+            handoff = _pending_support_handoff(request, lock=True)
+            if (
+                not handoff
+                or str(handoff.pk) != request.POST.get("handoff_id")
+                or not token
+                or not handoff.platform_confirmed_at
+                or handoff.platform_returned_at
+                or not constant_time_compare(
+                    handoff.platform_token_hash, _hash_support_secret(token)
+                )
+            ):
+                return HttpResponse(status=404)
+            handoff.platform_returned_at = timezone.now()
+            # Clear the consumed one-use token hash, not a password.
+            handoff.platform_token_hash = ""  # nosec B105
+            handoff.save(update_fields=["platform_returned_at", "platform_token_hash"])
+        return redirect("organizations:support_impersonation_confirm")
+
+
+class SupportImpersonationConfirmView(View):
+    """Require same-browser confirmation before replacing any tenant login."""
+
+    def get(self, request):
+        handoff = _pending_support_handoff(request)
+        if not handoff or not handoff.platform_returned_at:
+            return HttpResponse(status=404)
+        response = render(
+            request,
+            "organizations/support_impersonation_confirm.html",
+            {
+                "handoff": handoff,
+                "existing_user": (
+                    request.user if request.user.is_authenticated else None
+                ),
+            },
+        )
+        response["Cache-Control"] = "no-store"
+        return response
+
+    def post(self, request):
+        with transaction.atomic():
+            handoff = _pending_support_handoff(request, lock=True)
+            if not handoff or not handoff.platform_returned_at:
+                return HttpResponse(status=404)
+
+            audit_entry = log_event(
+                event=AuditEvent.USER_IMPERSONATED,
+                request=request,
+                actor=handoff.initiated_by,
+                resource=handoff.target_user,
+                notes=(
+                    f"Support impersonation confirmed for organization "
+                    f"{handoff.organization_id}; handoff {handoff.pk}."
+                ),
+            )
+            if audit_entry is None:
+                return HttpResponse(
+                    "Support access could not be started because the audit event was not recorded.",
+                    status=503,
+                )
+
+            auth_login(
+                request,
+                handoff.target_user,
+                backend="django.contrib.auth.backends.ModelBackend",
+            )
+            request.session["impersonator_id"] = handoff.initiated_by_id
+            request.session["support_impersonation_handoff_id"] = str(handoff.pk)
+            request.session["active_organization_id"] = handoff.organization_id
+            _clear_pending_support_session(request.session)
+
+            handoff.confirmed_at = timezone.now()
+            handoff.tenant_session_hash = _hash_support_secret(
+                request.session.session_key
+            )
+            handoff.save(update_fields=["confirmed_at", "tenant_session_hash"])
+
         return redirect("profile_dashboard")
 
 
 class PlatformStopImpersonationView(View):
-    """Stop active user impersonation and return to the superuser session."""
+    """End tenant impersonation without authenticating the platform user on this host."""
 
     def post(self, request):
-        return self._stop_impersonation(request)
-
-    def get(self, request):
-        return self._stop_impersonation(request)
-
-    def _stop_impersonation(self, request):
         impersonator_id = request.session.get("impersonator_id")
         if not impersonator_id:
             messages.warning(request, "No active impersonation session found.")
             return redirect("home")
 
-        superuser = get_object_or_404(
-            User, pk=impersonator_id, is_superuser=True, is_active=True
-        )
         impersonated_user = request.user
+        try:
+            handoff_id = uuid.UUID(
+                str(request.session.get("support_impersonation_handoff_id", ""))
+            )
+        except (TypeError, ValueError):
+            handoff_id = None
 
-        log_event(
-            event=AuditEvent.IMPERSONATION_ENDED,
-            actor=superuser,
-            resource=impersonated_user,
-            notes=f"Superuser '{superuser.username}' ended impersonation of '{impersonated_user.username}'.",
-        )
+        if handoff_id and impersonated_user.is_authenticated:
+            with transaction.atomic():
+                handoff = (
+                    SupportImpersonationHandoff.objects.select_for_update()
+                    .filter(
+                        pk=handoff_id,
+                        target_user=impersonated_user,
+                        confirmed_at__isnull=False,
+                        ended_at__isnull=True,
+                    )
+                    .first()
+                )
+                if handoff:
+                    log_event(
+                        event=AuditEvent.IMPERSONATION_ENDED,
+                        request=request,
+                        actor=handoff.initiated_by,
+                        resource=impersonated_user,
+                        notes=(
+                            f"Support impersonation ended for organization "
+                            f"{handoff.organization_id}; handoff {handoff.pk}."
+                        ),
+                    )
+                    handoff.ended_at = timezone.now()
+                    handoff.save(update_fields=["ended_at"])
+        elif impersonated_user.is_authenticated:
+            legacy_superuser = User.objects.filter(
+                pk=impersonator_id, is_superuser=True
+            ).first()
+            if legacy_superuser:
+                log_event(
+                    event=AuditEvent.IMPERSONATION_ENDED,
+                    request=request,
+                    actor=legacy_superuser,
+                    resource=impersonated_user,
+                    notes="Legacy support impersonation session ended.",
+                )
 
-        # Log superuser back in
-        auth_login(
-            request, superuser, backend="django.contrib.auth.backends.ModelBackend"
-        )
-
-        if "impersonator_id" in request.session:
-            del request.session["impersonator_id"]
-
-        messages.success(
-            request, "Impersonation session ended. Returned to platform administrator."
-        )
-        if SuperuserRequiredMixin.is_tenant_request(request):
-            site_base_url = get_site_base_url()
-            dashboard_url = reverse("platform_admin:dashboard")
-            if site_base_url:
-                return redirect(f"{site_base_url}{dashboard_url}")
-        return redirect("platform_admin:dashboard")
+        auth_logout(request)
+        site_base_url = get_site_base_url().rstrip("/")
+        dashboard_url = reverse("platform_admin:dashboard")
+        return redirect(f"{site_base_url}{dashboard_url}" if site_base_url else "home")
 
 
 class PlatformSwitchContextView(SuperuserRequiredMixin, View):

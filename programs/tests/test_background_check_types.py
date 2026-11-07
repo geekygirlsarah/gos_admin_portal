@@ -1,11 +1,11 @@
 import datetime
 
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import BackgroundChecksForm, BackgroundCheckTypeForm
 from programs.models import (
     Adult,
@@ -422,14 +422,27 @@ class BackgroundCheckTypeFormTests(TestCase):
         self.assertEqual(bct.student_min_age_cutoff_day, 15)
 
 
+@override_settings(
+    MOMENTUM_ROOT_DOMAIN="momentumteam.app",
+    ALLOWED_HOSTS=["testserver", "test-org.momentumteam.app"],
+)
 class PortalBackgroundCheckTypeViewTests(TestCase):
     def setUp(self):
-        self.org = Organization.objects.create(name="Test Org", slug="test-org")
+        self.org = Organization.objects.create(
+            name="Test Org", slug="test-org", subdomain="test-org"
+        )
         self.user = User.objects.create_user(
             username="lead", password="password123"  # nosec B106
         )
         lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.org,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.defaults["HTTP_HOST"] = "test-org.momentumteam.app"
         self.client.login(username="lead", password="password123")  # nosec B106
 
     def test_create_background_check_type(self):
@@ -452,6 +465,7 @@ class PortalBackgroundCheckTypeViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         bct = BackgroundCheckType.objects.filter(name="Custom Clearance").first()
         self.assertIsNotNone(bct)
+        self.assertEqual(bct.organization, self.org)
         self.assertEqual(bct.validity_years, 3)
         self.assertTrue(bct.applies_to_students)
         self.assertEqual(bct.student_min_age_by_date, 17)

@@ -6,15 +6,28 @@ import datetime
 import shutil
 import tempfile
 
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from applications.tests.access_helpers import grant_applicant_document_access
 from programs.models import Program, ProgramDocument
 
 _TMP_MEDIA = tempfile.mkdtemp(prefix="gos-filetests-media-")
+
+
+class _FailingStorage(FileSystemStorage):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.save_calls = 0
+
+    def save(self, name, content, max_length=None):
+        self.save_calls += 1
+        raise SuspiciousFileOperation("Storage error")
 
 
 @override_settings(
@@ -51,6 +64,7 @@ class FileUploadTests(TestCase):
             status=Application.Status.APPROVED,
             submitted_at=timezone.now(),
         )
+        grant_applicant_document_access(self.client, self.app)
 
     def test_upload_very_long_filename_is_sanitized_and_saved(self):
         from applications.models import ApplicationDocumentSubmission
@@ -77,12 +91,14 @@ class FileUploadTests(TestCase):
         self.assertEqual(response.status_code, 302)  # Should be a redirect on success
 
         submission = ApplicationDocumentSubmission.objects.get(application=self.app)
-        # It should be sanitized and truncated.
-        # sanitize_upload_filename(long_name) will truncate it to 150.
-        # Plus path "application_documents/8E9HZD9D/" (31 chars)
+        # Storage uses an opaque path rather than preserving the uploaded name.
         self.assertLessEqual(len(submission.file.name), 255)
-        self.assertIn("_", submission.file.name)  # Truncation suffix should be present
-        self.assertTrue(submission.file.name.startswith("application_documents/"))
+        self.assertTrue(
+            submission.file.name.startswith(
+                f"private/application_documents/{self.app.organization_id}/"
+            )
+        )
+        self.assertNotIn("a" * 40, submission.file.name)
 
     def test_sanitize_utility_directly(self):
         from programs.utils.files import sanitize_upload_filename
@@ -101,11 +117,6 @@ class FileUploadTests(TestCase):
         self.assertEqual(sanitize_upload_filename("test space!.pdf"), "test_space.pdf")
 
     def test_catch_suspicious_file_operation(self):
-        # We simulate a SuspiciousFileOperation by mocking save()
-        from unittest.mock import patch
-
-        from django.core.exceptions import SuspiciousFileOperation
-
         from applications.models import ApplicationDocumentSubmission
 
         url = reverse("apply_step10", kwargs={"app_id": self.app.application_id})
@@ -116,6 +127,7 @@ class FileUploadTests(TestCase):
         # Ensure the submission already exists so get_or_create doesn't call save()
         # with an empty file (which wouldn't trigger the error anyway, but the mock would)
         ApplicationDocumentSubmission.objects.create(
+            organization=self.app.organization,
             application=self.app,
             document=self.doc,
             file=SimpleUploadedFile(
@@ -123,11 +135,12 @@ class FileUploadTests(TestCase):
             ),
         )
 
-        with patch(
-            "applications.models.ApplicationDocumentSubmission.save"
-        ) as mock_save:
-            mock_save.side_effect = SuspiciousFileOperation("Storage error")
-
+        file_storage = ApplicationDocumentSubmission._meta.get_field("file").storage
+        storage_field = ApplicationDocumentSubmission._meta.get_field("file")
+        original_storage = storage_field.storage
+        failing_storage = _FailingStorage(location=_TMP_MEDIA)
+        storage_field.storage = failing_storage
+        try:
             response = self.client.post(
                 url,
                 {
@@ -136,10 +149,11 @@ class FileUploadTests(TestCase):
                 },
                 follow=True,
             )
+        finally:
+            storage_field.storage = original_storage
 
-            self.assertEqual(response.status_code, 200)
-            self.assertContains(
-                response, "The filename of your uploaded document is too long"
-            )
-            # It should be called once by submission.save() in the view
-            mock_save.assert_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "The filename of your uploaded document is too long"
+        )
+        self.assertEqual(failing_storage.save_calls, 1)

@@ -9,11 +9,18 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from applications.views.review import ApplicationEmailView
+from organizations.models import (
+    Organization,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from programs.models import Program, ProgramDocument
 
 User = get_user_model()
@@ -72,9 +79,19 @@ def _ensure_lead_mentors_group():
     return group
 
 
+def _add_membership(user, role):
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role=role,
+        is_active=True,
+    )
+
+
 def _reviewer_user(username="lead"):
     user = User.objects.create_user(username=username, email=f"{username}@x.test")
     user.groups.add(_ensure_lead_mentors_group())
+    _add_membership(user, "LeadMentor")
     return user
 
 
@@ -108,6 +125,7 @@ class ReviewPermissionGatingTests(TestCase):
 
     def test_user_without_permission_forbidden(self):
         plain = User.objects.create_user(username="plain")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
         self.assertIn(response.status_code, (302, 403))
@@ -467,6 +485,7 @@ class ConvertToStudentTests(TestCase):
         app = self._approved_signed_app()
         self.client.logout()
         plain = User.objects.create_user(username="plain")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         url = reverse(
             "application_review_convert", kwargs={"app_id": app.application_id}
@@ -504,6 +523,7 @@ class LeadMentorGroupMergeTests(TestCase):
     def test_lead_mentor_group_member_can_access_review_list(self):
         user = User.objects.create_user(username="lm_user", email="lm@x.test")
         user.groups.add(self.lead_mentor_group)
+        _add_membership(user, "LeadMentor")
         self.client.force_login(user)
         response = self.client.get(self.list_url)
         self.assertEqual(
@@ -516,6 +536,7 @@ class LeadMentorGroupMergeTests(TestCase):
     def test_lead_mentor_group_member_can_access_review_detail(self):
         user = User.objects.create_user(username="lm_user2", email="lm2@x.test")
         user.groups.add(self.lead_mentor_group)
+        _add_membership(user, "LeadMentor")
         self.client.force_login(user)
         response = self.client.get(self.detail_url)
         self.assertEqual(
@@ -534,6 +555,7 @@ class LeadMentorGroupMergeTests(TestCase):
 
     def test_user_without_group_cannot_access_review(self):
         plain = User.objects.create_user(username="plain_user", email="plain@x.test")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
         self.assertIn(
@@ -623,7 +645,7 @@ class ApplicationMessagingTests(TestCase):
         mail.outbox = []
         self.url = reverse("application_review_messaging")
 
-    def _post(self, **overrides):
+    def _post(self, http_host=None, **overrides):
         data = {
             "program": "",
             "statuses": [self.app.status],
@@ -637,6 +659,8 @@ class ApplicationMessagingTests(TestCase):
             "from_account": "",
         }
         data.update(overrides)
+        if http_host:
+            return self.client.post(self.url, data, HTTP_HOST=http_host)
         return self.client.post(self.url, data)
 
     def test_sends_normalized_html_and_plain_text(self):
@@ -674,6 +698,109 @@ class ApplicationMessagingTests(TestCase):
         self.assertEqual(
             sent.attachments[0]["Content-Disposition"], 'inline; filename="img_0.jpg"'
         )
+
+    def test_all_program_send_excludes_foreign_and_mismatched_applications(self):
+        other = Organization.objects.create(
+            name="Other Applicant Organization", slug="other-applicant-org"
+        )
+        foreign_program = Program.objects.create(
+            organization=other, name="Other Applicant Program", active=True
+        )
+        _make_application(
+            organization=other,
+            program=foreign_program,
+            email="foreign-applicant@example.test",
+            data={
+                "step5-student": {"email": "foreign-student@example.test"},
+                "step7-primaryparent": {"email": "foreign-parent@example.test"},
+            },
+        )
+        _make_application(
+            organization=self.app.organization,
+            program=foreign_program,
+            email="mismatched-applicant@example.test",
+            data={
+                "step5-student": {"email": "mismatched-student@example.test"},
+                "step7-primaryparent": {"email": "mismatched-parent@example.test"},
+            },
+        )
+
+        response = self._post()
+
+        self.assertEqual(response.status_code, 302)
+        recipients = {recipient for message in mail.outbox for recipient in message.to}
+        self.assertEqual(recipients, {"parent@example.com", "ada@example.com"})
+
+    def test_foreign_program_cannot_be_selected(self):
+        other = Organization.objects.create(
+            name="Foreign Program Organization", slug="foreign-program-org"
+        )
+        foreign_program = Program.objects.create(
+            organization=other, name="Foreign Program", active=True
+        )
+
+        response = self._post(
+            program=str(foreign_program.pk), test_email="preview@example.test"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("program", response.context["form"].errors)
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(
+        EMAIL_SENDER_ACCOUNTS=[
+            {"key": "platform-only", "email": "platform@example.test"}
+        ]
+    )
+    def test_preview_uses_request_tenant_sender_and_branding_without_program(self):
+        organization = Organization.objects.create(
+            name="Applicant Tenant",
+            slug="applicant-tenant",
+            subdomain="applicant-tenant",
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        OrganizationSettings.objects.create(
+            organization=organization,
+            data={
+                "email_settings": {
+                    "notification_from_email": "team@applicant.example.test",
+                    "organization_name": "Applicant Tenant Branding",
+                    "primary_color": "#123456",
+                }
+            },
+        )
+        host = "applicant-tenant.localhost"
+
+        get_response = self.client.get(self.url, HTTP_HOST=host)
+        choices = dict(get_response.context["form"].fields["from_account"].choices)
+        self.assertIn("DEFAULT", choices)
+        self.assertNotIn("platform-only", choices)
+
+        response = self._post(
+            http_host=host,
+            test_email="preview@example.test",
+            from_account="DEFAULT",
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("team@applicant.example.test", mail.outbox[0].from_email)
+        html_part = mail.outbox[0].alternatives[0][0]
+        self.assertIn("Applicant Tenant Branding", html_part)
+        self.assertIn("#123456", html_part)
+
+    def test_missing_organization_is_rejected(self):
+        request = RequestFactory().get(self.url)
+        request.user = self.user
+        request.organization = None
+
+        with self.assertRaises(Http404):
+            ApplicationEmailView.as_view()(request)
 
 
 class StaffDocumentUploadTests(TestCase):
@@ -725,6 +852,10 @@ class StaffDocumentUploadTests(TestCase):
                 application=self.app, document=self.doc
             ).exists()
         )
+        submission = ApplicationDocumentSubmission.objects.get(
+            application=self.app, document=self.doc
+        )
+        self.assertEqual(submission.organization_id, self.app.organization_id)
 
     def test_upload_promotes_approved_to_approved_signed(self):
         from applications.models import ApplicationDocumentSubmission
@@ -779,6 +910,7 @@ class StaffDocumentUploadTests(TestCase):
     def test_upload_requires_review_permission(self):
         self.client.logout()
         plain = User.objects.create_user(username="plain_upload")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         upload = SimpleUploadedFile(
             "signed_release.pdf", b"signed-content", content_type="application/pdf"

@@ -12,9 +12,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.formats import localize
 
+from organizations.models import Organization, UserOrganizationMembership
 from outreach.forms import OutreachManageMentorSignupsForm
 from outreach.models import OutreachMentorSignup, OutreachShift
-from outreach.tests.factories import create_outreach_event
+from outreach.tests.factories import add_gos_membership, create_outreach_event
 from programs.models import Adult, Program, ProgramFeature, School
 
 
@@ -37,6 +38,7 @@ class OutreachManageMentorSignupsViewTest(TestCase):
             username="lead", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_mentor_group)
+        add_gos_membership(self.lead_user, "LeadMentor")
         self.lead_adult = Adult.objects.create(
             user=self.lead_user,
             legal_first_name="Laura",
@@ -122,6 +124,30 @@ class OutreachManageMentorSignupsViewTest(TestCase):
         resp = self.client.get(self.manage_url)
         self.assertEqual(resp.status_code, 302)
         self.assertNotEqual(resp.url, self.manage_url)
+
+    def test_group_and_other_organization_lead_cannot_manage_signups(self):
+        self.mentor_user.groups.add(self.lead_mentor_group)
+        other = Organization.objects.create(
+            name="Other Organization", slug="other", subdomain="other"
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user, organization=other, role="LeadMentor", is_active=True
+        )
+        self.assertTrue(
+            UserOrganizationMembership.objects.filter(
+                user=self.mentor_user,
+                organization__slug="gos",
+                role="Mentor",
+                is_active=True,
+            ).exists()
+        )
+        self.client.force_login(self.mentor_user)
+        resp = self.client.get(self.manage_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertNotEqual(resp.url, self.manage_url)
+        self.assertNotContains(self.client.get(self.list_url), self.manage_url)
+        self.client.post(self.manage_url, {"mentors": [self.mentor_adult.pk]})
+        self.assertFalse(self.shift.mentor_signups.exists())
 
     def test_student_is_denied(self):
         student_user = User.objects.create_user(
@@ -226,6 +252,7 @@ class MentorSignupDuplicatePickerTest(TestCase):
             username="lead", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_group)
+        add_gos_membership(self.lead_user, "LeadMentor")
 
         self.event = create_outreach_event(
             program=self.program,

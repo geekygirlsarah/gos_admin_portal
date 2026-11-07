@@ -4,18 +4,24 @@ Verifies that Lead Mentors can create, manage, and revoke Lead Mentor invitation
 with proper email validation, case-insensitive matching, and safety checks.
 """
 
+from unittest.mock import Mock, patch
+
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from audit.events import AuditEvent
 from audit.models import AuditLog
 from organizations.models import (
     Organization,
+    OrganizationDomain,
     OrganizationInvitation,
     UserOrganizationMembership,
 )
+from organizations.services import send_invitation_email
+from organizations.utils import get_organization_url
 from programs.models import Adult
 from programs.permission_views import (
     get_user_role,
@@ -177,6 +183,51 @@ class OrganizationInvitationCRUDTests(TestCase):
         )
 
         self.client = Client()
+
+    @patch("organizations.services.send_invitation_email", return_value=False)
+    def test_delivery_failure_is_reported_for_all_invitation_actions(self, send_email):
+        self.client.force_login(self.lead_user)
+        cases = (
+            ("add_lead_mentor", False),
+            ("add_lead_mentor", True),
+            ("invite_lead_mentor", False),
+            ("invite_lead_mentor", True),
+            ("resend_invitation", True),
+        )
+        for index, (action, existing) in enumerate(cases):
+            with self.subTest(action=action, existing=existing):
+                email = f"delivery-{index}@example.com"
+                target = User.objects.create_user(
+                    username=f"delivery-{index}", email=email
+                )
+                invitation = None
+                if existing:
+                    invitation = OrganizationInvitation.objects.create(
+                        organization=self.gos,
+                        email=email,
+                        role="LeadMentor",
+                        invited_by=self.lead_user,
+                    )
+                data = {"action": action, "email": email, "user_id": target.pk}
+                if invitation:
+                    data["invitation_id"] = invitation.pk
+
+                response = self.client.post(
+                    reverse("portal_lead_mentors"), data, follow=True
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "could not be sent")
+                self.assertTrue(
+                    OrganizationInvitation.objects.filter(
+                        organization=self.gos, email=email, status="pending"
+                    ).exists()
+                )
+                log = AuditLog.objects.filter(
+                    event=AuditEvent.ROLE_CHANGED, actor=self.lead_user
+                ).latest("id")
+                self.assertIn("not sent", log.notes)
+        self.assertEqual(send_email.call_count, len(cases))
 
     def test_add_lead_mentor_action_sends_invitation_email(self):
         """Assigning an existing user sends a Lead Mentor invitation email."""
@@ -680,3 +731,96 @@ class OrganizationInvitationCRUDTests(TestCase):
         membership = invite.accept(user_with_adult)
         self.assertEqual(membership.user, user_with_adult)
         self.assertEqual(invite.status, "accepted")
+
+
+@override_settings(
+    MOMENTUM_ROOT_DOMAIN="momentumteam.app",
+    ALLOWED_HOSTS=["hostile.example.org", "another.momentumteam.app"],
+)
+class InvitationEmailServiceTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(
+            name="Robotigers", slug="robotigers", subdomain="robotigers-team"
+        )
+        self.invitation = OrganizationInvitation.objects.create(
+            organization=self.organization,
+            email="invitee@example.com",
+            role="LeadMentor",
+        )
+        self.accept_path = reverse(
+            "organizations:accept_invitation", kwargs={"token": self.invitation.token}
+        )
+
+    def make_domain(self, status):
+        now = timezone.now()
+        operator = User.objects.create_user(username="domain-operator")
+        return OrganizationDomain.objects.create(
+            organization=self.organization,
+            hostname="robotigers.example.org",
+            status=status,
+            dns_verified_at=now,
+            activated_at=now if status == OrganizationDomain.STATUS_ACTIVE else None,
+            activated_by=(
+                operator if status == OrganizationDomain.STATUS_ACTIVE else None
+            ),
+        )
+
+    def assert_invitation_sent_to(self, send_notification, base_url):
+        send_notification.assert_called_once()
+        kwargs = send_notification.call_args.kwargs
+        self.assertEqual(kwargs["recipient_list"], [self.invitation.email])
+        self.assertEqual(kwargs["organization"], self.organization)
+        self.assertEqual(
+            kwargs["template_name"], "organizations/emails/invitation.html"
+        )
+        self.assertEqual(
+            kwargs["context"]["invitation_url"], base_url + self.accept_path
+        )
+
+    @patch("organizations.services.send_templated_notification")
+    def test_active_custom_domain_is_used(self, send_notification):
+        self.make_domain(OrganizationDomain.STATUS_ACTIVE)
+        request = RequestFactory().get("/", HTTP_HOST="hostile.example.org")
+
+        self.assertTrue(send_invitation_email(self.invitation, request=request))
+
+        self.assert_invitation_sent_to(
+            send_notification, "https://robotigers.example.org"
+        )
+
+    @patch("organizations.services.send_templated_notification")
+    def test_disabled_custom_domain_falls_back_to_safe_tenant_url(
+        self, send_notification
+    ):
+        self.make_domain(OrganizationDomain.STATUS_DISABLED)
+
+        self.assertTrue(send_invitation_email(self.invitation))
+
+        self.assert_invitation_sent_to(
+            send_notification, "https://robotigers-team.momentumteam.app"
+        )
+
+    @patch("organizations.services.send_templated_notification")
+    def test_missing_safe_tenant_url_never_sends(self, send_notification):
+        Organization.objects.create(
+            name="Collision Team", slug="robotigers-team", subdomain="robotigers"
+        )
+        other = Organization.objects.create(
+            name="Another Team", slug="another", subdomain="another"
+        )
+        self.assertEqual(get_organization_url(self.organization), "")
+        self.assertEqual(
+            get_organization_url(other), "https://another.momentumteam.app"
+        )
+
+        for host in (None, "hostile.example.org", "another.momentumteam.app"):
+            with self.subTest(host=host):
+                request = RequestFactory().get("/", HTTP_HOST=host) if host else None
+                if request:
+                    request.build_absolute_uri = Mock(wraps=request.build_absolute_uri)
+                self.assertFalse(
+                    send_invitation_email(self.invitation, request=request)
+                )
+                send_notification.assert_not_called()
+                if request:
+                    request.build_absolute_uri.assert_not_called()

@@ -3,10 +3,11 @@ import io
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
+from organizations.models import Organization, OrganizationDomain
 from programs.models import (
     Adult,
     Crew,
@@ -92,6 +93,8 @@ class SettingsUIImprovementsTests(TestCase):
 
         # Verify all tabs exist
         self.assertContains(response, 'id="permissions-tab"')
+        self.assertContains(response, 'id="portal_address-tab"')
+        self.assertContains(response, 'id="branding-tab"')
         self.assertContains(response, 'id="teams-tab"')
         self.assertContains(response, 'id="crews-tab"')
         self.assertContains(response, 'id="subteams-tab"')
@@ -125,6 +128,35 @@ class SettingsUIImprovementsTests(TestCase):
         # Verify CSP nonce in script tags
         self.assertIn("csp_nonce", response.context)
         self.assertContains(response, f'nonce="{response.context["csp_nonce"]}"')
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_portal_address_tab_shows_momentum_address_and_setup_guidance(self):
+        org, _ = Organization.objects.get_or_create(
+            slug="gos", defaults={"name": "Girls of Steel Robotics"}
+        )
+        org.subdomain = "gos"
+        org.save(update_fields=["subdomain"])
+        OrganizationDomain.objects.create(
+            organization=org,
+            hostname="gos-portal.example.org",
+        )
+        self._login(self.lead_user)
+
+        response = self.client.get(reverse("portal_settings") + "?tab=portal_address")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Your Momentum portal address")
+        self.assertContains(response, 'href="https://gos.momentumteam.app"')
+        self.assertContains(
+            response,
+            "Your Momentum address keeps working after you connect a domain.",
+        )
+        self.assertContains(response, "Request a domain you own")
+        self.assertContains(response, "Check TXT record")
+        self.assertContains(
+            response,
+            "Your portal address and your email sending domain are configured separately.",
+        )
 
     def test_crews_and_subteams_grouped_by_program(self):
         """Portal Settings should render Crews and SubTeams grouped into cards by Program with inline quick-add forms."""
@@ -259,6 +291,14 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, "Pending Review")
         self.assertContains(response, "Active Sliding Scales")
 
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
     def test_portal_settings_branding_logo_upload_valid_and_path_traversal(self):
         """Uploading logo validates image format and rejects path traversal or invalid files."""
         self._login(self.lead_user)
@@ -286,6 +326,7 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(
             resp, "Email branding &amp; template settings updated successfully."
         )
+        self.assertIn("tab=branding", resp.redirect_chain[-1][0])
 
         # 2. Invalid / malicious non-image file with traversal attempts
         invalid_file = SimpleUploadedFile(

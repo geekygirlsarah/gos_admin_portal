@@ -2,11 +2,19 @@
 
 from datetime import timedelta
 
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from calendar_feeds.models import CalendarEvent, CalendarFeed, EventException
+from audit.events import AuditEvent
+from audit.models import AuditLog
+from calendar_feeds.models import (
+    CalendarEvent,
+    CalendarFeed,
+    CalendarFeedACL,
+    EventException,
+)
 from calendar_feeds.tests.factories import (
     make_event,
     make_feed,
@@ -16,6 +24,7 @@ from calendar_feeds.tests.factories import (
     make_program,
     make_student_user,
 )
+from organizations.models import Organization, UserOrganizationMembership
 
 
 class CalendarViewTests(TestCase):
@@ -68,6 +77,34 @@ class CalendarViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.context["feeds"]), 0)
+
+    def test_legacy_group_only_lead_is_denied_tenant_access(self):
+        lead = User.objects.create_user(username="legacy-lead")
+        lead.groups.add(Group.objects.get(name="LeadMentor"))
+        self.client.force_login(lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_inactive_lead_membership_is_denied_tenant_access(self):
+        membership = UserOrganizationMembership.objects.get(
+            user=self.lead, organization__slug="gos", role="LeadMentor"
+        )
+        membership.is_active = False
+        membership.save(update_fields=["is_active"])
+        self.client.force_login(self.lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_lead_membership_in_another_organization_is_denied(self):
+        lead = User.objects.create_user(username="other-lead")
+        lead.groups.add(Group.objects.get(name="LeadMentor"))
+        other = Organization.objects.create(name="Other", slug="other")
+        UserOrganizationMembership.objects.create(
+            user=lead, organization=other, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
 
 class CalendarEventsAPITests(TestCase):
@@ -288,6 +325,63 @@ class FeedDeleteViewTests(TestCase):
         self.assertRedirects(resp, reverse("calendar_feeds:feed_list"))
         self.assertFalse(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
 
+    def test_delete_feed_does_not_cascade_foreign_organization_acl(self):
+        other = Organization.objects.create(name="Other", slug="delete-acl-other")
+        foreign_acl = CalendarFeedACL.objects.create(
+            organization=other,
+            feed=self.feed,
+            role="Parent",
+            can_read=True,
+            can_write=False,
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(CalendarFeedACL.objects.filter(pk=foreign_acl.pk).exists())
+
+    def test_delete_feed_does_not_cascade_foreign_organization_event(self):
+        other = Organization.objects.create(name="Other", slug="delete-event-other")
+        foreign_event = CalendarEvent.objects.create(
+            organization=other,
+            feed=self.feed,
+            title="Foreign event",
+            start_datetime=timezone.now(),
+            end_datetime=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(CalendarEvent.objects.filter(pk=foreign_event.pk).exists())
+
+    def test_delete_feed_does_not_cascade_foreign_organization_exception(self):
+        other = Organization.objects.create(name="Other", slug="delete-exception-other")
+        event = CalendarEvent.objects.create(
+            organization=self.feed.organization,
+            feed=self.feed,
+            title="Local event",
+            start_datetime=timezone.now(),
+            end_datetime=timezone.now() + timedelta(hours=1),
+        )
+        foreign_exception = EventException.objects.create(
+            organization=other,
+            event=event,
+            original_date=timezone.localdate(),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(EventException.objects.filter(pk=foreign_exception.pk).exists())
+
 
 class EventCreateViewTests(TestCase):
     def setUp(self):
@@ -367,6 +461,13 @@ class EventDeleteViewTests(TestCase):
         resp = self.client.post(self.url)
         self.assertRedirects(resp, self.calendar_url)
         self.assertFalse(CalendarEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                event=AuditEvent.RECORD_DELETED,
+                resource_type="CalendarEvent",
+                resource_id=str(self.event.pk),
+            ).exists()
+        )
 
 
 class EventExceptionCreateViewTests(TestCase):

@@ -8,16 +8,16 @@ from django.utils import timezone
 from attendance.models import AttendanceSession
 from programs.models import Adult, Program, ProgramFeature, School, Student
 
+from .base import make_lead_mentor_user
+
 
 class Phase3AttendanceUITests(TestCase):
     def setUp(self):
-        self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
 
-        self.lead_user = User.objects.create_user(
+        self.lead_user = make_lead_mentor_user(
             username="lead_attendance", password="password123"  # nosec B106
         )
-        self.lead_user.groups.add(self.lead_mentor_group)
 
         self.mentor_user = User.objects.create_user(
             username="mentor_attendance", password="password123"  # nosec B106

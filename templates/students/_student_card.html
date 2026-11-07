@@ -4,7 +4,7 @@
     <div class="card h-100 text-center">
       {% if role == 'Student' %}
         {% if s.photo %}
-          <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.display_name }}" style="height:180px; object-fit: cover;">
+          <img src="{% url 'student_photo' s.pk %}" class="card-img-top" alt="{{ s.display_name }}" style="height:180px; object-fit: cover;">
         {% else %}
           <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
             <span class="text-muted">No Photo</span>
@@ -13,7 +13,7 @@
       {% else %}
         <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
           {% if s.photo %}
-            <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.display_name }}" style="height:180px; object-fit: cover;">
+            <img src="{% url 'student_photo' s.pk %}" class="card-img-top" alt="{{ s.display_name }}" style="height:180px; object-fit: cover;">
           {% else %}
             <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
               <span class="text-muted">No Photo</span>

@@ -60,7 +60,8 @@ class StudentHoursViewTests(TestCase):
         user = User.objects.create_user(
             username="alice", password="password123"  # nosec B106
         )
-        Student.objects.filter(pk=self.student.pk).update(user=user)
+        self.student.user = user
+        self.student.save(update_fields=["user"])
         self.student.refresh_from_db()
         self.client.login(username="alice", password="password123")  # nosec B106
         response = self.client.get(self.url)
@@ -72,7 +73,8 @@ class StudentHoursViewTests(TestCase):
         user = User.objects.create_user(
             username="alice2", password="password123"  # nosec B106
         )
-        Student.objects.filter(pk=self.student.pk).update(user=user)
+        self.student.user = user
+        self.student.save(update_fields=["user"])
         self.client.login(username="alice2", password="password123")  # nosec B106
         response = self.client.get(other_url)
         self.assertEqual(response.status_code, 302)

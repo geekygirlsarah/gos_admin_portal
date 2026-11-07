@@ -1,0 +1,23 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="card border-0 shadow-sm rounded-3 bg-white">
+    <div class="card-body p-4">
+        <h4 class="fw-bold mb-3">Confirm support access</h4>
+        <p>Continue in this browser to access {{ handoff.organization.name }} as {{ handoff.target_user.username }}.</p>
+        {% if return_url %}
+        <form method="post" action="{{ return_url }}" autocomplete="off">
+            <input type="hidden" name="stage" value="platform_return">
+            <input type="hidden" name="handoff_id" value="{{ handoff.pk }}">
+            <input type="hidden" name="handoff_token" value="{{ handoff_token }}">
+            <button type="submit" class="btn btn-warning fw-semibold">Return to the portal</button>
+        </form>
+        {% else %}
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning fw-semibold">Confirm this browser</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.forms import ProgramForm
 from programs.models import Program, ProgramFeature
 
@@ -52,6 +53,12 @@ class SignoutSheetFeatureTests(TestCase):
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(group)
         self.program = Program.objects.create(name="Test Program", active=True)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.signout_feature, _ = ProgramFeature.objects.get_or_create(
             key="signout-sheet",
             defaults={"name": "Parent sign-outs"},

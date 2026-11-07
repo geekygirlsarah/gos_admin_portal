@@ -13,8 +13,8 @@ Multi-feed calendars are served at `/calendar/`:
 ### Core Models
 - **`CalendarFeed`**: Represents a calendar category (`name`, `slug`, `color`, `visibility`, `source_type`).
   - Source types: `manual`, `outreach` (auto-synced), `travel` (auto-synced), `custom`.
-  - Permissions: Checked via `feed.user_can_read(user)` and `feed.user_can_write(user)`. Lead Mentors bypass ACL checks; source-managed feeds remain strictly read-only.
-- **`CalendarFeedACL`**: Role-based access rules (Role → `can_read` / `can_write`).
+  - Permissions: Checked via `feed.user_can_read(user)` and `feed.user_can_write(user)`. Lead Mentors bypass valid same-organization ACL checks; source-managed feeds remain strictly read-only.
+- **`CalendarFeedACL`**: Role-based access rules (Role → `can_read` / `can_write`), owned by the same organization as the feed. A private feed with any cross-organization ACL row fails closed for member reads and writes until an operator repairs the inconsistent data; public anonymous reads remain public.
 - **`CalendarEvent`**: Event instance (`title`, `start_datetime`, `end_datetime`, `all_day`, `location`, `description`, `rrule_ical`, `exdate_ical`, `uid`).
 - **`EventException`**: Overrides for recurring occurrences (`CHANGE_DELETED`, `CHANGE_MOVED`, `CHANGE_CHANGED`).
 - **`UserCalendarToken`**: Personal tokenized subscription key enabling secure ICS calendar subscriptions in external apps without session cookies.
@@ -38,6 +38,7 @@ Multi-feed calendars are served at `/calendar/`:
 - **Outreach Synchronization** (`signals.py` & `sources/outreach.py`): Synchronizes `OutreachShift` records into the program's linked outreach calendar feed.
 - **Travel Synchronization** (`signals.py` & `sources/travel.py`): Synchronizes `TravelEvent` and `TravelDeparture` dates into the program's travel calendar feed.
 - Creating or editing a feed triggers an initial automatic synchronization.
+- Source records, feeds, programs, and generated events must belong to the same organization; mismatched departures are omitted. Synchronization and deletion leave inconsistent cross-organization records untouched rather than cleaning up historical data.
 
 ---
 
@@ -48,11 +49,20 @@ Multi-feed calendars are served at `/calendar/`:
 - **Aggregate Public Feed**: `/calendar/feed.ics` (all active `anonymous` feeds, covering -30 days to +1 year).
 - **Personal Unified Subscription**: `/calendar/my/<token>/feed.ics` (aggregates all feeds the user has permission to read).
 
+All public and tokenized ICS endpoints are scoped to the organization resolved from the request hostname. Feed slugs are resolved within that organization, and event expansion excludes events whose organization does not match their feed. Personal tokens require an active account with an active membership in the organization currently hosting the subscription (superusers retain their existing membership exception). A token does not grant access to feeds on another organization's host; public feeds remain anonymously readable on their own organization's host. Requests without an organization context are rejected.
+
+Calendar feed forms only offer programs belonging to the current organization and reject submitted program IDs from other organizations.
+
+ACL editing is limited to rows owned by the feed organization, and newly saved rows inherit that organization. Event and exception management validates the full organization → feed → event → exception ownership chain; recurrence expansion, exception lists, and iCalendar output ignore foreign-owned exceptions. Event or feed deletion is blocked when it would cascade to child records owned by another organization. Calendar page, event API, and tenant-scoped management requests without a resolved organization are rejected; anonymous public access remains available on a resolved tenant host.
+
 ---
 
 ## Scheduled Reminders (`send_calendar_reminders`)
 
-Sends periodic personalized calendar digest emails to users for feeds they are authorized to read:
+Sends separate personalized digests per organization to active users with an active membership in that organization. Private feed ACLs still apply; public visibility alone does not enroll users from other organizations in reminders. Each email uses the organization's branding and canonical calendar address; the calendar link is omitted when no safe address is available.
+
+Reminders skip private feeds containing ACL rows owned by another organization and log the inconsistency; the shared feed permission checks now also fail closed for those inconsistent private-feed ACLs.
+
 ```bash
 python manage.py send_calendar_reminders --days-ahead 3 [--dry-run]
 ```

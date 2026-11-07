@@ -523,6 +523,8 @@ class SendWeeklyDigestCommandTests(TestCase):
 
     def test_command_custom_date_option(self):
         mail.outbox.clear()
+        self.shift.date = datetime.date(2026, 11, 3)
+        self.shift.save(update_fields=["date"])
         call_command(
             "send_weekly_digest", date="2026-11-01", role="student", stdout=self.out
         )

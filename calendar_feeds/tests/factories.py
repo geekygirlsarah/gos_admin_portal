@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
 from calendar_feeds.models import CalendarEvent, CalendarFeed, CalendarFeedACL
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Enrollment, Program, Student
 
 
@@ -13,6 +14,12 @@ def make_lead_mentor_user(username="lead", password="password123"):  # nosec B10
     user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role="LeadMentor",
+        is_active=True,
+    )
     return user
 
 

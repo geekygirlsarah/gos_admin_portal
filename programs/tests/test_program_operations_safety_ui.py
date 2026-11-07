@@ -4,6 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     Crew,
@@ -43,6 +44,12 @@ class ProgramOperationsSafetyUITests(TestCase):
         self.program = Program.objects.create(
             name="Robotics 2026-2027",
             active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
         self.school = School.objects.create(name="Central High School")

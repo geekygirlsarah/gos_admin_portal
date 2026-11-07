@@ -126,22 +126,31 @@ class MentorAgreementAcceptance(models.Model):
     def has_accepted_for_user(cls, user, organization=None):
         """Check if a user has accepted all current active agreements.
 
-        Returns True if there are no active agreements (graceful degradation)
-        or if the user's Adult profile has acceptances for every active version.
-        Returns False if the user has no Adult profile.
+        Uses the supplied organization, or the user's Adult organization when
+        omitted. A mismatched profile never satisfies the requirement; an
+        absent profile satisfies it only when that organization has no active
+        agreements.
         """
         from .adults import Adult
 
-        active = MentorAgreement.get_all_active(organization=organization)
-        if not active.exists():
-            return True
         try:
             adult = user.adult_profile
         except (AttributeError, Adult.DoesNotExist):
+            adult = None
+        if organization is None:
+            if adult is None or adult.organization_id is None:
+                return False
+            organization = adult.organization
+        elif adult is not None and adult.organization_id != organization.pk:
             return False
-        acceptances = cls.objects.filter(adult=adult, agreement__in=active)
-        if organization is not None:
-            acceptances = acceptances.filter(organization=organization)
+        active = MentorAgreement.get_all_active(organization=organization)
+        if not active.exists():
+            return True
+        if adult is None:
+            return False
+        acceptances = cls.objects.filter(
+            organization=organization, adult=adult, agreement__in=active
+        )
         accepted_ids = acceptances.values_list("agreement_id", flat=True)
         return active.filter(id__in=accepted_ids).count() == active.count()
 

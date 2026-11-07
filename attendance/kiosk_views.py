@@ -1,5 +1,6 @@
 import logging
 
+from django.http import Http404
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -13,7 +14,14 @@ def kiosk_index(request):
     """Landing page for kiosks.
     Lists all active kiosks.
     """
-    kiosks = KioskConfig.objects.filter(is_active=True).select_related("program")
+    organization = getattr(request, "organization", None)
+    if organization is None or not organization.is_active:
+        raise Http404
+    kiosks = KioskConfig.objects.filter(
+        organization=organization,
+        program__organization=organization,
+        is_active=True,
+    ).select_related("program")
     # Also filter by programs that have attendance feature enabled
     kiosks = kiosks.filter(program__features__key="attendance").distinct()
 
@@ -34,8 +42,8 @@ def kiosk_signin(request, kiosk_id):
     unlocked by a mentor (HttpOnly cookie present), the normal sign-in UI is
     shown.  Otherwise an unlock form is displayed.
     """
-    config = _get_kiosk_or_404(kiosk_id)
-    is_unlocked = _is_unlocked(request, kiosk_id)
+    config = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
+    is_unlocked = _is_unlocked(request, config)
     return render(
         request,
         "kiosk/signin.html",

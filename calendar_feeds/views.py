@@ -3,7 +3,7 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -22,6 +22,19 @@ from .ics import FeedICSView, PersonalICSFeedView, PublicICSFeedView  # noqa: F4
 from .models import CalendarEvent, CalendarFeed, EventException, UserCalendarToken
 
 
+def _tenant_calendar_events(organization):
+    return CalendarEvent.objects.for_organization(organization).filter(
+        feed__organization=organization
+    )
+
+
+def _tenant_event_exceptions(organization):
+    return EventException.objects.for_organization(organization).filter(
+        event__organization=organization,
+        event__feed__organization=organization,
+    )
+
+
 class CalendarView(View):
     """Main calendar view — shows all feeds the user can read.
 
@@ -31,6 +44,10 @@ class CalendarView(View):
     """
 
     def get(self, request):
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+
         from programs.permission_views import (
             can_user_read,
             user_is_mentor_or_lead,
@@ -44,7 +61,6 @@ class CalendarView(View):
             )
             return redirect("home")
 
-        org = getattr(request, "organization", None)
         feeds = CalendarFeed.objects.for_organization(org).filter(is_active=True)
         visible_feeds = [f for f in feeds if f.user_can_read(request.user)]
         writable_feeds = [f for f in visible_feeds if f.user_can_write(request.user)]
@@ -100,6 +116,10 @@ class CalendarEventsAPIView(View):
     """
 
     def get(self, request):
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+
         start = request.GET.get("start")
         end = request.GET.get("end")
         feed_pks = request.GET.getlist("feed")
@@ -113,7 +133,6 @@ class CalendarEventsAPIView(View):
         except (ValueError, TypeError):
             return JsonResponse({"events": []})
 
-        org = getattr(request, "organization", None)
         feeds = CalendarFeed.objects.for_organization(org).filter(is_active=True)
         if feed_pks:
             feeds = feeds.filter(pk__in=feed_pks)
@@ -144,7 +163,14 @@ class CalendarEventsAPIView(View):
         return JsonResponse({"events": all_events})
 
 
-class FeedListView(LeadMentorRequiredMixin, ListView):
+class OrganizationRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        if getattr(request, "organization", None) is None:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+
+class FeedListView(OrganizationRequiredMixin, LeadMentorRequiredMixin, ListView):
     model = CalendarFeed
     template_name = "calendar_feeds/feed_list.html"
     context_object_name = "feeds"
@@ -154,9 +180,10 @@ class FeedListView(LeadMentorRequiredMixin, ListView):
         return CalendarFeed.objects.for_organization(org).order_by("name")
 
 
-class FeedCreateView(LeadMentorRequiredMixin, View):
+class FeedCreateView(OrganizationRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request):
-        form = CalendarFeedForm()
+        org = getattr(request, "organization", None)
+        form = CalendarFeedForm(organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(prefix="acls")
         return render(
             request,
@@ -166,7 +193,7 @@ class FeedCreateView(LeadMentorRequiredMixin, View):
 
     def post(self, request):
         org = getattr(request, "organization", None)
-        form = CalendarFeedForm(request.POST)
+        form = CalendarFeedForm(request.POST, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(request.POST, prefix="acls")
 
         if form.is_valid() and acl_formset.is_valid():
@@ -194,11 +221,11 @@ class FeedCreateView(LeadMentorRequiredMixin, View):
         )
 
 
-class FeedUpdateView(LeadMentorRequiredMixin, View):
+class FeedUpdateView(OrganizationRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request, pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
-        form = CalendarFeedForm(instance=feed)
+        form = CalendarFeedForm(instance=feed, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(instance=feed, prefix="acls")
         return render(
             request,
@@ -209,7 +236,7 @@ class FeedUpdateView(LeadMentorRequiredMixin, View):
     def post(self, request, pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
-        form = CalendarFeedForm(request.POST, instance=feed)
+        form = CalendarFeedForm(request.POST, instance=feed, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(
             request.POST, instance=feed, prefix="acls"
         )
@@ -236,23 +263,44 @@ class FeedUpdateView(LeadMentorRequiredMixin, View):
         )
 
 
-class FeedDeleteView(LeadMentorRequiredMixin, View):
+class FeedDeleteView(OrganizationRequiredMixin, LeadMentorRequiredMixin, View):
     def post(self, request, pk):
         org = getattr(request, "organization", None)
-        feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
-        name = feed.name
-        log_deletion(
-            resource=feed,
-            request=request,
-            before={"name": name, "slug": feed.slug, "source_type": feed.source_type},
-            notes=f"Calendar feed '{name}' deleted.",
-        )
-        feed.delete()
+        with transaction.atomic():
+            feed = get_object_or_404(
+                CalendarFeed.objects.for_organization(org).select_for_update(), pk=pk
+            )
+            # Lock the cascade tree before checking ownership and deleting it.
+            list(feed.acls.select_for_update().values_list("pk", flat=True))
+            list(feed.events.select_for_update().values_list("pk", flat=True))
+            list(
+                EventException.objects.filter(event__feed=feed)
+                .select_for_update()
+                .values_list("pk", flat=True)
+            )
+            if feed.has_foreign_owned_children():
+                messages.error(
+                    request,
+                    "This feed cannot be deleted while it has records owned by another organization.",
+                )
+                return redirect("calendar_feeds:feed_list")
+            name = feed.name
+            log_deletion(
+                resource=feed,
+                request=request,
+                before={
+                    "name": name,
+                    "slug": feed.slug,
+                    "source_type": feed.source_type,
+                },
+                notes=f"Calendar feed '{name}' deleted.",
+            )
+            feed.delete()
         messages.success(request, f"Calendar feed '{name}' deleted.")
         return redirect("calendar_feeds:feed_list")
 
 
-class FeedACLUpdateView(LeadMentorRequiredMixin, View):
+class FeedACLUpdateView(OrganizationRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request, pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
@@ -280,7 +328,7 @@ class FeedACLUpdateView(LeadMentorRequiredMixin, View):
         )
 
 
-class EventCreateView(LoginRequiredMixin, View):
+class EventCreateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, feed_pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=feed_pk)
@@ -323,10 +371,10 @@ class EventCreateView(LoginRequiredMixin, View):
         )
 
 
-class EventUpdateView(LoginRequiredMixin, View):
+class EventUpdateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(CalendarEvent.objects.for_organization(org), pk=pk)
+        event = get_object_or_404(_tenant_calendar_events(org), pk=pk)
         if not event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to edit this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -345,7 +393,7 @@ class EventUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(CalendarEvent.objects.for_organization(org), pk=pk)
+        event = get_object_or_404(_tenant_calendar_events(org), pk=pk)
         if not event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to edit this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -368,40 +416,56 @@ class EventUpdateView(LoginRequiredMixin, View):
         )
 
 
-class EventDeleteView(LoginRequiredMixin, View):
+class EventDeleteView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(CalendarEvent.objects.for_organization(org), pk=pk)
-        if not event.feed.user_can_write(request.user):
-            messages.error(request, "You do not have permission to delete this event.")
-            return redirect("calendar_feeds:calendar_view")
+        with transaction.atomic():
+            event = get_object_or_404(
+                _tenant_calendar_events(org).select_for_update().select_related("feed"),
+                pk=pk,
+            )
+            if not event.feed.user_can_write(request.user):
+                messages.error(
+                    request, "You do not have permission to delete this event."
+                )
+                return redirect("calendar_feeds:calendar_view")
 
-        title = event.title
-        log_deletion(
-            resource=event,
-            request=request,
-            before={
-                "title": title,
-                "start_datetime": str(event.start_datetime),
-                "feed": str(event.feed),
-            },
-            notes=f"Calendar event '{title}' deleted.",
-        )
-        event.delete()
+            list(event.exceptions.select_for_update().values_list("pk", flat=True))
+            if event.exceptions.exclude(organization_id=org.pk).exists():
+                messages.error(
+                    request,
+                    "This event cannot be deleted while it has records owned by another organization.",
+                )
+                return redirect("calendar_feeds:calendar_view")
+
+            title = event.title
+            log_deletion(
+                resource=event,
+                request=request,
+                before={
+                    "title": title,
+                    "start_datetime": str(event.start_datetime),
+                    "feed": str(event.feed),
+                },
+                notes=f"Calendar event '{title}' deleted.",
+            )
+            event.delete()
         messages.success(request, f"Event '{title}' deleted.")
         return redirect("calendar_feeds:calendar_view")
 
 
-class EventExceptionListView(LoginRequiredMixin, View):
+class EventExceptionListView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, event_pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(
-            CalendarEvent.objects.for_organization(org), pk=event_pk
-        )
+        event = get_object_or_404(_tenant_calendar_events(org), pk=event_pk)
         if not event.feed.user_can_read(request.user):
             messages.error(request, "You do not have permission to view this event.")
             return redirect("calendar_feeds:calendar_view")
-        exceptions = event.exceptions.select_related("created_by").all()
+        exceptions = (
+            _tenant_event_exceptions(org)
+            .filter(event=event)
+            .select_related("created_by")
+        )
         return render(
             request,
             "calendar_feeds/exception_list.html",
@@ -409,12 +473,10 @@ class EventExceptionListView(LoginRequiredMixin, View):
         )
 
 
-class EventExceptionCreateView(LoginRequiredMixin, View):
+class EventExceptionCreateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, event_pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(
-            CalendarEvent.objects.for_organization(org), pk=event_pk
-        )
+        event = get_object_or_404(_tenant_calendar_events(org), pk=event_pk)
         if not event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -428,9 +490,7 @@ class EventExceptionCreateView(LoginRequiredMixin, View):
 
     def post(self, request, event_pk):
         org = getattr(request, "organization", None)
-        event = get_object_or_404(
-            CalendarEvent.objects.for_organization(org), pk=event_pk
-        )
+        event = get_object_or_404(_tenant_calendar_events(org), pk=event_pk)
         if not event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -452,12 +512,10 @@ class EventExceptionCreateView(LoginRequiredMixin, View):
         )
 
 
-class EventExceptionUpdateView(LoginRequiredMixin, View):
+class EventExceptionUpdateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, pk):
         org = getattr(request, "organization", None)
-        exception = get_object_or_404(
-            EventException.objects.for_organization(org), pk=pk
-        )
+        exception = get_object_or_404(_tenant_event_exceptions(org), pk=pk)
         if not exception.event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -475,9 +533,7 @@ class EventExceptionUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         org = getattr(request, "organization", None)
-        exception = get_object_or_404(
-            EventException.objects.for_organization(org), pk=pk
-        )
+        exception = get_object_or_404(_tenant_event_exceptions(org), pk=pk)
         if not exception.event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")
@@ -495,12 +551,10 @@ class EventExceptionUpdateView(LoginRequiredMixin, View):
         )
 
 
-class EventExceptionDeleteView(LoginRequiredMixin, View):
+class EventExceptionDeleteView(OrganizationRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         org = getattr(request, "organization", None)
-        exception = get_object_or_404(
-            EventException.objects.for_organization(org), pk=pk
-        )
+        exception = get_object_or_404(_tenant_event_exceptions(org), pk=pk)
         if not exception.event.feed.user_can_write(request.user):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")

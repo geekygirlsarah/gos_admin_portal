@@ -77,7 +77,7 @@
         <button type="submit" class="btn btn-primary">Send Emails</button>
       </div>
 
-      {% include 'programs/_email_send_confirm_modal.html' %}
+      {% include 'programs/_email_send_confirm_modal.html' with email_confirm_organization_name=program.organization.name %}
     </form>
   </div>
 </div>

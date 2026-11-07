@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-5" style="max-width: 720px;">
+    <div class="card border-warning shadow-sm">
+        <div class="card-header bg-warning-subtle fw-bold">Confirm support access</div>
+        <div class="card-body">
+            <p>
+                You are about to enter <strong>{{ handoff.organization.name }}</strong> as
+                <strong>{{ handoff.target_user.get_full_name|default:handoff.target_user.username }}</strong>
+                ({{ handoff.target_user.email }}).
+            </p>
+            {% if existing_user %}
+            <div class="alert alert-warning" role="alert">
+                This browser is currently signed in here as
+                <strong>{{ existing_user.get_full_name|default:existing_user.username }}</strong>
+                ({{ existing_user.email }}). Continuing will replace that tenant login on this
+                host. Your platform administrator session on the main Momentum site remains separate.
+            </div>
+            {% else %}
+            <p class="text-muted">
+                This creates a tenant session only. Your platform administrator session remains
+                separate on the main Momentum site.
+            </p>
+            {% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning fw-semibold">Confirm and enter portal</button>
+                <a href="{% url 'home' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -613,6 +613,12 @@ class PortalSettingsAccessControlTests(TestCase):
 
         lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.gos,
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.mentor_user = User.objects.create_user(
             username="regular_mentor",
@@ -630,6 +636,12 @@ class PortalSettingsAccessControlTests(TestCase):
             last_name="Mentor",
             personal_email="mentor@example.com",
             is_mentor=True,
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.mentor_user,
+            organization=self.gos,
+            role="Mentor",
+            defaults={"is_active": True},
         )
 
         self.org, _ = Organization.objects.get_or_create(

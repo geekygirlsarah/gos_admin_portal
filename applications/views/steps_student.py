@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db.models import F, Q
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -51,6 +52,7 @@ from .utils import (
     _is_handoff_authorized,
     _is_mentor,
     _issue_and_send,
+    _locked_application_redirect,
     _mentor_progress,
     _redirect_after_email_verified,
     _redirect_to_current_step,
@@ -70,7 +72,10 @@ class Step2ApplicantTypeView(View):
     template_name = "applications/step2_applicant_type.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         form = ApplicantTypeForm(
             initial={
                 "applicant_type": application.applicant_type or None,
@@ -80,7 +85,10 @@ class Step2ApplicantTypeView(View):
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         form = ApplicantTypeForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
@@ -152,8 +160,11 @@ class Step4ProgramView(View):
     template_name = "applications/step4_program.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
-        future, current, past = get_program_buckets()
+        application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
+        future, current, past = get_program_buckets(request.organization)
         form = ProgramSelectForm(
             future_programs=future,
             initial=(
@@ -163,8 +174,11 @@ class Step4ProgramView(View):
         return self._render(request, application, form, future, current, past)
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
-        future, current, past = get_program_buckets()
+        application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
+        future, current, past = get_program_buckets(request.organization)
         form = ProgramSelectForm(request.POST, future_programs=future)
         if not form.is_valid():
             return self._render(request, application, form, future, current, past)
@@ -202,7 +216,10 @@ class Step3VerifyEmailView(View):
     template_name = "applications/step3_verify_email.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         if application.email_is_verified:
             # Mentors skip program selection — send them back into the mentor
             # wizard; everyone else continues to Step 4 (program selection).
@@ -230,7 +247,10 @@ class Step3VerifyEmailView(View):
         return self._render(request, application, OtpVerifyForm())
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         rate_limited = check_otp_verify_limit(request, application.application_id)
         if rate_limited is not None:
             return rate_limited
@@ -303,10 +323,14 @@ class Step3DuplicateFoundView(View):
     template_name = "applications/step3_duplicate_found.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         # Find other applications with the same email that are in progress
         existing = (
-            Application.objects.filter(
+            Application.objects.for_organization(application.organization)
+            .filter(
                 email__iexact=application.email,
                 status__in=[
                     Application.Status.DRAFT,
@@ -315,6 +339,10 @@ class Step3DuplicateFoundView(View):
                 ],
             )
             .exclude(pk=application.pk)
+            .filter(
+                Q(program__isnull=True)
+                | Q(program__organization=application.organization)
+            )
             .order_by("-updated_at")
         )
 
@@ -334,22 +362,44 @@ class Step3DuplicateFoundView(View):
         )
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         action = request.POST.get("action")
 
-        existing_query = Application.objects.filter(
-            email__iexact=application.email,
-            status__in=[
-                Application.Status.DRAFT,
-                Application.Status.EMAIL_VERIFIED,
-                Application.Status.AWAITING_PARENT,
-            ],
-        ).exclude(pk=application.pk)
+        existing_query = (
+            Application.objects.for_organization(application.organization)
+            .filter(
+                email__iexact=application.email,
+                status__in=[
+                    Application.Status.DRAFT,
+                    Application.Status.EMAIL_VERIFIED,
+                    Application.Status.AWAITING_PARENT,
+                ],
+            )
+            .exclude(pk=application.pk)
+            .filter(
+                Q(program__isnull=True)
+                | Q(program__organization=application.organization)
+            )
+        )
 
         if action == "resume":
             # Resume existing: delete current, redirect to the most recent old one
             oldest_existing = existing_query.order_by("-updated_at").first()
             if oldest_existing:
+                if application.document_submissions.exclude(
+                    organization_id=application.organization_id,
+                    document__program__organization=application.organization,
+                ).exists():
+                    messages.error(
+                        request,
+                        "This application has an inconsistent document record and cannot be replaced.",
+                    )
+                    return redirect(
+                        "apply_duplicate_found", app_id=application.application_id
+                    )
                 log_event(
                     event=AuditEvent.RECORD_DELETED,
                     resource=application,
@@ -376,6 +426,22 @@ class Step3DuplicateFoundView(View):
             # Start over: delete all old ones, continue with current
             stale_ids = list(existing_query.values_list("application_id", flat=True))
             if stale_ids:
+                inconsistent_submissions = ApplicationDocumentSubmission.objects.filter(
+                    application__in=existing_query
+                ).exclude(
+                    organization_id=F("application__organization_id"),
+                    document__program__organization_id=F(
+                        "application__organization_id"
+                    ),
+                )
+                if inconsistent_submissions.exists():
+                    messages.error(
+                        request,
+                        "A previous application has an inconsistent document record and cannot be replaced.",
+                    )
+                    return redirect(
+                        "apply_duplicate_found", app_id=application.application_id
+                    )
                 log_event(
                     event=AuditEvent.RECORD_DELETED,
                     resource=application,
@@ -398,7 +464,10 @@ class Step3ResendCodeView(View):
     def post(self, request, app_id: str):
         from .. import services as _services
 
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         if not application.email:
             return redirect("apply_step2", app_id=application.application_id)
         rate_limited = check_otp_send_limit(request, application.email)
@@ -434,7 +503,7 @@ class Step5StudentInfoView(View):
     template_name = "applications/step5_student_info.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -462,7 +531,7 @@ class Step5StudentInfoView(View):
         )
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -579,7 +648,9 @@ class Step5StudentInfoView(View):
         elif application.applicant_type == Application.Type.STUDENT:
             # Returning student: remember which Student record matched so
             # Step 6 can prefill the primary parent/guardian automatically.
-            matched = find_student_by_email(application.email)
+            matched = find_student_by_email(
+                application.email, organization=application.organization
+            )
             if matched is not None:
                 payload["_existing_student_id"] = matched.pk
         _save_step_data(application, "step5-student", payload, next_step=6)
@@ -590,11 +661,15 @@ class Step5StudentInfoView(View):
         """Return (chosen_student, picker_form_or_None)."""
         if application.applicant_type != Application.Type.PARENT:
             return None, None
-        adult = find_adult_by_email(application.email)
-        students = students_for_adult(adult)
+        adult = find_adult_by_email(
+            application.email, organization=application.organization
+        )
+        students = students_for_adult(adult, organization=application.organization)
         if not students:
             return None, None
-        qs = Student.objects.filter(pk__in=[s.pk for s in students])
+        qs = Student.objects.for_organization(application.organization).filter(
+            pk__in=[s.pk for s in students]
+        )
         picker = ChooseExistingStudentForm(post or None, students=qs)
         chosen = None
         # Honor previously-saved choice in application.data
@@ -650,7 +725,9 @@ class Step5StudentInfoView(View):
             and application.applicant_type == Application.Type.STUDENT
             and not (application.data or {}).get("step5-student")
         ):
-            prefill_student = find_student_by_email(application.email)
+            prefill_student = find_student_by_email(
+                application.email, organization=application.organization
+            )
         welcome_back = None
         if prefill_student is not None:
             display_name = (
@@ -686,7 +763,7 @@ class Step6ExperienceView(View):
     template_name = "applications/step6_experience.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -698,7 +775,7 @@ class Step6ExperienceView(View):
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -737,7 +814,7 @@ class Step7PrimaryParentView(View):
     template_name = "applications/step7_primary_parent.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -755,7 +832,7 @@ class Step7PrimaryParentView(View):
         )
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -839,14 +916,24 @@ class Step7PrimaryParentView(View):
         )
         student = None
         if existing_student_id:
-            student = Student.objects.filter(pk=existing_student_id).first()
+            student = (
+                Student.objects.for_organization(application.organization)
+                .filter(pk=existing_student_id)
+                .first()
+            )
 
-        if not saved and student:
-            if student.primary_contact_id:
-                existing_adult = student.primary_contact
+        if not saved and student and student.primary_contact_relationship_id:
+            relationship = student.primary_contact_relationship
+            if (
+                relationship.organization_id == application.organization_id
+                and relationship.adult.organization_id == application.organization_id
+            ):
+                existing_adult = relationship.adult
         if not saved and existing_adult is None:
             lookup_email = handoff_email or application.email
-            existing_adult = find_adult_by_email(lookup_email)
+            existing_adult = find_adult_by_email(
+                lookup_email, organization=application.organization
+            )
 
         student_emails = get_student_emails(application)
         if student_initiated and not saved and not already_handed_off:
@@ -942,10 +1029,21 @@ class Step7PrimaryParentView(View):
                 .get("_existing_student_id")
             )
             if sid:
-                student = Student.objects.filter(pk=sid).first()
-                if student and student.secondary_contact_id:
+                student = (
+                    Student.objects.for_organization(application.organization)
+                    .filter(pk=sid)
+                    .first()
+                )
+                if (
+                    student
+                    and student.secondary_contact_relationship_id
+                    and student.secondary_contact_relationship.organization_id
+                    == application.organization_id
+                    and student.secondary_contact_relationship.adult.organization_id
+                    == application.organization_id
+                ):
                     has_secondary = True
-                    sc = student.secondary_contact
+                    sc = student.secondary_contact_relationship.adult
                     secondary_name = (
                         " ".join(
                             filter(
@@ -967,15 +1065,24 @@ class Step7PrimaryParentView(View):
         if not has_secondary:
             adult_for_check = existing_adult
             if adult_for_check is None:
-                adult_for_check = find_adult_by_email(application.email)
+                adult_for_check = find_adult_by_email(
+                    application.email, organization=application.organization
+                )
             if adult_for_check is not None:
-                linked_student = Student.objects.filter(
-                    primary_contact_relationship__adult=adult_for_check,
-                    secondary_contact_relationship__isnull=False,
-                ).first()
+                linked_student = (
+                    Student.objects.for_organization(application.organization)
+                    .filter(
+                        primary_contact_relationship__adult=adult_for_check,
+                        primary_contact_relationship__organization=application.organization,
+                        secondary_contact_relationship__isnull=False,
+                        secondary_contact_relationship__organization=application.organization,
+                        secondary_contact_relationship__adult__organization=application.organization,
+                    )
+                    .first()
+                )
                 if linked_student:
                     has_secondary = True
-                    sc = linked_student.secondary_contact
+                    sc = linked_student.secondary_contact_relationship.adult
                     secondary_name = (
                         " ".join(
                             filter(
@@ -1005,7 +1112,11 @@ class Step7PrimaryParentView(View):
             # Fallback to existing student record if we have one but data is missing
             sid = step5_data.get("_existing_student_id")
             if sid:
-                student = Student.objects.filter(pk=sid).first()
+                student = (
+                    Student.objects.for_organization(application.organization)
+                    .filter(pk=sid)
+                    .first()
+                )
                 if student:
                     student_address = student.address
                     student_city = student.city
@@ -1049,7 +1160,7 @@ class SwapParentsView(View):
     """
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -1073,12 +1184,36 @@ class SwapParentsView(View):
             "_existing_student_id"
         )
         if existing_student_id and (not step7 or not step8):
-            student = Student.objects.filter(pk=existing_student_id).first()
+            student = (
+                Student.objects.for_organization(application.organization)
+                .filter(pk=existing_student_id)
+                .first()
+            )
             if student:
-                if not step7 and student.primary_contact_id:
-                    step7 = adult_to_prefill(student.primary_contact, student=student)
-                if not step8 and student.secondary_contact_id:
-                    step8 = adult_to_prefill(student.secondary_contact, student=student)
+                primary_relationship = student.primary_contact_relationship
+                if (
+                    not step7
+                    and primary_relationship is not None
+                    and primary_relationship.organization_id
+                    == application.organization_id
+                    and primary_relationship.adult.organization_id
+                    == application.organization_id
+                ):
+                    step7 = adult_to_prefill(
+                        primary_relationship.adult, student=student
+                    )
+                secondary_relationship = student.secondary_contact_relationship
+                if (
+                    not step8
+                    and secondary_relationship is not None
+                    and secondary_relationship.organization_id
+                    == application.organization_id
+                    and secondary_relationship.adult.organization_id
+                    == application.organization_id
+                ):
+                    step8 = adult_to_prefill(
+                        secondary_relationship.adult, student=student
+                    )
 
         # Only swap when both sides have content.
         if step7 or step8:
@@ -1106,7 +1241,7 @@ class Step8SecondaryParentView(View):
     template_name = "applications/step8_secondary_parent.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -1128,7 +1263,7 @@ class Step8SecondaryParentView(View):
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -1190,9 +1325,19 @@ class Step8SecondaryParentView(View):
             .get("_existing_student_id")
         )
         if sid:
-            student = Student.objects.filter(pk=sid).first()
-            if student and student.secondary_contact_id:
-                return adult_to_prefill(student.secondary_contact, student=student)
+            student = (
+                Student.objects.for_organization(application.organization)
+                .filter(pk=sid)
+                .first()
+            )
+            if student and student.secondary_contact_relationship_id:
+                relationship = student.secondary_contact_relationship
+                if (
+                    relationship.organization_id == application.organization_id
+                    and relationship.adult.organization_id
+                    == application.organization_id
+                ):
+                    return adult_to_prefill(relationship.adult, student=student)
         return {}
 
     def _render(self, request, application, form):
@@ -1207,7 +1352,11 @@ class Step8SecondaryParentView(View):
             # Fallback to existing student record if we have one but data is missing
             sid = step5_data.get("_existing_student_id")
             if sid:
-                student = Student.objects.filter(pk=sid).first()
+                student = (
+                    Student.objects.for_organization(application.organization)
+                    .filter(pk=sid)
+                    .first()
+                )
                 if student:
                     student_address = student.address
                     student_city = student.city
@@ -1240,7 +1389,7 @@ class Step9ConfirmView(View):
     template_name = "applications/step9_confirm.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
@@ -1255,7 +1404,7 @@ class Step9ConfirmView(View):
         return self._render(request, application, ConfirmSubmitForm())
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_verified_email(application)
         if guard is not None:
             return guard

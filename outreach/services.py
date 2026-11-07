@@ -48,15 +48,16 @@ def adult_recipient_email(adult):
 
 
 def outreach_link(event):
-    """Return the absolute URL to the outreach events list for ``event``."""
-    if event and event.program_id:
-        path = reverse("outreach:event_list", kwargs={"program_id": event.program_id})
-        org = getattr(event, "organization", None) or getattr(
-            getattr(event, "program", None), "organization", None
-        )
-        base = get_organization_email_settings(org).get("portal_url", "").rstrip("/")
-        return f"{base}{path}" if base else path
-    return None
+    """Return the tenant's absolute outreach URL, or None when unavailable."""
+    if not event or not event.program_id or not event.organization_id:
+        return None
+    if event.program.organization_id != event.organization_id:
+        return None
+    base = get_organization_email_settings(event.organization).get("portal_url", "")
+    if not base:
+        return None
+    path = reverse("outreach:event_list", kwargs={"program_id": event.program_id})
+    return f"{base.rstrip('/')}{path}"
 
 
 def generate_shift_ics(shift, role_label=None):

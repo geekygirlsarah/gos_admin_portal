@@ -22,6 +22,82 @@ Never run development seed commands or test-data anonymization against productio
 data. Do not use `--fix`, `--execute`, or `--force` until the proposed changes
 have been reviewed.
 
+## Temporary Maintenance Mode
+
+Set `MAINTENANCE_MODE=true` on each web service instance and restart or redeploy
+the processes to return a non-cacheable `503 Service Unavailable` page for
+application requests. All visitors, including signed-in users and platform
+superusers, see the same page. Set the variable to `false` or remove it, then
+restart or redeploy the processes to restore normal access.
+
+Static assets served by WhiteNoise and the real `/health` endpoint remain
+available; health probes continue to report actual database and email status.
+APIs and webhooks routed through Django also receive `503`; confirm that their
+callers retry as appropriate or pause external delivery. Maintenance middleware
+runs only for web requests, so it does not stop background workers, scheduled
+jobs, or other external services. It also cannot help if the application fails
+before it can start. Confirm the deployment platform's health-check and restart
+behavior before relying on this switch during an incident.
+
+## Protected Media Files
+
+Student photos and signed application submissions are stored beneath the
+existing `MEDIA_ROOT`, in organization-scoped random paths under `private/`.
+The application denies direct `/media/` requests for those paths and for the
+legacy `photos/students/` and `application_documents/` directories; authorized
+student-photo, applicant, and staff endpoints stream the file from its stored
+path. Existing uploads are not moved or deleted automatically.
+
+The current application setting uses the relative path `media/`. Before a
+deployment, confirm that this resolves inside the existing persistent Render
+disk mount and is not an ephemeral service-filesystem location. Do not change
+the mount or bulk-move files as part of this application change. Any future
+copy or cleanup requires a separately reviewed backup, inventory, validation,
+and approval plan. A proxy, CDN, or storage origin that bypasses Django must
+also deny the sensitive legacy and `private/` prefixes; review any cached
+copies of previously public URLs separately.
+
+After deploying the protection, verify that anonymous direct requests to both
+legacy and new sensitive media paths are denied, authorized same-tenant photo
+and document endpoints still work, and foreign-tenant requests are denied.
+Perform these checks through the actual proxy/CDN path as well as Django when
+those services can serve files independently.
+
+### Transitioning existing uploads
+
+`programs.management.commands.transition_private_media` inventories legacy
+student photos and signed application submissions. It is read-only by default:
+
+```bash
+python manage.py transition_private_media
+```
+
+Review the aggregate counts and any manual-review reasons before an approved
+execution:
+
+```bash
+python manage.py transition_private_media --execute
+```
+
+The command only accepts the known `photos/students/` and
+`application_documents/` source prefixes and the filesystem storage rooted at
+`MEDIA_ROOT`. It checks tenant ownership, copies each eligible file to its
+model-generated random private path, verifies the copied bytes with SHA-256,
+and updates the reference in a per-record transaction only if the stored path
+is unchanged. Already-private files are validated and skipped. A nonzero result
+means at least one record needs manual review; successful records from that run
+may already have been committed, so inspect the summary and rerun after review.
+
+Before any real execution, make and verify a coordinated database and complete
+`MEDIA_ROOT` backup, confirm `MEDIA_ROOT` is on the persistent disk, and ensure
+the Django server and any proxy, CDN, or storage origin deny direct access to
+the sensitive legacy paths. The command never deletes or overwrites source
+files. A rollback may restore a database reference to its retained source only
+while that source remains present; new private copies left behind by a failed
+or rolled-back attempt are orphans and must be inventoried separately, not
+automatically deleted. Keep legacy originals until a separate reviewed cleanup
+and approval; a successful transition does not purge previously cached copies.
+
 ## Local Development Commands
 
 | Task                     | Command                                                                      | Scope / safety                                                |

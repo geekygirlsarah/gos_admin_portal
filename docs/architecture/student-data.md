@@ -32,6 +32,8 @@ Student-Adult relationships are stored in the through-model `AdultStudentRelatio
   - `Student.primary_contact`, `Student.secondary_contact`, `Student.primary_contact_id`, and `Student.secondary_contact_id` are **compatibility properties with setters** that synchronize the through-record pointers.
   - **Query Invariant**: When filtering querysets by primary/secondary guardian, always filter via the relationship FK (e.g. `primary_contact_relationship__adult=...`), never the compat property name.
 
+Student and adult detail/edit views must scope the profile lookup, relationship choices, and related enrollments, documents, and background checks to the request organization. Relationship writes must validate that both endpoints and the relationship row belong to that organization; inconsistent foreign-owned rows are not exposed or modified. A missing organization fails closed.
+
 ---
 
 ## Active vs. Inactive Students Scoping
@@ -54,6 +56,10 @@ On program detail rosters, student membership is toggled rather than deleted:
 ## Merging Duplicate Records
 
 Merging helpers in `programs/utils/merges.py` handle deduplication atomically while preserving historical links and audit trails.
+
+Merge forms and their displayed relationship data are scoped to the current request organization. The merge helpers independently require saved keep/source records from the same organization and validate the ownership chain for related records before transferring or deleting anything. If a relationship, financial, attendance, travel, document, or other merge-related row is inconsistently owned, the operation is rejected without partial changes. A missing organization provides no merge choices and cannot be used to perform a merge.
+
+Alumni matching and conversion use the student's organization: only adults in that organization can be matched, and a newly created alumni adult is explicitly owned by it. A foreign-owned adult already linked to the student, or a matching adult linked to a different student, blocks conversion rather than being relinked across organizations.
 
 ### Student Merge (`perform_student_merge`, `student_merge` view)
 Merges duplicate student records into a target record:

@@ -4,7 +4,9 @@ This document details the versioned mentor agreement acceptance system and backg
 
 ## Mentor Agreements (`MentorAgreement` & `MentorAgreementAcceptance`)
 
-Mentors must review and accept all active organizational agreements before gaining portal access.
+Mentors must review and accept all active agreements belonging to the current
+organization before gaining portal access. Agreement management, versioning,
+acceptances, and uploads are scoped to that organization.
 
 ### Versioning & Lifecycle
 - Identified by a `slug` grouping versions of the same document, with sequential `version` numbers.
@@ -14,9 +16,24 @@ Mentors must review and accept all active organizational agreements before gaini
 
 ### Middleware Enforcement (`MentorAgreementMiddleware`)
 - Intercepts mentor requests and redirects mentors who have pending agreements to `/mentor-agreement/`.
-- `Adult.has_accepted_current_agreement()` evaluates acceptance across all active agreements.
+- `Adult.has_accepted_current_agreement()` evaluates active agreements and
+  acceptances for the adult's organization only.
 - Controlled globally by `MENTOR_AGREEMENT_ENABLED` (defaults to `not TESTING`).
 - Seed agreements via `python manage.py seed_mentor_agreement`.
+
+The agreement page remains publicly readable on a tenant hostname, including
+its agreement content and linked documents. Authenticated users without an
+active membership are denied by the tenant membership guard. An adult profile
+currently belongs to one organization: a mentor with a profile from another
+organization cannot accept or upload an agreement for this tenant. An
+acceptance whose organization disagrees with its agreement is not honored and
+requires administrative review; it is not automatically reassigned. Deletion
+is blocked if an associated acceptance or submission has a mismatched owner or
+adult profile, so it cannot cascade into another organization's records.
+
+Agreement-related digest action items are tenant-scoped. Other digest data,
+including outreach, attendance, travel, and calendar items, requires separate
+tenant-isolation review.
 
 ---
 

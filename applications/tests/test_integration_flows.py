@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from organizations.models import UserOrganizationMembership
 from programs.models import Enrollment, Program, RaceEthnicity, School, Student
 
 
@@ -66,6 +67,12 @@ class ApplicationIntegrationFlowTests(TestCase):
             applications_open=today - datetime.timedelta(days=1),
             applications_close=today + datetime.timedelta(days=15),
             active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.reviewer,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
         # Create necessary lookups for forms
@@ -230,6 +237,9 @@ class ApplicationIntegrationFlowTests(TestCase):
             reverse("application_review_approve", args=[app_id]), follow=True
         )
         self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response, reverse("application_review_detail", args=[app_id])
+        )
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.APPROVED)
 
@@ -238,6 +248,9 @@ class ApplicationIntegrationFlowTests(TestCase):
             reverse("application_review_convert", args=[app_id]), follow=True
         )
         self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response, reverse("application_review_detail", args=[app_id])
+        )
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.CONVERTED)
         self.assertTrue(app.converted_student)
@@ -357,11 +370,19 @@ class ApplicationIntegrationFlowTests(TestCase):
 
         # --- Review & Convert ---
         self.client.force_login(self.reviewer)
-        self.client.post(
+        response = self.client.post(
             reverse("application_review_approve", args=[app_id]), follow=True
         )
-        self.client.post(
+        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response, reverse("application_review_detail", args=[app_id])
+        )
+        response = self.client.post(
             reverse("application_review_convert", args=[app_id]), follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response, reverse("application_review_detail", args=[app_id])
         )
 
         app.refresh_from_db()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_DOWN, Decimal
 
@@ -24,7 +25,7 @@ def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> D
     return amount.quantize(Decimal("1."), rounding=ROUND_HALF_DOWN)
 
 
-def program_overlaps_sliding_window(program, sliding):
+def program_overlaps_sliding_window(program, sliding, fee_records=None):
     """Return True if a program's date range overlaps the sliding scale's
     effective window (``sliding.date`` -> ``sliding.expiration_date``).
 
@@ -40,11 +41,14 @@ def program_overlaps_sliding_window(program, sliding):
     prog_end = program.end_date
 
     if prog_start is None or prog_end is None:
-        from ..models import Fee
+        if fee_records is None:
+            from ..models import Fee
+
+            fee_records = Fee.objects.filter(program=program)
 
         fee_dates = [
             f.effective_date or (f.created_at.date() if f.created_at else None)
-            for f in Fee.objects.filter(program=program)
+            for f in fee_records
         ]
         valid_fee_dates = [d for d in fee_dates if d is not None]
         if valid_fee_dates:
@@ -271,3 +275,224 @@ def get_student_program_balance(student, program, can_view_sliding=True):
         program,
         can_view_sliding=can_view_sliding,
     )["balance"]
+
+
+class InconsistentBalanceStatementError(Exception):
+    """The statement cannot be calculated safely from its related records."""
+
+
+class TenantBalanceStatementCalculator:
+    """Calculate statements from a tenant-validated, batched set of records."""
+
+    def __init__(self, organization, students, programs):
+        from ..models import Enrollment, Fee, FeeAssignment, Payment, SlidingScale
+
+        self.organization_id = getattr(organization, "pk", None)
+        self.students = {
+            student.pk: student
+            for student in students
+            if student.pk and student.organization_id == self.organization_id
+        }
+        self.programs = {
+            program.pk: program
+            for program in programs
+            if program.pk and program.organization_id == self.organization_id
+        }
+        self.fees = defaultdict(list)
+        self.assignments = defaultdict(set)
+        self.payments = defaultdict(list)
+        self.scales = defaultdict(list)
+        self.enrollments = set()
+        self.invalid_programs = set()
+        self.invalid_pairs = set()
+        self._cache = {}
+
+        if not self.organization_id or not self.students or not self.programs:
+            return
+
+        student_ids = set(self.students)
+        program_ids = set(self.programs)
+        fee_programs = {}
+        for fee in Fee.objects.filter(program_id__in=program_ids):
+            self.fees[fee.program_id].append(fee)
+            fee_programs[fee.pk] = fee.program_id
+            if fee.organization_id != self.organization_id:
+                self.invalid_programs.add(fee.program_id)
+
+        assignment_pairs = set()
+        if fee_programs:
+            assignments = FeeAssignment.objects.filter(
+                fee_id__in=fee_programs
+            ).values_list(
+                "fee_id", "organization_id", "student_id", "student__organization_id"
+            )
+            for fee_id, owner_id, student_id, student_owner_id in assignments:
+                self.assignments[fee_id].add(student_id)
+                assignment_pairs.add((student_id, fee_programs[fee_id]))
+                if (
+                    owner_id != self.organization_id
+                    or student_owner_id != self.organization_id
+                ):
+                    self.invalid_programs.add(fee_programs[fee_id])
+
+        enrollment_student_ids = student_ids | {pair[0] for pair in assignment_pairs}
+        for enrollment in Enrollment.objects.filter(
+            student_id__in=enrollment_student_ids, program_id__in=program_ids
+        ).only("student_id", "program_id", "organization_id"):
+            pair = (enrollment.student_id, enrollment.program_id)
+            if enrollment.organization_id == self.organization_id:
+                self.enrollments.add(pair)
+            else:
+                self.invalid_pairs.add(pair)
+        for pair in assignment_pairs:
+            if pair not in self.enrollments or pair in self.invalid_pairs:
+                self.invalid_programs.add(pair[1])
+
+        for payment in Payment.objects.filter(
+            student_id__in=student_ids, program_id__in=program_ids
+        ):
+            pair = (payment.student_id, payment.program_id)
+            self.payments[pair].append(payment)
+            if payment.organization_id != self.organization_id:
+                self.invalid_pairs.add(pair)
+
+        for scale in SlidingScale.objects.filter(
+            student_id__in=student_ids, status=SlidingScale.STATUS_APPROVED
+        ).order_by("-date", "-created_at"):
+            self.scales[scale.student_id].append(scale)
+
+    def get_balance_data(self, student, program, can_view_sliding=True):
+        from ..models import Payment
+
+        pair = (getattr(student, "pk", None), getattr(program, "pk", None))
+        if (
+            not self.organization_id
+            or pair[0] not in self.students
+            or pair[1] not in self.programs
+            or student.organization_id != self.organization_id
+            or program.organization_id != self.organization_id
+            or pair not in self.enrollments
+            or pair in self.invalid_pairs
+            or pair[1] in self.invalid_programs
+        ):
+            raise InconsistentBalanceStatementError
+
+        cache_key = (*pair, bool(can_view_sliding))
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        fees = self.fees[pair[1]]
+        overlapping_scales = [
+            scale
+            for scale in self.scales[pair[0]]
+            if program_overlaps_sliding_window(program, scale, fee_records=fees)
+        ]
+        if any(
+            scale.organization_id != self.organization_id
+            for scale in overlapping_scales
+        ):
+            raise InconsistentBalanceStatementError
+        if not can_view_sliding:
+            overlapping_scales = []
+        sliding = overlapping_scales[0] if overlapping_scales else None
+
+        applicable_fees = [
+            fee
+            for fee in fees
+            if not self.assignments[fee.pk] or pair[0] in self.assignments[fee.pk]
+        ]
+        entries = []
+        discountable_amounts = []
+        for fee in applicable_fees:
+            fee_date = fee.effective_date or (
+                fee.created_at.date() if fee.created_at else None
+            )
+            starts_ok = (
+                not sliding
+                or not sliding.date
+                or (fee_date and fee_date >= sliding.date)
+            )
+            ends_ok = (
+                not sliding
+                or not sliding.expiration_date
+                or (fee_date and fee_date <= sliding.expiration_date)
+            )
+            adjusted_amount = fee.amount
+            if sliding and sliding.percent is not None and starts_ok and ends_ok:
+                adjusted_amount -= compute_sliding_discount_rounded(
+                    fee.amount, sliding.percent
+                )
+            entries.append(
+                {
+                    "date": fee_date,
+                    "due_date": fee.due_date,
+                    "type": "Fee",
+                    "name": fee.name,
+                    "amount": fee.amount,
+                    "adjusted_amount": adjusted_amount,
+                }
+            )
+            if not (
+                sliding
+                and fee_date
+                and (
+                    (sliding.date and fee_date < sliding.date)
+                    or (sliding.expiration_date and fee_date > sliding.expiration_date)
+                )
+            ):
+                discountable_amounts.append(fee.amount)
+
+        discount = Decimal("0")
+        if sliding and sliding.percent is not None:
+            discount = compute_sliding_discount_rounded(
+                sum(discountable_amounts, start=Decimal("0")), sliding.percent
+            )
+            entries.append(
+                {
+                    "date": sliding.date or sliding.created_at.date(),
+                    "type": "Sliding Scale",
+                    "name": f"Sliding scale (owes {sliding.percent}%)",
+                    "amount": Decimal("0.00"),
+                    "adjusted_amount": Decimal("0.00"),
+                }
+            )
+
+        for payment in self.payments[pair]:
+            via = dict(Payment.PAID_VIA_CHOICES).get(payment.paid_via, payment.paid_via)
+            details = (
+                f" (check #{payment.check_number})"
+                if payment.paid_via == "check" and payment.check_number
+                else ""
+            )
+            if payment.paid_via == "other" and payment.notes:
+                details += f" — {payment.notes}"
+            entries.append(
+                {
+                    "date": payment.paid_on,
+                    "type": "Payment",
+                    "name": f"Payment via {via}{details}",
+                    "amount": -payment.amount,
+                    "adjusted_amount": -payment.amount,
+                    "payment_id": payment.id,
+                }
+            )
+
+        entries.sort(
+            key=lambda entry: (entry["date"] is None, entry["date"], entry["type"])
+        )
+        total_fees = sum(entry["amount"] for entry in entries if entry["type"] == "Fee")
+        total_payments = -sum(
+            entry["amount"] for entry in entries if entry["type"] == "Payment"
+        )
+        result = {
+            "entries": entries,
+            "total_fees": total_fees,
+            "total_sliding": discount,
+            "total_payments": total_payments,
+            "balance": total_fees - discount - total_payments,
+            "sliding_scale": sliding,
+            "all_overlapping_sliding_scales": overlapping_scales,
+            "overlapping_sliding_count": len(overlapping_scales),
+        }
+        self._cache[cache_key] = result
+        return result

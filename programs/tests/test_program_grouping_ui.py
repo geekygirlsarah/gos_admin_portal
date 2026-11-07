@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from applications.views.review import ApplicationEmailForm
 from orders.forms import OrderForm
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import ProgramEmailBalancesForm, ProgramEmailForm
 from programs.models import Program, ProgramFeature
 from programs.utils.programs import (
@@ -113,6 +114,19 @@ class ProgramGroupingFormAndViewsTests(TestCase):
             password="password",  # nosec B106
         )
         self.mentor_user.groups.add(self.mentor_group)
+        organization = Organization.objects.get(slug="gos")
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user,
+            organization=organization,
+            role="Mentor",
+            is_active=True,
+        )
 
         self.prog_active = Program.objects.create(
             name="Active Program 2026",
@@ -140,7 +154,9 @@ class ProgramGroupingFormAndViewsTests(TestCase):
         self.prog_past.features.add(feat_attendance)
 
     def test_program_email_form_grouped_choices(self):
-        form_lead = ProgramEmailForm(user=self.lead_user)
+        form_lead = ProgramEmailForm(
+            user=self.lead_user, organization=self.prog_active.organization
+        )
         choices = list(form_lead.fields["program"].choices)
         choice_labels = [c[0] for c in choices if isinstance(c[1], (list, tuple))]
         self.assertIn("Active Programs", choice_labels)
@@ -148,7 +164,9 @@ class ProgramGroupingFormAndViewsTests(TestCase):
         self.assertIn("Past / Archived Programs", choice_labels)
 
         # Mentor should only see active/upcoming
-        form_mentor = ProgramEmailForm(user=self.mentor_user)
+        form_mentor = ProgramEmailForm(
+            user=self.mentor_user, organization=self.prog_active.organization
+        )
         mentor_choices = list(form_mentor.fields["program"].choices)
         mentor_labels = [
             c[0] for c in mentor_choices if isinstance(c[1], (list, tuple))
@@ -186,7 +204,7 @@ class ProgramGroupingFormAndViewsTests(TestCase):
         self.assertIn("Past / Archived Programs", choice_labels)
 
     def test_application_email_form_grouped_choices(self):
-        form = ApplicationEmailForm()
+        form = ApplicationEmailForm(organization=self.prog_active.organization)
         choices = list(form.fields["program"].choices)
         choice_labels = [c[0] for c in choices if isinstance(c[1], (list, tuple))]
         self.assertIn("Active Programs", choice_labels)

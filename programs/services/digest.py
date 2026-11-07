@@ -587,13 +587,16 @@ def collect_mentor_digest_data(
     # 6. Action items (Pending Agreements, Clearances)
     pending_agreements = []
     try:
-        from programs.models import MentorAgreement
+        from programs.models import MentorAgreement, MentorAgreementAcceptance
 
-        if not adult.has_accepted_current_agreement():
+        if adult.organization_id and not adult.has_accepted_current_agreement():
+            accepted_ids = MentorAgreementAcceptance.objects.filter(
+                organization_id=adult.organization_id, adult=adult
+            ).values_list("agreement_id", flat=True)
             pending_agreements = list(
-                MentorAgreement.objects.filter(is_active=True).exclude(
-                    acceptances__adult=adult
-                )
+                MentorAgreement.objects.filter(
+                    organization_id=adult.organization_id, is_active=True
+                ).exclude(id__in=accepted_ids)
             )
     except Exception:
         pending_agreements = []

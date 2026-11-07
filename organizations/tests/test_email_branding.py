@@ -5,13 +5,19 @@ from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import render_to_string
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from organizations.models import Organization, OrganizationSettings
+from organizations.models import (
+    Organization,
+    OrganizationDomain,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from organizations.utils import (
     get_organization_email_settings,
+    get_organization_url,
     update_organization_email_settings,
 )
 from programs.models import Adult
@@ -41,6 +47,12 @@ class OrganizationEmailBrandingTests(TestCase):
             last_name="Mentor",
             personal_email="lead@girlsofsteelrobotics.org",
         )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.user,
+            organization=self.org,
+            role="LeadMentor",
+            defaults={"is_active": True},
+        )
         self.url = reverse("portal_email_settings")
 
     def test_default_branding_settings(self):
@@ -60,6 +72,10 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("portal_url", cfg)
 
     def test_custom_branding_settings(self):
+        self.org_settings.data = {
+            "email_settings": {"portal_url": "https://portal.teamhyperion.org"}
+        }
+        self.org_settings.save()
         custom_cfg = {
             "primary_color": "#123456",
             "secondary_color": "#abcdef",
@@ -80,7 +96,12 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg["secondary_color"], "#abcdef")
         self.assertEqual(cfg["header_text_color"], "#fefefe")
         self.assertEqual(cfg["logo_url"], "https://example.com/logo.png")
-        self.assertEqual(cfg["portal_url"], "https://portal.teamhyperion.org")
+        self.assertEqual(cfg["portal_url"], get_organization_url(self.org))
+        self.org_settings.refresh_from_db()
+        self.assertEqual(
+            self.org_settings.data["email_settings"]["portal_url"],
+            "https://portal.teamhyperion.org",
+        )
         self.assertEqual(cfg["organization_name"], "Team Hyperion")
         self.assertEqual(cfg["address_line1"], "123 Tech Way")
         self.assertEqual(cfg["address_line2"], "Suite 400")
@@ -89,6 +110,10 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg["contact_email"], "contact@teamhyperion.org")
 
     def test_portal_settings_update_branding_post(self):
+        self.org_settings.data = {
+            "email_settings": {"portal_url": "https://old.example.com"}
+        }
+        self.org_settings.save()
         self.client.login(
             username="lead_mentor", password="testpassword123"
         )  # nosec B106
@@ -115,8 +140,16 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg.get("organization_name"), "RoboTitans")
         self.assertEqual(cfg.get("address_line1"), "456 Innovation Blvd")
         self.assertEqual(cfg.get("logo_url"), "https://example.org/static/logo.png")
-        self.assertEqual(cfg.get("portal_url"), "https://portal.robotitans.org")
+        self.assertEqual(cfg.get("portal_url"), "https://old.example.com")
 
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
     def test_portal_settings_upload_logo_file(self):
         self.client.login(
             username="lead_mentor", password="testpassword123"
@@ -211,7 +244,11 @@ class OrganizationEmailBrandingTests(TestCase):
             footer_portion,
         )
 
-    def test_portal_url_derived_from_custom_domain(self):
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_email_sending_domain_does_not_determine_portal_url(self):
+        self.org.subdomain = "titanrobotics"
+        self.org.settings = {}
+        self.org.save(update_fields=["subdomain"])
         custom_cfg = {
             "custom_domain": {
                 "enabled": True,
@@ -220,7 +257,7 @@ class OrganizationEmailBrandingTests(TestCase):
         }
         update_organization_email_settings(self.org, custom_cfg)
         cfg = get_organization_email_settings(self.org)
-        self.assertEqual(cfg["portal_url"], "https://titanrobotics.org")
+        self.assertEqual(cfg["portal_url"], "https://titanrobotics.momentumteam.app")
 
     def test_base_notification_template_renders_without_link_when_no_portal_url(self):
         cfg = {
@@ -295,12 +332,14 @@ class OrganizationEmailBrandingTests(TestCase):
         self.client.login(
             username="lead_mentor", password="testpassword123"
         )  # nosec B106
-        resp = self.client.get(reverse("portal_settings") + "?tab=email")
+        resp = self.client.get(reverse("portal_settings") + "?tab=branding")
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="branding-tab"')
+        self.assertContains(resp, 'id="branding"')
         self.assertContains(resp, "Email Branding &amp; Template Customization")
         self.assertContains(resp, "Primary Brand Color")
         self.assertContains(resp, "Organization Logo")
-        self.assertContains(resp, "Portal Web Address / URL")
+        self.assertNotContains(resp, 'name="portal_url"')
         self.assertContains(resp, "Email Template Live Preview")
 
     def test_wrap_email_document_renders_branding(self):
@@ -329,7 +368,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Team Announcement", html)
         self.assertIn("Important announcement to the team.", html)
         self.assertIn(
-            'This is an automated notification from the <a href="https://portal.titanrobotics.org"',
+            f'This is an automated notification from the <a href="{get_organization_url(self.org)}"',
             html,
         )
 
@@ -385,7 +424,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Apex Robotics", html_body)
         self.assertIn("#2c3e50", html_body)
         self.assertIn(
-            'This is an automated notification from the <a href="https://apex.example.com"',
+            f'This is an automated notification from the <a href="{get_organization_url(self.org)}"',
             html_body,
         )
 
@@ -420,7 +459,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Jane", html_body)
         self.assertIn("Teal Robotics", html_body)
         self.assertIn(
-            'This is an automated notification from the <a href="https://teal.example.com"',
+            f'This is an automated notification from the <a href="{get_organization_url(self.org)}"',
             html_body,
         )
         self.assertIn("Jane Doe", html_body)
@@ -456,3 +495,52 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Hello team!", rendered)
         # Ensure the old top date bar table is not present
         self.assertNotIn("Date: ", rendered.split("email-main-content")[0])
+
+
+@override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+class CanonicalEmailBrandingTests(TestCase):
+    @override_settings(DEFAULT_ORGANIZATION_SLUG="missing")
+    def test_missing_organization_does_not_link_to_generic_site(self):
+        self.assertEqual(get_organization_email_settings()["portal_url"], "")
+
+    def test_active_domain_then_disabled_domain_ignore_all_legacy_overrides(self):
+        from django.utils import timezone
+
+        org = Organization.objects.create(
+            name="Robots",
+            slug="robots",
+            subdomain="robots",
+            settings={
+                "portal_url": "https://wrong.example.org",
+                "site_url": "https://other.example.org",
+            },
+        )
+        OrganizationSettings.objects.update_or_create(
+            organization=org,
+            defaults={
+                "data": {
+                    "email_settings": {"portal_url": "https://override.example.org"}
+                }
+            },
+        )
+        domain = OrganizationDomain.objects.create(
+            organization=org,
+            hostname="robots.example.org",
+            status=OrganizationDomain.STATUS_ACTIVE,
+            dns_verified_at=timezone.now(),
+            activated_at=timezone.now(),
+            activated_by=User.objects.create_user(username="domain_operator"),
+        )
+        self.assertEqual(
+            get_organization_email_settings(org)["portal_url"],
+            "https://robots.example.org",
+        )
+        domain.status = OrganizationDomain.STATUS_DISABLED
+        domain.save(update_fields=["status"])
+        self.assertEqual(
+            get_organization_email_settings(org)["portal_url"],
+            "https://robots.momentumteam.app",
+        )
+        org.is_active = False
+        org.save(update_fields=["is_active"])
+        self.assertEqual(get_organization_email_settings(org)["portal_url"], "")

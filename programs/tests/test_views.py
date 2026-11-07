@@ -2,6 +2,7 @@ from django.contrib.auth.models import Permission, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Enrollment, Program, Student
 
 
@@ -11,6 +12,16 @@ class ViewTests(TestCase):
         self.user = User.objects.create_user(
             username="tester", password="pass12345"
         )  # nosec B106
+        self.membership = UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Staff",
+            is_active=True,
+        )
+
+    def _grant_lead_membership(self):
+        self.membership.role = "LeadMentor"
+        self.membership.save(update_fields=["role"])
 
     def test_program_list_requires_login(self):
         url = reverse("program_list")
@@ -46,6 +57,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
 
@@ -78,6 +90,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
         student = Student.objects.create(legal_first_name="Riley", last_name="Jones")
@@ -96,6 +109,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
         program = Program.objects.create(
@@ -126,6 +140,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
         program = Program.objects.create(
@@ -143,6 +158,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
         program = Program.objects.create(name="Robot Camp", active=True)
@@ -158,6 +174,7 @@ class ViewTests(TestCase):
 
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self._grant_lead_membership()
 
         self.client.login(username="tester", password="pass12345")  # nosec B106
         program = Program.objects.create(name="Map Test Program")

@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program
 
 
@@ -17,6 +18,13 @@ class ProgramListGroupingTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
+        self.organization = Organization.objects.get(slug="gos")
+        self.membership = UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="lm", password="pass12345")  # nosec B106
 
     def _make_past_program(self, name, end_date):
@@ -25,6 +33,27 @@ class ProgramListGroupingTests(TestCase):
     def _labels(self):
         response = self.client.get(reverse("program_list"))
         return [label for label, _ in response.context["past_programs_by_year"]]
+
+    def test_group_only_and_no_role_users_cannot_access_program_list(self):
+        self.membership.delete()
+        self.assertEqual(self.client.get(reverse("program_list")).status_code, 403)
+        self.user.groups.clear()
+        self.assertEqual(self.client.get(reverse("program_list")).status_code, 403)
+
+    def test_inactive_lead_cannot_access_program_list(self):
+        self.membership.is_active = False
+        self.membership.save(update_fields=["is_active"])
+        self.assertEqual(self.client.get(reverse("program_list")).status_code, 403)
+
+    def test_other_organization_lead_cannot_access_program_list(self):
+        self.membership.delete()
+        other = Organization.objects.create(
+            name="Other Team", slug="other-team", subdomain="other-team"
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=other, role="LeadMentor", is_active=True
+        )
+        self.assertEqual(self.client.get(reverse("program_list")).status_code, 403)
 
     def test_past_programs_grouped_by_school_year(self):
         # Relative to "today" so the test stays valid regardless of when it runs.

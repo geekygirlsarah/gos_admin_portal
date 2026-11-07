@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -60,6 +61,12 @@ class ParentPaymentsViewTests(TestCase):
         )
         lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lead_mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.program_a = Program.objects.create(name="Program A", active=True)
         self.program_b = Program.objects.create(name="Program B", active=True)

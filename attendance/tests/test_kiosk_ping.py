@@ -2,6 +2,7 @@
 
 import json
 
+from django.core import signing
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -19,6 +20,15 @@ class KioskPingTests(TestCase):
         self.kiosk = KioskConfig.objects.create(
             label="Ping Test Kiosk",
             program=self.program,
+        )
+
+    def set_unlocked(self):
+        self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = signing.dumps(
+            {
+                "kiosk_id": self.kiosk.pk,
+                "organization_id": self.kiosk.organization_id,
+            },
+            salt="attendance.kiosk_unlock",
         )
 
     def test_ping_returns_ok(self):
@@ -55,7 +65,7 @@ class KioskPingTests(TestCase):
 
     def test_kiosk_page_has_service_down_overlay(self):
         url = reverse("kiosk_signin", args=[self.kiosk.pk])
-        self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = "1"
+        self.set_unlocked()
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -64,7 +74,7 @@ class KioskPingTests(TestCase):
 
     def test_kiosk_page_has_ping_function(self):
         url = reverse("kiosk_signin", args=[self.kiosk.pk])
-        self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = "1"
+        self.set_unlocked()
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()

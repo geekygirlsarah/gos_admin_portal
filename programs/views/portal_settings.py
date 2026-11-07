@@ -5,16 +5,25 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
-from django.shortcuts import redirect, render
+from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
-from audit.service import log_deletion
-from organizations.models import Organization
+from audit.events import AuditEvent
+from audit.service import log_deletion, log_event
+from organizations import domain_recovery
+from organizations.domain_forms import OrganizationDomainRequestForm
+from organizations.domain_verification import verify_domain_txt
+from organizations.models import Organization, OrganizationDomain, OrganizationSettings
 from organizations.utils import (
     get_default_organization,
     get_organization_email_settings,
+    get_organization_momentum_url,
     update_organization_email_settings,
 )
 from programs.constants import TEAM_TYPES
@@ -22,6 +31,7 @@ from programs.forms import MentorAgreementForm
 from programs.models import (
     BackgroundCheckType,
     Crew,
+    Enrollment,
     MentorAgreement,
     Program,
     RolePermission,
@@ -41,11 +51,49 @@ except ImportError:
     KioskConfig = None
 
 
+def _stored_notification_sender(organization):
+    data = (
+        OrganizationSettings.objects.filter(organization=organization)
+        .values_list("data", flat=True)
+        .first()
+    )
+    email_settings = data.get("email_settings") if isinstance(data, dict) else None
+    value = (
+        email_settings.get("notification_from_email")
+        if isinstance(email_settings, dict)
+        else None
+    )
+    return value if isinstance(value, str) else ""
+
+
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+def _has_foreign_enrollments(field_name, resource, organization, program=None):
+    ownership = {
+        "organization": organization,
+        "student__organization": organization,
+        "program__organization": organization,
+    }
+    if program is not None:
+        ownership["program"] = program
+    return (
+        Enrollment.objects.filter(**{field_name: resource})
+        .exclude(**ownership)
+        .exists()
+    )
+
+
 class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 
     def get(self, request):
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = _request_organization(request)
+        agreements = MentorAgreement.objects.for_organization(org)
         sections = RolePermission.SECTION_CHOICES
         roles = RolePermission.ROLE_CHOICES
 
@@ -95,22 +143,46 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 }
             )
 
-        teams = Team.objects.all()
+        teams = Team.objects.for_organization(org)
         team_types = TEAM_TYPES
-        crews = Crew.objects.select_related("program").all()
-        subteams = SubTeam.objects.select_related("program").all()
+        crews = (
+            Crew.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
+        subteams = (
+            SubTeam.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
         programs = (
-            Program.objects.prefetch_related("crews", "subteams")
-            .all()
+            Program.objects.for_organization(org)
+            .prefetch_related(
+                Prefetch(
+                    "crews",
+                    queryset=Crew.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+                Prefetch(
+                    "subteams",
+                    queryset=SubTeam.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+            )
             .order_by("-active", "name")
         )
         attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
         kiosk_configs = None
         if KioskConfig:
-            kiosk_configs = KioskConfig.objects.select_related("program").all()
+            kiosk_configs = (
+                KioskConfig.objects.for_organization(org)
+                .filter(program__organization=org)
+                .select_related("program")
+            )
 
-        org = getattr(request, "organization", None) or get_default_organization()
         email_settings = get_organization_email_settings(org)
 
         bg_types = BackgroundCheckType.objects.for_organization(org).order_by(
@@ -158,6 +230,14 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .order_by("-created_at")
         )
 
+        organization_domains = (
+            OrganizationDomain.objects.for_organization(org).order_by(
+                "-created_at", "hostname"
+            )
+            if org
+            else OrganizationDomain.objects.none()
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -173,8 +253,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "pending_sliding_scale_count": SlidingScale.objects.filter(
                 status=SlidingScale.STATUS_PENDING
             ).count(),
-            "mentor_agreements": MentorAgreement.objects.order_by("slug", "-version"),
-            "mentor_agreement_slugs": MentorAgreement.objects.values_list(
+            "mentor_agreements": agreements.order_by("slug", "-version"),
+            "mentor_agreement_slugs": agreements.values_list(
                 "slug", flat=True
             ).distinct(),
             "background_check_types": bg_types,
@@ -182,7 +262,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "eligible_lead_mentor_users": eligible_lead_mentor_users,
             "pending_lead_mentor_invitations": pending_lead_mentor_invitations,
             "organization": org,
+            "organization_domains": organization_domains,
+            "momentum_portal_url": get_organization_momentum_url(org),
             "email_settings": email_settings,
+            "notification_from_override": _stored_notification_sender(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
@@ -249,6 +332,7 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for Teams from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_team":
@@ -258,7 +342,11 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             color = request.POST.get("color")
             if team_type and number:
                 Team.objects.create(
-                    team_type=team_type, number=number, name=name, color=color
+                    organization=organization,
+                    team_type=team_type,
+                    number=number,
+                    name=name,
+                    color=color,
                 )
                 messages.success(request, f"Team {team_type} {number} added.")
             return redirect("/programs/settings/?tab=teams")
@@ -266,8 +354,18 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_team":
             team_id = request.POST.get("team_id")
             if team_id:
-                team = Team.objects.filter(id=team_id).first()
+                team = (
+                    Team.objects.for_organization(organization)
+                    .filter(id=team_id)
+                    .first()
+                )
                 if team:
+                    if _has_foreign_enrollments("team", team, organization):
+                        messages.error(
+                            request,
+                            "This team cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=teams")
                     log_deletion(
                         resource=team,
                         request=request,
@@ -290,7 +388,11 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if team_id:
-                team = Team.objects.filter(id=team_id).first()
+                team = (
+                    Team.objects.for_organization(organization)
+                    .filter(id=team_id)
+                    .first()
+                )
                 if team:
                     team.team_type = team_type
                     team.number = number
@@ -307,6 +409,7 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for Crews from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_crew":
@@ -314,15 +417,38 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if program_id and name:
-                Crew.objects.create(program_id=program_id, name=name, color=color)
-                messages.success(request, f"Crew {name} added.")
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
+                )
+                if program is not None:
+                    Crew.objects.create(
+                        organization=organization,
+                        program=program,
+                        name=name,
+                        color=color,
+                    )
+                    messages.success(request, f"Crew {name} added.")
             return redirect("/programs/settings/?tab=crews")
 
         elif action == "delete_crew":
             crew_id = request.POST.get("crew_id")
             if crew_id:
-                crew = Crew.objects.filter(id=crew_id).first()
+                crew = (
+                    Crew.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=crew_id)
+                    .first()
+                )
                 if crew:
+                    if _has_foreign_enrollments(
+                        "crew", crew, organization, program=crew.program
+                    ):
+                        messages.error(
+                            request,
+                            "This crew cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=crews")
                     log_deletion(
                         resource=crew,
                         request=request,
@@ -342,7 +468,11 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if crew_id:
-                crew = Crew.objects.filter(id=crew_id).first()
+                crew = (
+                    Crew.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=crew_id)
+                    .first()
+                )
                 if crew:
                     crew.name = name
                     crew.color = color
@@ -357,6 +487,7 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for SubTeams from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_subteam":
@@ -364,15 +495,38 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if program_id and name:
-                SubTeam.objects.create(program_id=program_id, name=name, color=color)
-                messages.success(request, f"SubTeam {name} added.")
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
+                )
+                if program is not None:
+                    SubTeam.objects.create(
+                        organization=organization,
+                        program=program,
+                        name=name,
+                        color=color,
+                    )
+                    messages.success(request, f"SubTeam {name} added.")
             return redirect("/programs/settings/?tab=subteams")
 
         elif action == "delete_subteam":
             subteam_id = request.POST.get("subteam_id")
             if subteam_id:
-                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                subteam = (
+                    SubTeam.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=subteam_id)
+                    .first()
+                )
                 if subteam:
+                    if _has_foreign_enrollments(
+                        "subteam", subteam, organization, program=subteam.program
+                    ):
+                        messages.error(
+                            request,
+                            "This subteam cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=subteams")
                     log_deletion(
                         resource=subteam,
                         request=request,
@@ -392,7 +546,11 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if subteam_id:
-                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                subteam = (
+                    SubTeam.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=subteam_id)
+                    .first()
+                )
                 if subteam:
                     subteam.name = name
                     subteam.color = color
@@ -407,23 +565,35 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/toggle actions for Kiosks from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_kiosk_config" and KioskConfig:
             label = request.POST.get("label", "").strip()
             program_id = request.POST.get("program_id")
             if label and program_id:
-                KioskConfig.objects.create(
-                    label=label,
-                    program_id=program_id,
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
                 )
-                messages.success(request, f"Kiosk '{label}' added.")
+                if program is not None:
+                    KioskConfig.objects.create(
+                        organization=organization,
+                        label=label,
+                        program=program,
+                    )
+                    messages.success(request, f"Kiosk '{label}' added.")
             return redirect("/programs/settings/?tab=kiosk_configs")
 
         elif action == "delete_kiosk_config" and KioskConfig:
             kiosk_config_id = request.POST.get("kiosk_config_id")
             if kiosk_config_id:
-                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                kiosk = (
+                    KioskConfig.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=kiosk_config_id)
+                    .first()
+                )
                 if kiosk:
                     log_deletion(
                         resource=kiosk,
@@ -442,7 +612,11 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "toggle_kiosk_config" and KioskConfig:
             kiosk_config_id = request.POST.get("kiosk_config_id")
             if kiosk_config_id:
-                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                kiosk = (
+                    KioskConfig.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=kiosk_config_id)
+                    .first()
+                )
                 if kiosk:
                     kiosk.is_active = not kiosk.is_active
                     kiosk.save(update_fields=["is_active"])
@@ -457,6 +631,10 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles create / update / toggle / delete actions for Mentor Agreements."""
 
     def post(self, request):
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        agreements = MentorAgreement.objects.for_organization(org)
         action = request.POST.get("action")
 
         if action == "add_agreement":
@@ -464,13 +642,14 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if form.is_valid():
                 slug = form.cleaned_data["slug"]
                 version = (
-                    MentorAgreement.objects.filter(slug=slug)
+                    agreements.filter(slug=slug)
                     .order_by("-version")
                     .values_list("version", flat=True)
                     .first()
                 )
                 version = (version or 0) + 1
                 agreement = form.save(commit=False)
+                agreement.organization = org
                 agreement.version = version
                 if not agreement.effective_date:
                     agreement.effective_date = date.today()
@@ -486,7 +665,7 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "update_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
             except MentorAgreement.DoesNotExist:
                 messages.error(request, "Agreement not found.")
                 return redirect("/programs/settings/?tab=agreements")
@@ -505,12 +684,13 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 if content_changed or doc_changed:
                     # Create new version
                     version = (
-                        MentorAgreement.objects.filter(slug=agreement.slug)
+                        agreements.filter(slug=agreement.slug)
                         .order_by("-version")
                         .values_list("version", flat=True)
                         .first()
                     )
                     new_agreement.version = (version or 0) + 1
+                    new_agreement.organization = org
                     new_agreement.pk = None
                     new_agreement.created_at = None
                     new_agreement.updated_at = None
@@ -535,7 +715,7 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "toggle_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
                 agreement.is_active = not agreement.is_active
                 agreement.save(update_fields=["is_active"])
                 state = "activated" if agreement.is_active else "deactivated"
@@ -547,33 +727,60 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
                 title = agreement.title
-                from programs.models import MentorAgreementAcceptance
-
-                versions = MentorAgreement.objects.filter(slug=agreement.slug)
-                acceptance_count = MentorAgreementAcceptance.objects.filter(
-                    agreement__in=versions
-                ).count()
-                count = versions.count()
-                log_deletion(
-                    resource=agreement,
-                    request=request,
-                    before={
-                        "title": title,
-                        "slug": agreement.slug,
-                        "version_count": count,
-                        "acceptance_count": acceptance_count,
-                    },
-                    notes=(
-                        f"Mentor agreement '{title}' and {count} version(s) deleted "
-                        f"({acceptance_count} acceptance record(s) removed)."
-                    ),
+                from programs.models import (
+                    MentorAgreementAcceptance,
+                    MentorAgreementSubmission,
                 )
-                MentorAgreementAcceptance.objects.filter(
-                    agreement__in=versions
-                ).delete()
-                versions.delete()
+
+                with transaction.atomic():
+                    version_ids = list(
+                        agreements.select_for_update()
+                        .filter(slug=agreement.slug)
+                        .values_list("pk", flat=True)
+                    )
+                    if agreement.pk not in version_ids:
+                        raise MentorAgreement.DoesNotExist
+                    versions = agreements.filter(pk__in=version_ids)
+                    acceptances = MentorAgreementAcceptance.objects.filter(
+                        agreement__in=versions
+                    )
+                    submissions = MentorAgreementSubmission.objects.filter(
+                        agreement__in=versions
+                    )
+                    list(acceptances.select_for_update().values_list("pk", flat=True))
+                    list(submissions.select_for_update().values_list("pk", flat=True))
+                    if any(
+                        records.exclude(
+                            organization=org, adult__organization=org
+                        ).exists()
+                        for records in (acceptances, submissions)
+                    ):
+                        messages.error(
+                            request,
+                            "Agreement has inconsistent records and cannot be deleted. "
+                            "Contact a platform administrator for review.",
+                        )
+                        return redirect("/programs/settings/?tab=agreements")
+                    acceptance_count = acceptances.count()
+                    count = len(version_ids)
+                    log_deletion(
+                        resource=agreement,
+                        request=request,
+                        before={
+                            "title": title,
+                            "slug": agreement.slug,
+                            "version_count": count,
+                            "acceptance_count": acceptance_count,
+                        },
+                        notes=(
+                            f"Mentor agreement '{title}' and {count} version(s) deleted "
+                            f"({acceptance_count} acceptance record(s) removed)."
+                        ),
+                    )
+                    acceptances.delete()
+                    versions.delete()
                 messages.success(
                     request,
                     f"Agreement '{title}' and {count} version(s) deleted.",
@@ -599,6 +806,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
 
         action = request.POST.get("action")
         email_cfg = get_organization_email_settings(org)
+        email_cfg["notification_from_email"] = _stored_notification_sender(org)
 
         if action == "update_branding":
             primary_color = (
@@ -626,9 +834,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             footer_text = request.POST.get("footer_text", "").strip()
             contact_name = request.POST.get("contact_name", "").strip()
             contact_email = request.POST.get("contact_email", "").strip()
-            portal_url = request.POST.get("portal_url", "").strip()
-            if portal_url and not portal_url.startswith(("http://", "https://")):
-                portal_url = f"https://{portal_url}"
 
             logo_url = request.POST.get("logo_url", "").strip()
             remove_logo = request.POST.get("remove_logo") in (
@@ -674,7 +879,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
                     )
                 except Exception as e:
                     messages.error(request, f"Invalid logo image file: {e}")
-                    return redirect("/programs/settings/?tab=email")
+                    return redirect("/programs/settings/?tab=branding")
             elif not logo_url and "logo_url" not in request.POST:
                 logo_url = email_cfg.get("logo_url", "")
             elif logo_url and logo_url.startswith("/") and request:
@@ -687,7 +892,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             email_cfg["address_line1"] = address_line1
             email_cfg["address_line2"] = address_line2
             email_cfg["footer_text"] = footer_text
-            email_cfg["portal_url"] = portal_url
             email_cfg["contact_name"] = contact_name
             email_cfg["contact_email"] = contact_email
             email_cfg["logo_url"] = logo_url
@@ -696,7 +900,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             messages.success(
                 request, "Email branding & template settings updated successfully."
             )
-            return redirect("/programs/settings/?tab=email")
+            return redirect("/programs/settings/?tab=branding")
 
         elif action == "update_email_settings":
             sender_display_name = request.POST.get("sender_display_name", "").strip()
@@ -1158,6 +1362,22 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         org = getattr(request, "organization", None) or get_default_organization()
         action = request.POST.get("action")
 
+        def report_failed_invitation(invitation, change):
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=(
+                    f"{change} Lead Mentor invitation to {invitation.email} for "
+                    f"organization '{org.name}'; email not sent."
+                ),
+            )
+            messages.error(
+                request,
+                f"The invitation for {invitation.email} was saved but could not be sent. "
+                "Check the portal address and email settings, then retry the invitation.",
+            )
+
         if action == "add_lead_mentor":
             user_id = request.POST.get("user_id")
             if not user_id:
@@ -1219,7 +1439,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 existing_invite.expires_at = timezone.now() + timedelta(days=14)
                 existing_invite.invited_by = request.user
                 existing_invite.save(update_fields=["expires_at", "invited_by"])
-                send_invitation_email(existing_invite, request=request)
+                if not send_invitation_email(existing_invite, request=request):
+                    report_failed_invitation(existing_invite, "Refreshed")
+                    return redirect("/programs/settings/?tab=lead_mentors")
                 log_event(
                     request=request,
                     event=AuditEvent.ROLE_CHANGED,
@@ -1239,7 +1461,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 invited_by=request.user,
                 expires_at=timezone.now() + timedelta(days=14),
             )
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Created")
+                return redirect("/programs/settings/?tab=lead_mentors")
             log_event(
                 request=request,
                 event=AuditEvent.ROLE_CHANGED,
@@ -1348,7 +1572,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 existing_invite.expires_at = timezone.now() + timedelta(days=14)
                 existing_invite.invited_by = request.user
                 existing_invite.save(update_fields=["expires_at", "invited_by"])
-                send_invitation_email(existing_invite, request=request)
+                if not send_invitation_email(existing_invite, request=request):
+                    report_failed_invitation(existing_invite, "Refreshed")
+                    return redirect("/programs/settings/?tab=lead_mentors")
                 log_event(
                     request=request,
                     event=AuditEvent.ROLE_CHANGED,
@@ -1368,7 +1594,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 invited_by=request.user,
                 expires_at=timezone.now() + timedelta(days=14),
             )
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Created")
+                return redirect("/programs/settings/?tab=lead_mentors")
             log_event(
                 request=request,
                 event=AuditEvent.ROLE_CHANGED,
@@ -1399,7 +1627,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
             invitation.expires_at = timezone.now() + timedelta(days=14)
             invitation.save(update_fields=["expires_at"])
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Refreshed")
+                return redirect("/programs/settings/?tab=lead_mentors")
             messages.success(
                 request,
                 f"Resent Lead Mentor invitation to {invitation.email}.",
@@ -1438,3 +1668,145 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         messages.error(request, "Unknown action.")
         return redirect("/programs/settings/?tab=lead_mentors")
+
+
+class PortalDomainView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Manage custom portal-domain requests for the current organization."""
+
+    redirect_url = "/programs/settings/?tab=portal_address"
+
+    def post(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        action = request.POST.get("action")
+        if action in ("request_recovery", "verify_recovery", "revoke_recovery"):
+            try:
+                if action == "request_recovery":
+                    domain_recovery.request_recovery(
+                        request, organization, request.POST.get("hostname", "")
+                    )
+                    message = (
+                        "Recovery requested. Publish the separate TXT challenge below."
+                    )
+                elif action == "verify_recovery":
+                    domain_recovery.verify_recovery(
+                        request, organization, request.POST.get("recovery_id")
+                    )
+                    message = (
+                        "DNS proof verified. Momentum support must review the recovery."
+                    )
+                else:
+                    domain_recovery.revoke_recovery(
+                        request, organization, request.POST.get("recovery_id")
+                    )
+                    message = "Recovery request revoked."
+            except (domain_recovery.RecoveryError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, message)
+            return redirect(self.redirect_url)
+
+        if action == "request":
+            form = OrganizationDomainRequestForm(
+                request.POST, organization=organization
+            )
+            if not form.is_valid():
+                messages.error(
+                    request,
+                    "; ".join(form.errors.get("hostname", ["Enter a valid hostname."])),
+                )
+                return redirect(self.redirect_url)
+
+            domain = OrganizationDomain(
+                organization=organization,
+                hostname=form.cleaned_data["hostname"],
+                created_by=request.user,
+            )
+            try:
+                domain.save()
+            except IntegrityError:
+                messages.error(
+                    request,
+                    "That hostname is already registered. Contact Momentum support if you believe this is an error.",
+                )
+                return redirect(self.redirect_url)
+
+            log_event(
+                request=request,
+                event=AuditEvent.ORGANIZATION_UPDATED,
+                resource=organization,
+                notes=f"Requested portal hostname {domain.hostname}.",
+            )
+            messages.success(
+                request,
+                f"Added {domain.hostname}. Add the TXT record shown below, then check it here. "
+                "New addresses need Momentum support to complete setup and activate them; existing "
+                "legacy addresses can continue working during the transition.",
+            )
+            return redirect(self.redirect_url)
+
+        if action == "verify":
+            domain = get_object_or_404(
+                OrganizationDomain.objects.for_organization(organization),
+                pk=request.POST.get("domain_id"),
+            )
+            if domain.status == OrganizationDomain.STATUS_ACTIVE:
+                messages.info(request, "This domain is already active.")
+                return redirect(self.redirect_url)
+
+            if not verify_domain_txt(domain):
+                messages.error(
+                    request,
+                    "We could not find the matching TXT record. Check the record name and value, allow time "
+                    "for DNS to update, then try again.",
+                )
+                return redirect(self.redirect_url)
+
+            with transaction.atomic():
+                current = get_object_or_404(
+                    OrganizationDomain.objects.for_organization(
+                        organization
+                    ).select_for_update(),
+                    pk=domain.pk,
+                )
+                if (
+                    current.hostname != domain.hostname
+                    or current.verification_token != domain.verification_token
+                ):
+                    messages.error(
+                        request, "The domain changed during verification. Try again."
+                    )
+                    return redirect(self.redirect_url)
+                if current.status == OrganizationDomain.STATUS_ACTIVE:
+                    messages.info(request, "This domain is already active.")
+                    return redirect(self.redirect_url)
+
+                current.dns_verified_at = timezone.now()
+                if current.status != OrganizationDomain.STATUS_DISABLED:
+                    current.status = OrganizationDomain.STATUS_DNS_VERIFIED
+                current.save(update_fields=["dns_verified_at", "status", "updated_at"])
+                log_event(
+                    request=request,
+                    event=AuditEvent.ORGANIZATION_UPDATED,
+                    resource=organization,
+                    notes=f"Verified DNS ownership for portal hostname {current.hostname}.",
+                )
+
+            if current.status == OrganizationDomain.STATUS_DISABLED:
+                messages.success(
+                    request,
+                    f"DNS ownership for {current.hostname} is verified. The domain remains disabled "
+                    "until a Momentum administrator activates it.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"DNS ownership for {current.hostname} is verified. Registry activation still requires "
+                    "Momentum support to confirm HTTPS and host routing; existing legacy routes may remain available.",
+                )
+            return redirect(self.redirect_url)
+
+        messages.error(request, "Unknown domain action.")
+        return redirect(self.redirect_url)
