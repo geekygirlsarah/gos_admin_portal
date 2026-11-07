@@ -13,7 +13,7 @@ from outreach.models import (
     OutreachShift,
     OutreachSignup,
 )
-from programs.models import Program, ProgramFeature, Student
+from programs.models import Enrollment, Program, ProgramFeature, Student
 
 
 class OutreachManagementTenantIsolationTests(TestCase):
@@ -196,3 +196,45 @@ class OutreachManagementTenantIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["can_operate"])
         self.assertIsNotNone(signup.pk)
+
+    def test_walk_up_checkin_uses_tenant_organization_and_is_idempotent(self):
+        alpha_student = Student.objects.create(
+            organization=self.alpha,
+            legal_first_name="Alpha",
+            last_name="Walkup",
+        )
+        Enrollment.objects.create(
+            organization=self.alpha,
+            student=alpha_student,
+            program=self.alpha_program,
+            active=True,
+        )
+        url = reverse(
+            "outreach:shift_check_in",
+            args=[self.alpha_program.pk, self.alpha_shift.pk],
+        )
+        data = {"action": "walk_up", "student_id": alpha_student.pk}
+
+        self.tenant_post(url, data)
+        signup = OutreachSignup.objects.for_organization(self.alpha).get(
+            shift=self.alpha_shift, student=alpha_student
+        )
+        original_check_in = signup.checked_in_at
+        self.assertEqual(signup.organization, self.alpha)
+
+        self.tenant_post(url, data)
+        self.assertEqual(
+            OutreachSignup.objects.for_organization(self.alpha)
+            .filter(shift=self.alpha_shift, student=alpha_student)
+            .count(),
+            1,
+        )
+        signup.refresh_from_db()
+        self.assertEqual(signup.checked_in_at, original_check_in)
+
+        self.tenant_post(url, {"action": "walk_up", "student_id": self.beta_student.pk})
+        self.assertFalse(
+            OutreachSignup.objects.filter(
+                shift=self.alpha_shift, student=self.beta_student
+            ).exists()
+        )

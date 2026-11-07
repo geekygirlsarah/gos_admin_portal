@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
 - The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
+- Travel trip creation and inline departures/costs now inherit the program organization, travel mentor and parent signups persist their organization, and the dashboard displays the travel event's actual location.
 
 ## 2026-11-06
 

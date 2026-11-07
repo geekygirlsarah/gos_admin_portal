@@ -334,10 +334,16 @@ class TravelInlineFormsetsMixin:
             return self.render_to_response(context)
         with transaction.atomic():
             response = super().form_valid(form)
-            departure_formset.instance = self.object
-            departure_formset.save()
-            cost_formset.instance = self.object
-            cost_formset.save()
+            for formset in (departure_formset, cost_formset):
+                formset.instance = self.object
+                for inline_form in formset.forms:
+                    if (
+                        inline_form.instance._state.adding
+                        and inline_form.has_changed()
+                        and not inline_form.cleaned_data.get("DELETE", False)
+                    ):
+                        inline_form.instance.organization = self.object.organization
+                formset.save()
         return response
 
 
@@ -354,6 +360,7 @@ class TravelEventCreateView(
 
     def form_valid(self, form):
         form.instance.program = self.program
+        form.instance.organization = self.program.organization
         return super().form_valid(form)
 
 
@@ -737,7 +744,12 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
 
         signup, created = TravelMentorSignup.objects.for_organization(
             org
-        ).get_or_create(adult=adult, event=event, defaults={"departure": departure})
+        ).get_or_create(
+            organization=org,
+            adult=adult,
+            event=event,
+            defaults={"departure": departure},
+        )
         if not created and signup.departure_id != (departure.id if departure else None):
             signup.departure = departure
             signup.save(update_fields=["departure"])
@@ -838,7 +850,12 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
         departure = _resolve_departure_for_event(event, request.POST)
         signup, created = TravelParentChaperoneSignup.objects.for_organization(
             org
-        ).get_or_create(adult=adult, event=event, defaults={"departure": departure})
+        ).get_or_create(
+            organization=org,
+            adult=adult,
+            event=event,
+            defaults={"departure": departure},
+        )
         if not created and signup.departure_id != (departure.id if departure else None):
             signup.departure = departure
             signup.save(update_fields=["departure"])
