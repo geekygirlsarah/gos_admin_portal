@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Student and parent merges and alumni conversion now stay within the current organization; inconsistent cross-organization relationships block changes before records are transferred or deleted.
 - Non-superuser Lead Mentors can manage travel trips and signups using their organization-scoped role; travel program lookups are tenant-scoped, and calendar event forms show the Feeds breadcrumb to authorized Lead Mentors.
+- Support impersonation continuation pages now preserve same-origin metadata needed for HTTPS CSRF validation while withholding referrers from cross-origin requests.
 
 ## 2026-11-05
 

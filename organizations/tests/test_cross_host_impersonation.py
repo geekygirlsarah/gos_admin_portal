@@ -297,6 +297,122 @@ class CrossHostImpersonationTests(TestCase):
             200,
         )
 
+    def test_https_handoff_continuations_preserve_same_origin_csrf(self):
+        response = self.start_handoff()
+        tenant_client = Client(enforce_csrf_checks=True)
+        handoff_url = reverse("organizations:support_impersonation_handoff")
+        tenant_host = "alpha.momentumteam.app"
+        tenant_origin = f"https://{tenant_host}"
+        prepared = tenant_client.post(
+            handoff_url,
+            self.handoff_data(response),
+            HTTP_HOST=tenant_host,
+            secure=True,
+        )
+
+        self.assertEqual(prepared.status_code, 200)
+        self.assertEqual(prepared["Referrer-Policy"], "same-origin")
+        redeem_url = reverse("organizations:support_impersonation_redeem")
+        redeem_data = self.prepared_handoff_data(prepared)
+        missing_csrf = {
+            key: value
+            for key, value in redeem_data.items()
+            if key != "csrfmiddlewaretoken"
+        }
+        self.assertEqual(
+            tenant_client.post(
+                redeem_url,
+                missing_csrf,
+                HTTP_HOST=tenant_host,
+                HTTP_ORIGIN=tenant_origin,
+                secure=True,
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            tenant_client.post(
+                redeem_url,
+                redeem_data,
+                HTTP_HOST=tenant_host,
+                HTTP_ORIGIN="https://attacker.example",
+                secure=True,
+            ).status_code,
+            403,
+        )
+        redeemed = tenant_client.post(
+            redeem_url,
+            redeem_data,
+            HTTP_HOST=tenant_host,
+            HTTP_REFERER=f"{tenant_origin}{redeem_url}",
+            secure=True,
+        )
+        self.assertEqual(redeemed.status_code, 200)
+
+        authorize_url = reverse(
+            "platform_admin:impersonation_authorize",
+            kwargs={"handoff_id": prepared.context["handoff_id"]},
+        )
+        self.assertEqual(
+            self.platform_client.get(
+                authorize_url, HTTP_HOST="momentumteam.app"
+            ).status_code,
+            200,
+        )
+        platform_return = self.platform_client.post(
+            authorize_url, HTTP_HOST="momentumteam.app"
+        )
+        self.assertEqual(platform_return.status_code, 200)
+        return_prepared = tenant_client.post(
+            handoff_url,
+            {
+                "stage": "platform_return",
+                "handoff_id": str(prepared.context["handoff_id"]),
+                "handoff_token": platform_return.context["handoff_token"],
+            },
+            HTTP_HOST=tenant_host,
+            secure=True,
+        )
+
+        self.assertEqual(return_prepared.status_code, 200)
+        self.assertEqual(return_prepared["Referrer-Policy"], "same-origin")
+        resume_url = reverse("organizations:support_impersonation_resume")
+        resume_data = self.prepared_handoff_data(return_prepared)
+        missing_csrf = {
+            key: value
+            for key, value in resume_data.items()
+            if key != "csrfmiddlewaretoken"
+        }
+        self.assertEqual(
+            tenant_client.post(
+                resume_url,
+                missing_csrf,
+                HTTP_HOST=tenant_host,
+                HTTP_ORIGIN=tenant_origin,
+                secure=True,
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            tenant_client.post(
+                resume_url,
+                resume_data,
+                HTTP_HOST=tenant_host,
+                HTTP_ORIGIN="https://attacker.example",
+                secure=True,
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            tenant_client.post(
+                resume_url,
+                resume_data,
+                HTTP_HOST=tenant_host,
+                HTTP_ORIGIN=tenant_origin,
+                secure=True,
+            ).status_code,
+            302,
+        )
+
     def test_platform_and_tenant_return_steps_require_csrf_and_matching_session(self):
         response = self.start_handoff()
         tenant_client = Client(enforce_csrf_checks=True)
