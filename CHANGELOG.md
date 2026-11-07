@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Added an opt-in `MAINTENANCE_MODE` environment variable that serves a non-cacheable `503` page for application requests while preserving static assets and the real health check.
 
 ### Fixed
+- Organization-scoped non-superuser Lead Mentors can manage local program, student, financial, school, attendance, outreach, badge, order, and organization-account records, and review applications and guest forms. Related object lookups now enforce tenant boundaries; import access remains unchanged until those paths are safely scoped.
 - Student and parent merges and alumni conversion now stay within the current organization; inconsistent cross-organization relationships block changes before records are transferred or deleted.
 - Non-superuser Lead Mentors can manage travel trips and signups using their organization-scoped role; travel program lookups are tenant-scoped, and calendar event forms show the Feeds breadcrumb to authorized Lead Mentors.
 - Support impersonation continuation pages now preserve same-origin metadata needed for HTTPS CSRF validation while withholding referrers from cross-origin requests.

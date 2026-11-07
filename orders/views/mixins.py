@@ -22,7 +22,10 @@ class OrderProgramMixin:
     """
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        )
         is_mentor = user_is_mentor_or_lead(request.user, org=request.organization)
         if not self.program.features.filter(key="orders").exists() and not is_mentor:
             raise Http404("Order requests are not enabled for this program.")
@@ -31,7 +34,9 @@ class OrderProgramMixin:
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["program"] = self.program
-        context["user_role"] = get_user_role(self.request.user)
+        context["user_role"] = get_user_role(
+            self.request.user, org=getattr(self.request, "organization", None)
+        )
         return context
 
     def get_success_url(self):

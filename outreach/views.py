@@ -53,10 +53,22 @@ from programs.views.mixins import (
 
 class OutreachProgramMixin:
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        )
         if not self.program.features.filter(key="outreach").exists():
             raise Http404("Outreach is not enabled for this program.")
         return super().dispatch(request, *args, **kwargs)
+
+    def get_shift_queryset(self):
+        org = getattr(self.request, "organization", None)
+        shifts = OutreachShift.objects.for_organization(org).filter(
+            event__program=self.program
+        )
+        if org is not None:
+            shifts = shifts.filter(event__organization=org)
+        return shifts
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -94,6 +106,11 @@ class OutreachLocationPickerMixin:
     is offered) and ``locations_data`` (a JSON list used by the template's
     JavaScript to auto-fill the name/address inputs).
     """
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -149,6 +166,9 @@ class OutreachLocationCreateView(
         return context
 
     def form_valid(self, form):
+        form.instance.organization = (
+            getattr(self.request, "organization", None) or self.program.organization
+        )
         if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
             location = form.save()
             return JsonResponse(
@@ -181,6 +201,11 @@ class OutreachLocationUpdateView(
     form_class = OutreachLocationForm
     template_name = "outreach/location_form.html"
 
+    def get_queryset(self):
+        return OutreachLocation.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Edit Location"
@@ -203,6 +228,11 @@ class OutreachLocationDeleteView(
 ):
     model = OutreachLocation
     template_name = "outreach/location_confirm_delete.html"
+
+    def get_queryset(self):
+        return OutreachLocation.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
 
     def audit_snapshot(self, obj):
         return {"name": obj.name, "address": obj.address}
@@ -256,19 +286,39 @@ class OutreachEventListView(
     section = "outreach"
 
     def get_queryset(self):
-        return OutreachEvent.objects.filter(program=self.program).prefetch_related(
-            Prefetch(
-                "shifts",
-                queryset=OutreachShift.objects.prefetch_related(
-                    "signups__student", "mentor_signups__adult"
-                ),
+        org = getattr(self.request, "organization", None)
+        signups = OutreachSignup.objects.for_organization(org)
+        mentor_signups = OutreachMentorSignup.objects.for_organization(org)
+        if org is not None:
+            signups = signups.filter(student__organization=org)
+            mentor_signups = mentor_signups.filter(adult__organization=org)
+        return (
+            OutreachEvent.objects.for_organization(org)
+            .filter(program=self.program)
+            .prefetch_related(
+                Prefetch(
+                    "shifts",
+                    queryset=OutreachShift.objects.for_organization(
+                        org
+                    ).prefetch_related(
+                        Prefetch(
+                            "signups",
+                            queryset=signups.select_related("student"),
+                        ),
+                        Prefetch(
+                            "mentor_signups",
+                            queryset=mentor_signups.select_related("adult"),
+                        ),
+                    ),
+                )
             )
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        role = get_user_role(user)
+        org = getattr(self.request, "organization", None)
+        role = get_user_role(user, org=org)
         context["user_role"] = role
 
         events = sorted(
@@ -302,9 +352,9 @@ class OutreachEventListView(
                 # Get student signups for this program, keyed by shift since a
                 # student signs up for individual shifts, not whole events.
                 student_signups = list(
-                    OutreachSignup.objects.filter(
-                        student=student, shift__event__program=self.program
-                    ).select_related("shift", "shift__event")
+                    OutreachSignup.objects.for_organization(org)
+                    .filter(student=student, shift__event__program=self.program)
+                    .select_related("shift", "shift__event")
                 )
 
                 student_signup_event_ids = {s.shift.event_id for s in student_signups}
@@ -343,26 +393,28 @@ class OutreachEventListView(
             except AttributeError:
                 pass
 
-        context["can_add"] = can_user_write(user, "outreach")
+        context["can_add"] = can_user_write(user, "outreach", org=org)
 
         # Shifts the viewer may operate the check-in/out station for.
         can_checkin_shift_ids = set()
         for event in events:
             for shift in event.ordered_shifts:
-                if can_operate_checkin(user, shift):
+                if can_operate_checkin(user, shift, organization=org):
                     can_checkin_shift_ids.add(shift.pk)
         context["can_checkin_shift_ids"] = can_checkin_shift_ids
 
         # Mentor support signups: any mentor (or lead mentor) may volunteer
         # for a shift; there is no capacity limit.
-        context["viewer_is_mentor"] = user_is_mentor_or_lead(user)
+        context["viewer_is_mentor"] = user_is_mentor_or_lead(user, org=org)
         context["mentor_signup_shift_ids"] = set()
         try:
             context["mentor_signup_shift_ids"] = set(
-                OutreachMentorSignup.objects.filter(
+                OutreachMentorSignup.objects.for_organization(org)
+                .filter(
                     adult=user.adult_profile,
                     shift__event__program=self.program,
-                ).values_list("shift_id", flat=True)
+                )
+                .values_list("shift_id", flat=True)
             )
         except AttributeError:
             pass
@@ -394,8 +446,14 @@ class OutreachShiftFormSetMixin:
         if not shift_formset.is_valid():
             return self.render_to_response(context)
         with transaction.atomic():
+            form.instance.organization = (
+                getattr(self.request, "organization", None) or self.program.organization
+            )
             response = super().form_valid(form)
             shift_formset.instance = self.object
+            for shift_form in shift_formset.forms:
+                if shift_form.instance.pk is None:
+                    shift_form.instance.organization = self.object.organization
             shift_formset.save()
         return response
 
@@ -415,18 +473,31 @@ class OutreachEventCreateView(
 
     def form_valid(self, form):
         form.instance.program = self.program
+        form.instance.organization = (
+            getattr(self.request, "organization", None) or self.program.organization
+        )
         response = super().form_valid(form)
         if self.object is None:
             return response
         user = self.request.user
-        role = get_user_role(user)
+        role = get_user_role(user, org=getattr(self.request, "organization", None))
         if role == "Student":
             try:
                 student = user.student_profile
                 first_shift = self.object.first_shift
-                signup = OutreachSignup.objects.create(
-                    student=student, shift=first_shift, role=OutreachSignup.CHAMPION
-                )
+                if student.organization_id == self.object.organization_id:
+                    signup = OutreachSignup.objects.create(
+                        organization=self.object.organization,
+                        student=student,
+                        shift=first_shift,
+                        role=OutreachSignup.CHAMPION,
+                    )
+                else:
+                    messages.warning(
+                        self.request,
+                        "Event created, but your student profile belongs to another organization.",
+                    )
+                    return response
                 from outreach.services import notify_outreach_signup
 
                 notify_outreach_signup(signup)
@@ -458,7 +529,9 @@ class OutreachEventUpdateView(
     section = "outreach"
 
     def get_queryset(self):
-        return OutreachEvent.objects.filter(program=self.program)
+        return OutreachEvent.objects.for_organization(
+            getattr(self.request, "organization", None)
+        ).filter(program=self.program)
 
 
 class OutreachEventDeleteView(
@@ -468,7 +541,9 @@ class OutreachEventDeleteView(
     template_name = "outreach/event_confirm_delete.html"
 
     def get_queryset(self):
-        return OutreachEvent.objects.filter(program=self.program)
+        return OutreachEvent.objects.for_organization(
+            getattr(self.request, "organization", None)
+        ).filter(program=self.program)
 
     def audit_snapshot(self, obj):
         return {"name": obj.name, "program_id": obj.program_id}
@@ -483,12 +558,15 @@ class OutreachEventDeleteView(
 
     def dispatch(self, request, *args, **kwargs):
         # Initialize program via mixin logic first
-        self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        )
         if not self.program.features.filter(key="outreach").exists():
             raise Http404("Outreach is not enabled for this program.")
 
-        obj = self.get_object()
-        if not can_user_delete(request.user, "outreach", obj):
+        obj = get_object_or_404(self.get_queryset(), pk=kwargs.get("pk"))
+        if not can_user_delete(request.user, "outreach", obj, org=org):
             messages.error(request, "You do not have permission to delete this event.")
             return redirect("outreach:event_list", program_id=self.program.id)
         return super(OutreachProgramMixin, self).dispatch(request, *args, **kwargs)
@@ -496,9 +574,7 @@ class OutreachEventDeleteView(
 
 class OutreachShiftSignupView(LoginRequiredMixin, OutreachProgramMixin, View):
     def post(self, request, program_id, shift_pk):
-        shift = get_object_or_404(
-            OutreachShift, pk=shift_pk, event__program=self.program
-        )
+        shift = get_object_or_404(self.get_shift_queryset(), pk=shift_pk)
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer sign up.")
             return redirect("outreach:event_list", program_id=self.program.id)
@@ -514,7 +590,18 @@ class OutreachShiftSignupView(LoginRequiredMixin, OutreachProgramMixin, View):
             messages.error(request, "Only students can sign up for shifts.")
             return redirect("outreach:event_list", program_id=self.program.id)
 
-        signup = OutreachSignup(student=student, shift=shift, role=role)
+        if student.organization_id != shift.organization_id:
+            messages.error(
+                request, "You can't sign up for another organization's shift."
+            )
+            return redirect("outreach:event_list", program_id=self.program.id)
+
+        signup = OutreachSignup(
+            organization=shift.organization,
+            student=student,
+            shift=shift,
+            role=role,
+        )
         try:
             signup.clean()
             signup.save()
@@ -530,15 +617,15 @@ class OutreachShiftSignupView(LoginRequiredMixin, OutreachProgramMixin, View):
 
 class OutreachShiftCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
     def post(self, request, program_id, shift_pk):
-        shift = get_object_or_404(
-            OutreachShift, pk=shift_pk, event__program=self.program
-        )
+        shift = get_object_or_404(self.get_shift_queryset(), pk=shift_pk)
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer cancel.")
             return redirect("outreach:event_list", program_id=self.program.id)
         try:
             student = request.user.student_profile
-            signup = OutreachSignup.objects.get(student=student, shift=shift)
+            signup = OutreachSignup.objects.for_organization(shift.organization).get(
+                student=student, shift=shift
+            )
             log_deletion(
                 resource=signup,
                 request=request,
@@ -566,9 +653,7 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
     """
 
     def post(self, request, program_id, shift_pk):
-        shift = get_object_or_404(
-            OutreachShift, pk=shift_pk, event__program=self.program
-        )
+        shift = get_object_or_404(self.get_shift_queryset(), pk=shift_pk)
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer sign up.")
             return redirect("outreach:event_list", program_id=self.program.id)
@@ -588,8 +673,16 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
             )
             return redirect("outreach:event_list", program_id=self.program.id)
 
+        if adult.organization_id != shift.organization_id:
+            messages.error(
+                request, "You can't sign up for another organization's shift."
+            )
+            return redirect("outreach:event_list", program_id=self.program.id)
+
         signup, created = OutreachMentorSignup.objects.get_or_create(
-            adult=adult, shift=shift
+            adult=adult,
+            shift=shift,
+            defaults={"organization": shift.organization},
         )
         if created:
             from outreach.services import notify_mentor_outreach_signup
@@ -610,16 +703,14 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
 
 class OutreachShiftMentorCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
     def post(self, request, program_id, shift_pk):
-        shift = get_object_or_404(
-            OutreachShift, pk=shift_pk, event__program=self.program
-        )
+        shift = get_object_or_404(self.get_shift_queryset(), pk=shift_pk)
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer cancel.")
             return redirect("outreach:event_list", program_id=self.program.id)
         try:
-            signup = OutreachMentorSignup.objects.get(
-                adult=request.user.adult_profile, shift=shift
-            )
+            signup = OutreachMentorSignup.objects.for_organization(
+                shift.organization
+            ).get(adult=request.user.adult_profile, shift=shift)
             log_deletion(
                 resource=signup,
                 request=request,
@@ -649,26 +740,23 @@ class OutreachShiftManageSignupsView(
         # mentors/lead mentors (so rosters and attendance can still be
         # corrected after the fact). Resolve the program/shift directly here
         # because the parent mixin hasn't populated ``self.program`` yet.
-        program = get_object_or_404(Program, pk=kwargs.get("program_id"))
-        shift = get_object_or_404(
-            OutreachShift,
-            pk=kwargs.get("shift_pk"),
-            event__program=program,
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
         )
+        shift = get_object_or_404(self.get_shift_queryset(), pk=kwargs.get("shift_pk"))
         if shift.is_past and not user_is_mentor_or_lead(
             request.user, org=request.organization
         ):
             messages.error(
                 request, "This shift has ended and can no longer be changed."
             )
-            return redirect("outreach:event_list", program_id=program.id)
+            return redirect("outreach:event_list", program_id=self.program.id)
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self):
         return get_object_or_404(
-            OutreachShift,
-            pk=self.kwargs.get("shift_pk"),
-            event__program=self.program,
+            self.get_shift_queryset(), pk=self.kwargs.get("shift_pk")
         )
 
     def get(self, request, program_id, shift_pk):
@@ -720,9 +808,7 @@ class OutreachShiftManageMentorSignupsView(
 
     def get_object(self):
         return get_object_or_404(
-            OutreachShift,
-            pk=self.kwargs.get("shift_pk"),
-            event__program=self.program,
+            self.get_shift_queryset(), pk=self.kwargs.get("shift_pk")
         )
 
     def get(self, request, program_id, shift_pk):
@@ -771,8 +857,9 @@ class OutreachStudentStatsView(
     def get(self, request, program_id):
         from programs.utils import active_students_in_program
 
+        organization = request.organization or self.program.organization
         students = (
-            active_students_in_program(self.program)
+            active_students_in_program(self.program, organization=organization)
             .annotate(
                 display_first_name=Coalesce("preferred_first_name", "legal_first_name")
             )
@@ -783,15 +870,17 @@ class OutreachStudentStatsView(
         students = students.prefetch_related(
             Prefetch(
                 "outreach_signups",
-                queryset=OutreachSignup.objects.filter(
-                    shift__event__program=self.program
-                ).select_related("shift", "shift__event"),
+                queryset=OutreachSignup.objects.for_organization(organization)
+                .filter(
+                    shift__event__program=self.program,
+                    student__organization=organization,
+                )
+                .select_related("shift", "shift__event"),
                 to_attr="program_signups",
             )
         )
 
         students = list(students)
-        organization = request.organization or self.program.organization
         attendance_by_student = defaultdict(list)
         student_ids = [student.pk for student in students]
         if student_ids:
@@ -847,22 +936,26 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
 
     def _get_shift(self):
         return get_object_or_404(
-            OutreachShift, pk=self.kwargs.get("shift_pk"), event__program=self.program
+            self.get_shift_queryset(), pk=self.kwargs.get("shift_pk")
         )
 
     def get(self, request, program_id, shift_pk):
         shift = self._get_shift()
-        if not can_view_checkin(request.user, shift):
+        organization = request.organization or self.program.organization
+        if not can_view_checkin(request.user, shift, organization=organization):
             messages.error(request, "You can't view this shift's check-in page.")
             return redirect("outreach:event_list", program_id=self.program.id)
 
         from programs.utils import active_students_in_program
 
-        signups = shift.signups.select_related("student").order_by(
-            "student__legal_first_name", "student__last_name"
+        signups = (
+            OutreachSignup.objects.for_organization(organization)
+            .filter(shift=shift, student__organization=organization)
+            .select_related("student")
+            .order_by("student__legal_first_name", "student__last_name")
         )
         active_students = (
-            active_students_in_program(self.program)
+            active_students_in_program(self.program, organization=organization)
             .annotate(
                 display_first_name=Coalesce("preferred_first_name", "legal_first_name")
             )
@@ -880,7 +973,9 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
                     signups.values_list("student_id", flat=True)
                 ),
                 "active_students": active_students,
-                "can_operate": can_operate_checkin(request.user, shift),
+                "can_operate": can_operate_checkin(
+                    request.user, shift, organization=organization
+                ),
             },
         )
 
@@ -888,7 +983,8 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
         from programs.utils import active_students_in_program
 
         shift = self._get_shift()
-        if not can_operate_checkin(request.user, shift):
+        organization = request.organization or self.program.organization
+        if not can_operate_checkin(request.user, shift, organization=organization):
             messages.error(
                 request, "This shift's check-in is locked. Ask a mentor for help."
             )
@@ -916,7 +1012,12 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
 
         if action in ("check_in", "check_out"):
             signup = (
-                OutreachSignup.objects.filter(shift=shift, student_id=student_id)
+                OutreachSignup.objects.for_organization(organization)
+                .filter(
+                    shift=shift,
+                    student_id=student_id,
+                    student__organization=organization,
+                )
                 .select_related("student")
                 .first()
             )
@@ -929,25 +1030,40 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
                 signup.checked_out_at = now
                 signup.save(update_fields=["checked_out_at"])
         elif action == "check_in_all":
-            updated = shift.signups.filter(checked_in_at__isnull=True).update(
-                checked_in_at=now
+            updated = (
+                OutreachSignup.objects.for_organization(organization)
+                .filter(
+                    shift=shift,
+                    student__organization=organization,
+                    checked_in_at__isnull=True,
+                )
+                .update(checked_in_at=now)
             )
             if updated:
                 messages.success(request, f"Checked in all {updated} student(s).")
         elif action == "check_out_all":
-            updated = shift.signups.filter(checked_out_at__isnull=True).update(
-                checked_out_at=now
+            updated = (
+                OutreachSignup.objects.for_organization(organization)
+                .filter(
+                    shift=shift,
+                    student__organization=organization,
+                    checked_out_at__isnull=True,
+                )
+                .update(checked_out_at=now)
             )
             if updated:
                 messages.success(request, f"Checked out all {updated} student(s).")
         elif action == "walk_up":
             student = (
-                active_students_in_program(self.program).filter(pk=student_id).first()
+                active_students_in_program(self.program, organization=organization)
+                .filter(pk=student_id)
+                .first()
             )
             if student is None:
                 messages.error(request, "That's not a valid student for this program.")
             else:
                 signup, created = OutreachSignup.objects.get_or_create(
+                    organization=organization,
                     shift=shift,
                     student=student,
                     defaults={
@@ -962,7 +1078,12 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
                     messages.success(request, f"{student.display_name} checked in.")
         elif action == "set_times":
             signup = (
-                OutreachSignup.objects.filter(shift=shift, student_id=student_id)
+                OutreachSignup.objects.for_organization(organization)
+                .filter(
+                    shift=shift,
+                    student_id=student_id,
+                    student__organization=organization,
+                )
                 .select_related("student")
                 .first()
             )

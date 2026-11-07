@@ -8,7 +8,12 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from organizations.models import Organization, OrganizationDomain, OrganizationSettings
+from organizations.models import (
+    Organization,
+    OrganizationDomain,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from organizations.utils import get_organization_email_settings
 from outreach.models import (
     OutreachEvent,
@@ -296,9 +301,14 @@ class OutreachNotificationsTest(TestCase):
         self.assertEqual(email.to, ["mentor@example.com"])
         self.assertIn("Mentor", email.subject)
 
-    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    @override_settings(
+        MOMENTUM_ROOT_DOMAIN="momentumteam.app",
+        ALLOWED_HOSTS=[".momentumteam.app", "testserver"],
+    )
     def test_notification_with_custom_organization_domain(self):
-        org = Organization.objects.create(name="Custom Org", slug="custom")
+        org = Organization.objects.create(
+            name="Custom Org", slug="custom", subdomain="custom"
+        )
         OrganizationSettings.objects.create(
             organization=org,
             data={
@@ -312,10 +322,24 @@ class OutreachNotificationsTest(TestCase):
         self.program.save()
         self.shift.event.organization = org
         self.shift.event.save()
+        self.shift.organization = org
+        self.shift.save(update_fields=["organization"])
+        self.student1.organization = org
+        self.student1.save(update_fields=["organization"])
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.student1_user,
+            organization=org,
+            role="Student",
+            defaults={"is_active": True},
+        )
 
         self.client.login(username="student1", password="password")  # nosec B106
         url = reverse("outreach:shift_signup", args=[self.program.id, self.shift.pk])
-        resp = self.client.post(url, {"role": OutreachSignup.CHAMPION})
+        resp = self.client.post(
+            url,
+            {"role": OutreachSignup.CHAMPION},
+            HTTP_HOST="custom.momentumteam.app",
+        )
         self.assertEqual(resp.status_code, 302)
 
         self.assertEqual(len(mail.outbox), 1)

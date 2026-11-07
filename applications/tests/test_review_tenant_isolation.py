@@ -85,6 +85,17 @@ class ApplicationReviewTenantIsolationTests(TestCase):
             },
         )
 
+    def test_membership_only_lead_can_review_current_organization(self):
+        self.user.groups.clear()
+        self.user.user_permissions.clear()
+        application = self.make_application(email="membership-only@example.test")
+
+        response = self.tenant_get(reverse("application_review_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, application.application_id)
+        self.assertContains(response, reverse("application_review_list"))
+
     def tenant_get(self, path, **kwargs):
         return self.client.get(path, HTTP_HOST=self.alpha_host, **kwargs)
 

@@ -1069,23 +1069,31 @@ def perform_student_merge(keep: Any, source: Any) -> dict[str, Any]:
 
 
 def perform_visitor_merge(
-    selected_names: Sequence[str] | Iterable[str], target_name: str
+    selected_names: Sequence[str] | Iterable[str], target_name: str, organization=None
 ) -> int:
     """Merge visitor sessions and events with names in ``selected_names`` into ``target_name``."""
     from attendance.models import AttendanceEvent, AttendanceSession
 
     names_list = list(selected_names)
     with transaction.atomic():
-        sessions_updated = AttendanceSession.objects.filter(
-            student__isnull=True,
-            adult__isnull=True,
-            visitor_name__in=names_list,
-        ).update(visitor_name=target_name)
+        sessions_updated = (
+            AttendanceSession.objects.for_organization(organization)
+            .filter(
+                student__isnull=True,
+                adult__isnull=True,
+                visitor_name__in=names_list,
+            )
+            .update(visitor_name=target_name)
+        )
 
-        events_updated = AttendanceEvent.objects.filter(
-            student__isnull=True,
-            adult__isnull=True,
-            visitor_name__in=names_list,
-        ).update(visitor_name=target_name)
+        events_updated = (
+            AttendanceEvent.objects.for_organization(organization)
+            .filter(
+                student__isnull=True,
+                adult__isnull=True,
+                visitor_name__in=names_list,
+            )
+            .update(visitor_name=target_name)
+        )
 
     return sessions_updated + events_updated

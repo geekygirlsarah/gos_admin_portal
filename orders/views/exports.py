@@ -126,7 +126,13 @@ class _OrderExportMixin:
         export = self.request.GET.get("export")
         if not export:
             return None
-        if get_user_role(self.request.user) != "LeadMentor":
+        if (
+            get_user_role(
+                self.request.user,
+                org=getattr(self.request, "organization", None),
+            )
+            != "LeadMentor"
+        ):
             messages.error(self.request, "Only Lead Mentors can export orders.")
             return redirect("orders:order_list", program_id=self.program.id)
         if export == "csv":

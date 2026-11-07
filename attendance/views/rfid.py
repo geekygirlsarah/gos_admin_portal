@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q, Value
+from django.db.models import Prefetch, Q, Value
 from django.db.models.functions import Coalesce, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,7 +18,8 @@ from ..services import find_card_by_uid
 
 @login_required
 def rfid_management_view(request):
-    if not can_user_write(request.user, "attendance"):
+    org = getattr(request, "organization", None)
+    if not can_user_write(request.user, "attendance", org=org):
         messages.error(request, "You do not have permission to manage RFID cards.")
         return redirect("home")
 
@@ -28,7 +29,8 @@ def rfid_management_view(request):
     if search_query:
         # Search students
         student_qs = (
-            Student.objects.filter(
+            Student.objects.for_organization(org)
+            .filter(
                 Q(preferred_first_name__icontains=search_query)
                 | Q(last_name__icontains=search_query)
                 | Q(legal_first_name__icontains=search_query)
@@ -39,38 +41,55 @@ def rfid_management_view(request):
                 ),
             )
             .order_by("sort_first", "last_name")
-            .prefetch_related("rfid_cards")
+            .prefetch_related(
+                Prefetch(
+                    "rfid_cards",
+                    queryset=RFIDCard.objects.for_organization(org).filter(
+                        is_active=True
+                    ),
+                )
+            )
         )
         for s in student_qs[:10]:
             results.append(
                 {
                     "person": s,
                     "type": "student",
-                    "rfid": s.rfid_cards.filter(is_active=True).first(),
+                    "rfid": s.rfid_cards.all().first(),
                 }
             )
 
         # Search mentors
         adult_qs = (
-            Adult.objects.filter(is_mentor=True)
+            Adult.objects.for_organization(org)
+            .filter(is_mentor=True)
             .filter(
                 Q(legal_first_name__icontains=search_query)
                 | Q(preferred_first_name__icontains=search_query)
                 | Q(last_name__icontains=search_query)
             )
-            .prefetch_related("rfid_cards")
+            .prefetch_related(
+                Prefetch(
+                    "rfid_cards",
+                    queryset=RFIDCard.objects.for_organization(org).filter(
+                        is_active=True
+                    ),
+                )
+            )
         )
         for a in adult_qs[:10]:
             results.append(
                 {
                     "person": a,
                     "type": "mentor",
-                    "rfid": a.rfid_cards.filter(is_active=True).first(),
+                    "rfid": a.rfid_cards.all().first(),
                 }
             )
     else:
-        assigned_cards = RFIDCard.objects.filter(is_active=True).select_related(
-            "student", "adult"
+        assigned_cards = (
+            RFIDCard.objects.for_organization(org)
+            .filter(is_active=True)
+            .select_related("student", "adult")
         )
     # Sort assigned cards by preferred name then last name
     assigned_cards_list = list(assigned_cards)
@@ -101,15 +120,26 @@ def rfid_management_view(request):
                     with transaction.atomic():
                         # Find person
                         if person_type == "student":
-                            person = get_object_or_404(Student, pk=person_id)
+                            person = get_object_or_404(
+                                Student.objects.for_organization(org), pk=person_id
+                            )
                         else:
-                            person = get_object_or_404(Adult, pk=person_id)
+                            person = get_object_or_404(
+                                Adult.objects.for_organization(org).filter(
+                                    is_mentor=True
+                                ),
+                                pk=person_id,
+                            )
 
                         # Find if this UID is already in the system
-                        existing_card = find_card_by_uid(uid)
+                        existing_card = find_card_by_uid(
+                            uid, organization=org or person.organization
+                        )
 
                         # Deactivate other active cards for this person
                         person_cards = person.rfid_cards.filter(is_active=True)
+                        if org is not None:
+                            person_cards = person_cards.filter(organization=org)
                         if existing_card:
                             person_cards = person_cards.exclude(pk=existing_card.pk)
                         person_cards.update(is_active=False)
@@ -140,9 +170,17 @@ def rfid_management_view(request):
                         else:
                             # Create new card record
                             if person_type == "student":
-                                RFIDCard.objects.create(uid=uid, student=person)
+                                RFIDCard.objects.create(
+                                    organization=org or person.organization,
+                                    uid=uid,
+                                    student=person,
+                                )
                             else:
-                                RFIDCard.objects.create(uid=uid, adult=person)
+                                RFIDCard.objects.create(
+                                    organization=org or person.organization,
+                                    uid=uid,
+                                    adult=person,
+                                )
                             messages.success(
                                 request, f"Assigned RFID {uid} to {person}."
                             )
@@ -153,7 +191,7 @@ def rfid_management_view(request):
             )
 
         elif action == "deactivate":
-            if not can_user_delete(request.user, "attendance"):
+            if not can_user_delete(request.user, "attendance", org=org):
                 messages.error(
                     request, "You do not have permission to deactivate RFID cards."
                 )
@@ -161,7 +199,7 @@ def rfid_management_view(request):
                     f"{reverse('rfid_management')}?{urlencode({'q': search_query})}"
                 )
             card_id = request.POST.get("card_id")
-            card = get_object_or_404(RFIDCard, id=card_id)
+            card = get_object_or_404(RFIDCard.objects.for_organization(org), id=card_id)
             card.is_active = False
             card.save()
             messages.success(request, f"Deactivated RFID {card.uid}")

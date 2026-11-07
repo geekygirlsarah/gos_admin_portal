@@ -30,7 +30,8 @@ class BadgeAwardPermissionMixin:
     """Allows awarding only if user has badge_award write (LeadMentor always)."""
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_write(request.user, "badge_award"):
+        org = getattr(request, "organization", None)
+        if not can_user_write(request.user, "badge_award", org=org):
             from django.contrib import messages as _messages
             from django.shortcuts import redirect as _redirect
 
@@ -43,7 +44,8 @@ class BadgeManagePermissionMixin:
     """Allows create/edit/delete only if user has badge_manage write."""
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_write(request.user, "badge_manage"):
+        org = getattr(request, "organization", None)
+        if not can_user_write(request.user, "badge_manage", org=org):
             from django.contrib import messages as _messages
             from django.shortcuts import redirect as _redirect
 
@@ -54,26 +56,28 @@ class BadgeManagePermissionMixin:
 
 class BadgeListView(LoginRequiredMixin, View):
     def get(self, request):
+        org = getattr(request, "organization", None)
         # If accessed with ?program=X, gate on that program's feature
         program_id = request.GET.get("program")
         if program_id:
             from programs.models import Program
 
             try:
-                program = Program.objects.get(pk=int(program_id))
+                program = Program.objects.for_organization(org).get(pk=int(program_id))
             except (Program.DoesNotExist, ValueError, TypeError):
                 raise Http404("Program not found.")
             if not program.has_feature("badges"):
                 raise Http404("Badges are not enabled for this program.")
 
-        org = getattr(request, "organization", None)
         badges = (
             Badge.objects.for_organization(org).prefetch_related("prerequisites").all()
         )
         student = None
         earned_ids = set()
         student_profile = getattr(request.user, "student_profile", None)
-        if student_profile:
+        if student_profile and (
+            org is None or student_profile.organization_id == org.pk
+        ):
             student = student_profile
             earned_ids = set(
                 StudentBadge.objects.for_organization(org)
@@ -83,24 +87,24 @@ class BadgeListView(LoginRequiredMixin, View):
         student_id = request.GET.get("student")
         if student_id:
             try:
-                s = Student.objects.get(pk=student_id)
+                s = Student.objects.for_organization(org).get(pk=student_id)
             except (Student.DoesNotExist, ValueError, TypeError):
                 s = None
             if s:
                 from programs.permission_views import can_user_read
 
-                if can_user_read(request.user, "badges", s):
+                if can_user_read(request.user, "badges", s, org=org):
                     student = s
                     earned_ids = set(
-                        StudentBadge.objects.filter(student=s).values_list(
-                            "badge_id", flat=True
-                        )
+                        StudentBadge.objects.for_organization(org)
+                        .filter(student=s)
+                        .values_list("badge_id", flat=True)
                     )
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=org)
         show_how = role in ("LeadMentor", "Mentor")
         is_lead = role == "LeadMentor"
-        can_award = can_user_write(request.user, "badge_award")
-        can_manage = can_user_write(request.user, "badge_manage")
+        can_award = can_user_write(request.user, "badge_award", org=org)
+        can_manage = can_user_write(request.user, "badge_manage", org=org)
         from .models import BadgeCategory
 
         # Check if the active student is enrolled in at least one badge-enabled program
@@ -108,11 +112,14 @@ class BadgeListView(LoginRequiredMixin, View):
         if student:
             from programs.models import Enrollment
 
-            enrolled_in_badge_program = Enrollment.objects.filter(
+            enrollments = Enrollment.objects.for_organization(org).filter(
                 student=student,
                 active=True,
                 program__features__key="badges",
-            ).exists()
+            )
+            if org is not None:
+                enrollments = enrollments.filter(program__organization=org)
+            enrolled_in_badge_program = enrollments.exists()
 
         return render(
             request,
@@ -142,14 +149,19 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
     model = Badge
     template_name = "badges/badge_detail.html"
 
+    def get_queryset(self):
+        return Badge.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         org = getattr(self.request, "organization", None)
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=org)
         ctx["show_how"] = role in ("LeadMentor", "Mentor")
         ctx["is_lead_mentor"] = role == "LeadMentor"
-        ctx["can_award"] = can_user_write(self.request.user, "badge_award")
-        ctx["can_manage"] = can_user_write(self.request.user, "badge_manage")
+        ctx["can_award"] = can_user_write(self.request.user, "badge_award", org=org)
+        ctx["can_manage"] = can_user_write(self.request.user, "badge_manage", org=org)
         ctx["awards"] = (
             StudentBadge.objects.for_organization(org)
             .filter(badge=self.object)
@@ -169,7 +181,7 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
             from programs.models import Program
 
             try:
-                program = Program.objects.get(pk=int(program_id))
+                program = Program.objects.for_organization(org).get(pk=int(program_id))
             except (Program.DoesNotExist, ValueError, TypeError):
                 raise Http404("Program not found.")
             if not program.has_feature("badges"):
@@ -177,6 +189,8 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
 
         # also check context processor's current_program via query param fallback
         qs = S.objects.for_organization(org)
+        if org is not None:
+            qs = qs.filter(enrollment__organization=org)
         if program_id:
             try:
                 qs = qs.filter(
@@ -235,6 +249,11 @@ class BadgeUpdateView(LoginRequiredMixin, BadgeManagePermissionMixin, UpdateView
     template_name = "badges/badge_form.html"
     success_url = reverse_lazy("badges:list")
 
+    def get_queryset(self):
+        return Badge.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
+
     def form_valid(self, form):
         before = {"name": self.get_object().name, "level": self.get_object().level}
         resp = super().form_valid(form)
@@ -253,6 +272,11 @@ class BadgeDeleteView(LoginRequiredMixin, BadgeManagePermissionMixin, DeleteView
     model = Badge
     template_name = "badges/badge_confirm_delete.html"
     success_url = reverse_lazy("badges:list")
+
+    def get_queryset(self):
+        return Badge.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
 
     def form_valid(self, form):
         log_event(

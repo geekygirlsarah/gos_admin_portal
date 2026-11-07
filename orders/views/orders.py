@@ -126,12 +126,14 @@ class OrderListView(
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
-            self.request.user, "orders-request"
+            self.request.user, "orders-request", org=org
         )
         context["can_place_order"] = user_is_mentor_or_lead(
-            self.request.user
-        ) and can_user_write(self.request.user, "orders-manage")
-        context["can_manage_items"] = can_user_write(self.request.user, "orders-manage")
+            self.request.user, org=org
+        ) and can_user_write(self.request.user, "orders-manage", org=org)
+        context["can_manage_items"] = can_user_write(
+            self.request.user, "orders-manage", org=org
+        )
         context["page_title"] = "Order Requests"
         return context
 
@@ -184,6 +186,7 @@ class OrderArchiveView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
+        org = getattr(self.request, "organization", None)
         orders = list(context["orders"])
         for order in orders:
             order.ordered_by_name = user_display_name(order.ordered_by)
@@ -195,11 +198,11 @@ class OrderArchiveView(
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
-            self.request.user, "orders-request"
+            self.request.user, "orders-request", org=org
         )
         context["can_place_order"] = user_is_mentor_or_lead(
-            self.request.user
-        ) and can_user_write(self.request.user, "orders-manage")
+            self.request.user, org=org
+        ) and can_user_write(self.request.user, "orders-manage", org=org)
         context["page_title"] = "Order Archive"
         return context
 
@@ -233,9 +236,13 @@ class OrderDetailView(
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         org = getattr(self.request, "organization", None)
-        context["items"] = self.object.items.select_related(
-            "program", "vendor", "team", "crew", "subteam", "requested_by", "order"
-        ).all()
+        context["items"] = (
+            OrderItem.objects.for_organization(org)
+            .filter(order=self.object)
+            .select_related(
+                "program", "vendor", "team", "crew", "subteam", "requested_by", "order"
+            )
+        )
         context["available_items"] = (
             OrderItem.objects.for_organization(org)
             .filter(order__isnull=True)
@@ -246,10 +253,10 @@ class OrderDetailView(
         )
         context["is_lead"] = role == "LeadMentor"
         context["can_manage_items"] = can_user_write(
-            self.request.user, "orders-manage", self.object
+            self.request.user, "orders-manage", self.object, org=org
         )
         context["can_edit_shipping"] = can_user_write(
-            self.request.user, "orders-shipping", self.object
+            self.request.user, "orders-shipping", self.object, org=org
         )
         context["shipping_form"] = ShippingInfoForm(instance=self.object)
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
@@ -359,7 +366,10 @@ class OrderDeleteView(
         return Order.objects.for_organization(org)
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_delete(request.user, "orders-manage", self.get_object()):
+        org = getattr(request, "organization", None)
+        if not can_user_delete(
+            request.user, "orders-manage", self.get_object(), org=org
+        ):
             messages.error(request, "You do not have permission to delete that order.")
             return redirect("orders:order_list", program_id=kwargs.get("program_id"))
         return super().dispatch(request, *args, **kwargs)

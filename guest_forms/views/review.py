@@ -13,13 +13,20 @@ from audit.service import log_event
 from guest_forms.forms import GuestFormForm
 from guest_forms.models import GuestForm, GuestFormSubmission
 from organizations.models import OrganizationManager, OrganizationQuerySet
+from programs.permission_views import user_is_lead_mentor
 
 
 class GuestFormReviewRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
-    """Mixin for views that require the review_guest_form permission."""
+    """Require reviewer delegation or Lead Mentor membership in this tenant."""
 
     permission_required = "guest_forms.review_guestform"
     raise_exception = False
+
+    def has_permission(self):
+        return super().has_permission() or user_is_lead_mentor(
+            self.request.user,
+            org=getattr(self.request, "organization", None),
+        )
 
 
 class GuestFormReviewListView(GuestFormReviewRequiredMixin, View):

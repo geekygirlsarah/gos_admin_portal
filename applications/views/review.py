@@ -34,6 +34,7 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 from programs.models import Program, RaceEthnicity
+from programs.permission_views import user_is_lead_mentor
 from programs.utils import GroupedProgramChoiceField
 from programs.utils.email_async import send_messages_in_background
 from programs.utils.email_html import build_email_parts
@@ -581,10 +582,16 @@ class ApplicationEmailForm(forms.Form):
 
 
 class _ReviewerRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
-    """All review pages require the dedicated review permission."""
+    """Require reviewer delegation or Lead Mentor membership in this tenant."""
 
     permission_required = REVIEW_PERM
     raise_exception = False  # default behavior: redirect to login
+
+    def has_permission(self):
+        return super().has_permission() or user_is_lead_mentor(
+            self.request.user,
+            org=getattr(self.request, "organization", None),
+        )
 
 
 @method_decorator(login_required, name="dispatch")

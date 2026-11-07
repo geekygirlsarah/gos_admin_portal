@@ -40,21 +40,23 @@ def resolve_card_by_uid(uid: str, organization=None) -> Optional[RFIDCard]:
         return None
 
 
-def find_card_by_uid(uid: str) -> Optional[RFIDCard]:
+def find_card_by_uid(uid: str, organization=None) -> Optional[RFIDCard]:
     """Find a card by exact UID or stripped UID (leading zeros), regardless of active status."""
+    cards = RFIDCard.objects.for_organization(organization)
+    if organization is not None:
+        cards = cards.filter(
+            Q(student__organization=organization) | Q(adult__organization=organization)
+        )
+
     # Try exact match first
-    card = RFIDCard.objects.select_related("student", "adult").filter(uid=uid).first()
+    card = cards.select_related("student", "adult").filter(uid=uid).first()
     if card:
         return card
 
     # Fallback: Check if we have a card stored without leading zeros
     stripped = uid.lstrip("0")
     if stripped and stripped != uid:
-        card = (
-            RFIDCard.objects.select_related("student", "adult")
-            .filter(uid=stripped)
-            .first()
-        )
+        card = cards.select_related("student", "adult").filter(uid=stripped).first()
         if card:
             return card
 

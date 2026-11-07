@@ -59,12 +59,22 @@ class OutreachEventForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
+        self.organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
+        self.fields["saved_location"].queryset = (
+            OutreachLocation.objects.for_organization(self.organization).order_by(
+                "name"
+            )
+        )
         if instance and instance.pk and instance.location_name:
-            match = OutreachLocation.objects.filter(
-                name=instance.location_name,
-                address=instance.location_address,
-            ).first()
+            match = (
+                self.fields["saved_location"]
+                .queryset.filter(
+                    name=instance.location_name,
+                    address=instance.location_address,
+                )
+                .first()
+            )
             if match:
                 self.fields["saved_location"].initial = match.pk
 
@@ -156,16 +166,22 @@ class OutreachManageSignupsForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.shift = kwargs.pop("shift")
         super().__init__(*args, **kwargs)
-        active_students = active_students_in_program(self.shift.event.program)
+        active_students = active_students_in_program(
+            self.shift.event.program, organization=self.shift.organization
+        )
         self.fields["champions"].queryset = active_students
         self.fields["helpers"].queryset = active_students
 
         # Set initial values
-        self.fields["champions"].initial = self.shift.champions.values_list(
-            "student_id", flat=True
+        self.fields["champions"].initial = (
+            OutreachSignup.objects.for_organization(self.shift.organization)
+            .filter(shift=self.shift, role=OutreachSignup.CHAMPION)
+            .values_list("student_id", flat=True)
         )
-        self.fields["helpers"].initial = self.shift.helpers.values_list(
-            "student_id", flat=True
+        self.fields["helpers"].initial = (
+            OutreachSignup.objects.for_organization(self.shift.organization)
+            .filter(shift=self.shift, role=OutreachSignup.HELPER)
+            .values_list("student_id", flat=True)
         )
 
     def clean(self):
@@ -198,11 +214,18 @@ class OutreachManageSignupsForm(forms.Form):
         helpers = self.cleaned_data["helpers"]
 
         # Track existing student signups and their roles
-        existing_signups = {s.student_id: s.role for s in self.shift.signups.all()}
+        existing_signups = {
+            s.student_id: s.role
+            for s in OutreachSignup.objects.for_organization(
+                self.shift.organization
+            ).filter(shift=self.shift)
+        }
 
         # Remove old signups not in the new lists
         all_new_student_ids = [s.id for s in champions] + [s.id for s in helpers]
-        self.shift.signups.exclude(student_id__in=all_new_student_ids).delete()
+        OutreachSignup.objects.for_organization(self.shift.organization).filter(
+            shift=self.shift
+        ).exclude(student_id__in=all_new_student_ids).delete()
 
         from outreach.services import notify_outreach_signup
 
@@ -211,7 +234,10 @@ class OutreachManageSignupsForm(forms.Form):
             signup, created = OutreachSignup.objects.update_or_create(
                 shift=self.shift,
                 student=student,
-                defaults={"role": OutreachSignup.CHAMPION},
+                defaults={
+                    "role": OutreachSignup.CHAMPION,
+                    "organization": self.shift.organization,
+                },
             )
             if created or existing_signups.get(student.id) != OutreachSignup.CHAMPION:
                 notify_outreach_signup(signup)
@@ -221,7 +247,10 @@ class OutreachManageSignupsForm(forms.Form):
             signup, created = OutreachSignup.objects.update_or_create(
                 shift=self.shift,
                 student=student,
-                defaults={"role": OutreachSignup.HELPER},
+                defaults={
+                    "role": OutreachSignup.HELPER,
+                    "organization": self.shift.organization,
+                },
             )
             if created or existing_signups.get(student.id) != OutreachSignup.HELPER:
                 notify_outreach_signup(signup)
@@ -247,8 +276,10 @@ class OutreachManageMentorSignupsForm(forms.Form):
         self.shift = kwargs.pop("shift")
         super().__init__(*args, **kwargs)
         self.fields["mentors"].queryset = self._mentor_queryset()
-        self.fields["mentors"].initial = self.shift.mentor_signups.values_list(
-            "adult_id", flat=True
+        self.fields["mentors"].initial = (
+            OutreachMentorSignup.objects.for_organization(self.shift.organization)
+            .filter(shift=self.shift)
+            .values_list("adult_id", flat=True)
         )
 
     def _mentor_queryset(self):
@@ -258,9 +289,14 @@ class OutreachManageMentorSignupsForm(forms.Form):
         # "signed up" branch is a pk__in subquery rather than an OR-joined
         # queryset, so a mentor supporting several shifts is never listed
         # more than once.
-        signed_up = Adult.objects.filter(outreach_mentor_signups__shift=self.shift)
+        organization = self.shift.organization
+        signed_up = Adult.objects.for_organization(organization).filter(
+            outreach_mentor_signups__shift=self.shift,
+            outreach_mentor_signups__organization=organization,
+        )
         return (
-            Adult.objects.filter(Q(pk__in=active_mentors()) | Q(pk__in=signed_up))
+            Adult.objects.for_organization(organization)
+            .filter(Q(pk__in=active_mentors(organization)) | Q(pk__in=signed_up))
             .annotate(
                 _sort_first_name=Lower(
                     Coalesce(F("preferred_first_name"), F("legal_first_name"))
@@ -272,16 +308,22 @@ class OutreachManageMentorSignupsForm(forms.Form):
     def save(self):
         mentors = self.cleaned_data["mentors"]
         existing_adult_ids = set(
-            self.shift.mentor_signups.values_list("adult_id", flat=True)
+            OutreachMentorSignup.objects.for_organization(self.shift.organization)
+            .filter(shift=self.shift)
+            .values_list("adult_id", flat=True)
         )
         all_new_adult_ids = [adult.id for adult in mentors]
-        self.shift.mentor_signups.exclude(adult_id__in=all_new_adult_ids).delete()
+        OutreachMentorSignup.objects.for_organization(self.shift.organization).filter(
+            shift=self.shift
+        ).exclude(adult_id__in=all_new_adult_ids).delete()
 
         from outreach.services import notify_mentor_outreach_signup
 
         for adult in mentors:
             signup, created = OutreachMentorSignup.objects.get_or_create(
-                shift=self.shift, adult=adult
+                shift=self.shift,
+                adult=adult,
+                defaults={"organization": self.shift.organization},
             )
             if created or adult.id not in existing_adult_ids:
                 notify_mentor_outreach_signup(signup)

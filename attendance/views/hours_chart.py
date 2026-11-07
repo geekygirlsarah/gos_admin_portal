@@ -21,16 +21,19 @@ from ..models import AttendanceSession
 @login_required
 def student_hours_view(request, pk):
     """Student/parent attendance hours visualization with line chart and calendar."""
-    student = get_object_or_404(Student, pk=pk)
+    org = getattr(request, "organization", None)
+    student = get_object_or_404(Student.objects.for_organization(org), pk=pk)
 
-    if not can_user_read(request.user, "attendance", obj=student):
+    if not can_user_read(request.user, "attendance", obj=student, org=org):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
 
     # Attendance-enabled programs the student is enrolled in (active + past)
-    enrolled_programs = Program.objects.filter(
-        enrollment__student=student, features__key="attendance"
-    ).distinct()
+    enrolled_programs = (
+        Program.objects.for_organization(org)
+        .filter(enrollment__student=student, features__key="attendance")
+        .distinct()
+    )
 
     # Program filter
     program_id = request.GET.get("program_id")
@@ -38,9 +41,13 @@ def student_hours_view(request, pk):
     if program_id and program_id.isdigit():
         selected_program = enrolled_programs.filter(id=int(program_id)).first()
 
-    sessions = AttendanceSession.objects.filter(student=student).select_related(
-        "program"
+    sessions = (
+        AttendanceSession.objects.for_organization(org)
+        .filter(student=student)
+        .select_related("program")
     )
+    if org is not None:
+        sessions = sessions.filter(program__organization=org)
     if selected_program:
         sessions = sessions.filter(program=selected_program)
 
@@ -237,13 +244,16 @@ def student_hours_view(request, pk):
 @login_required
 def attendance_hours_chart_view(request):
     """Mentor attendance hours bar chart with configurable average-lines."""
-    if not can_user_read(request.user, "attendance"):
+    org = getattr(request, "organization", None)
+    if not can_user_read(request.user, "attendance", org=org):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
 
-    programs = Program.objects.filter(
-        features__key="attendance", active=True
-    ).distinct()
+    programs = (
+        Program.objects.for_organization(org)
+        .filter(features__key="attendance", active=True)
+        .distinct()
+    )
 
     program_id = request.GET.get("program_id")
     selected_program = None
@@ -311,14 +321,18 @@ def attendance_hours_chart_view(request):
         "on",
         "yes",
     )
-    sessions = AttendanceSession.objects.filter(student__isnull=False)
+    sessions = AttendanceSession.objects.for_organization(org).filter(
+        student__isnull=False
+    )
+    if org is not None:
+        sessions = sessions.filter(program__organization=org, student__organization=org)
     if selected_program:
         sessions = sessions.filter(
             program=selected_program,
-            student__in=active_students_in_program(selected_program),
+            student__in=active_students_in_program(selected_program, organization=org),
         )
     else:
-        sessions = sessions.filter(student__in=active_students())
+        sessions = sessions.filter(student__in=active_students(org))
     if date_from:
         sessions = sessions.filter(
             check_in__date__gte=date_from,
@@ -398,9 +412,9 @@ def attendance_hours_chart_view(request):
     if include_unlogged:
         logged_student_ids = {stat["student__id"] for stat in student_stats}
         students_scope = (
-            active_students_in_program(selected_program)
+            active_students_in_program(selected_program, organization=org)
             if selected_program
-            else active_students()
+            else active_students(org)
         )
         unlogged_students = students_scope.exclude(id__in=logged_student_ids).order_by(
             "preferred_first_name", "legal_first_name", "last_name"
@@ -543,5 +557,7 @@ def attendance_hours_chart_view(request):
 @login_required
 def program_hours_view(request, program_id):
     """Redirect to the shared Hours Chart page with the program pre-selected."""
+    org = getattr(request, "organization", None)
+    get_object_or_404(Program.objects.for_organization(org), pk=program_id)
     url = f"{reverse('attendance_hours_chart')}?{urlencode({'program_id': program_id})}"
     return HttpResponseRedirect(url)

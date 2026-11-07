@@ -56,6 +56,23 @@ class GuestFormManageViewTests(TestCase):
         self.assertContains(resp, 'name="legal_notices_url"')
         self.assertContains(resp, 'name="safety_guidelines_url"')
 
+    def test_membership_only_lead_can_manage_guest_forms(self):
+        lead = User.objects.create_user(
+            username="membership-only-lead", password="pass12345"  # nosec B106
+        )
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=self.org,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(lead)
+
+        response = self.client.get(reverse("guest_form_manage_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("guest_form_manage_list"))
+
     def test_manage_form_has_no_form_type(self):
         """Regression: form_type moved from GuestForm to the submission itself."""
         resp = self.client.get(reverse("guest_form_create"))

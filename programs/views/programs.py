@@ -51,6 +51,7 @@ from .mixins import (
     DynamicReadPermissionMixin,
     LogFormSaveMixin,
     StudentQuerysetRoleMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     logger,
 )
 
@@ -285,9 +286,12 @@ class ProgramEmergencyContactsView(
         return primary, secondary, others
 
     def get(self, request, program_id):
-        program = get_object_or_404(Program, pk=program_id)
+        org = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(org), pk=program_id
+        )
         students = (
-            active_students_in_program(program)
+            active_students_in_program(program, organization=org)
             .select_related(
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
@@ -334,9 +338,12 @@ class ProgramMedicalInfoView(LoginRequiredMixin, MentorOrLeadMentorRequiredMixin
     template_name = "programs/medical_info.html"
 
     def get(self, request, program_id):
-        program = get_object_or_404(Program, pk=program_id)
+        org = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(org), pk=program_id
+        )
         students = (
-            active_students_in_program(program)
+            active_students_in_program(program, organization=org)
             .filter(
                 Q(allergies__isnull=False)
                 | Q(dietary_restrictions__isnull=False)
@@ -390,17 +397,23 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
     context_object_name = "program"
     section = "programs"
 
+    def get_queryset(self):
+        return Program.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-
-        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         program = self.object
+        org = getattr(self.request, "organization", None) or program.organization
+        ctx["role"] = get_user_role(self.request.user, org=org)
 
         role = ctx["role"]
 
         # Prepare annotated queryset for consistent sorting
         base_qs = (
-            Enrollment.objects.filter(program=program)
+            Enrollment.objects.for_organization(org)
+            .filter(program=program)
             .select_related("student", "student__user", "team", "crew", "subteam")
             .annotate(
                 sort_first=Lower(
@@ -412,6 +425,8 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 sort_last=Lower("student__last_name"),
             )
         )
+        if org is not None:
+            base_qs = base_qs.filter(student__organization=org)
 
         # Parent restriction
         if role == "Parent":
@@ -498,9 +513,6 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         if "background-checks" in program.feature_keys:
             from programs.models.adults import get_active_background_check_types
 
-            org = getattr(self.request, "organization", None) or getattr(
-                program, "organization", None
-            )
             active_types = [
                 t
                 for t in get_active_background_check_types(org)
@@ -607,7 +619,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["inactive_students"] = [e.student for e in inactive_enrollments_list]
         ctx["enrolled_students"] = ctx["active_students"] + ctx["inactive_students"]
 
-        ctx["teams"] = Team.objects.all()
+        ctx["teams"] = Team.objects.for_organization(org)
         ctx["crews"] = program.crews.all()
 
         if role in ("Mentor", "Student"):
@@ -624,22 +636,30 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["enrolled_students"] = list(ctx["active_students"])
         else:
             ctx["can_manage_students"] = can_user_write(
-                self.request.user, "student_info"
+                self.request.user, "student_info", obj=program, org=org
             )
-            ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
-            ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
-            ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
-            ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+            ctx["can_add_payment"] = can_user_write(
+                self.request.user, "payments", obj=program, org=org
+            )
+            ctx["can_manage_fees"] = can_user_write(
+                self.request.user, "fees", obj=program, org=org
+            )
+            ctx["can_view_payments"] = can_user_read(
+                self.request.user, "payments", obj=program, org=org
+            )
+            ctx["can_view_attendance"] = can_user_read(
+                self.request.user, "attendance", obj=program, org=org
+            )
             ctx["can_view_documents"] = can_user_read(
-                self.request.user, "student_documents"
+                self.request.user, "student_documents", obj=program, org=org
             )
 
         # Document management: any user who can edit the program can manage
         # the blank documents attached to it (used by the application wizard
         # Step 9 signed-document upload flow).
-        ctx["can_manage_documents"] = self.request.user.has_perm(
-            "programs.change_program"
-        )
+        ctx["can_manage_documents"] = can_user_write(
+            self.request.user, "programs", obj=program, org=org
+        ) or self.request.user.has_perm("programs.change_program")
         ctx["program_documents"] = program.documents.all().order_by(
             "display_order", "name"
         )
@@ -719,26 +739,48 @@ class ProgramStudentDocumentsView(
         return ctx
 
 
-class ProgramCreateView(LogFormSaveMixin, CreateView):
+class ProgramCreateView(
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    LogFormSaveMixin,
+    CreateView,
+):
     model = Program
     form_class = ProgramForm
     template_name = "programs/form.html"
+    permission_required = "programs.add_program"
+
+    def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse("program_detail", args=[self.object.pk])
 
 
-class ProgramUpdateView(LogFormSaveMixin, UpdateView):
+class ProgramUpdateView(
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    LogFormSaveMixin,
+    UpdateView,
+):
     model = Program
     form_class = ProgramForm
     template_name = "programs/form.html"
+    permission_required = "programs.change_program"
+
+    def get_queryset(self):
+        return Program.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         program = self.object
-        ctx["can_manage_documents"] = self.request.user.has_perm(
-            "programs.change_program"
-        )
+        org = getattr(self.request, "organization", None)
+        ctx["can_manage_documents"] = can_user_write(
+            self.request.user, "programs", obj=program, org=org
+        ) or self.request.user.has_perm("programs.change_program")
         ctx["program_documents"] = program.documents.all().order_by(
             "display_order", "name"
         )
@@ -748,30 +790,50 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
         return reverse("program_detail", args=[self.object.pk])
 
 
-class ProgramStudentAddView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentAddView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.change_student"
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        organization = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=pk
+        )
         form = AddExistingStudentToProgramForm(request.POST, program=program)
         if form.is_valid():
             student = form.cleaned_data["student"]
-            Enrollment.objects.get_or_create(student=student, program=program)
+            Enrollment.objects.get_or_create(
+                organization=organization,
+                student=student,
+                program=program,
+            )
             messages.success(request, f"Added {student} to {program}.")
         else:
             messages.error(request, "Could not add student to program.")
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramStudentQuickCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentQuickCreateView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.add_student"
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        organization = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=pk
+        )
         form = QuickCreateStudentForm(request.POST)
         if form.is_valid():
-            student = form.save()
-            Enrollment.objects.get_or_create(student=student, program=program)
+            student = form.save(commit=False)
+            student.organization = organization
+            student.save()
+            Enrollment.objects.get_or_create(
+                organization=organization,
+                student=student,
+                program=program,
+            )
             messages.success(request, f"Created {student} and added to {program}.")
         else:
             messages.error(request, "Could not create student.")
@@ -854,16 +916,32 @@ class ProgramEnrollmentUpdateView(
         return redirect("program_detail", pk=pk)
 
 
-class ProgramStudentDeactivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentDeactivateView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
         from audit.events import AuditEvent
         from audit.service import log_event
 
-        program = get_object_or_404(Program, pk=pk)
-        student = get_object_or_404(Student, pk=student_id)
-        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        organization = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=pk
+        )
+        student = get_object_or_404(
+            Student.objects.for_organization(organization), pk=student_id
+        )
+        enrollment = (
+            Enrollment.objects.for_organization(organization)
+            .filter(
+                student=student,
+                program=program,
+                student__organization=organization,
+                program__organization=organization,
+            )
+            .first()
+        )
         if enrollment and enrollment.active:
             enrollment.active = False
             enrollment.save(update_fields=["active"])
@@ -884,16 +962,32 @@ class ProgramStudentDeactivateView(LoginRequiredMixin, PermissionRequiredMixin, 
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramStudentActivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentActivateView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
         from audit.events import AuditEvent
         from audit.service import log_event
 
-        program = get_object_or_404(Program, pk=pk)
-        student = get_object_or_404(Student, pk=student_id)
-        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        organization = getattr(request, "organization", None)
+        program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=pk
+        )
+        student = get_object_or_404(
+            Student.objects.for_organization(organization), pk=student_id
+        )
+        enrollment = (
+            Enrollment.objects.for_organization(organization)
+            .filter(
+                student=student,
+                program=program,
+                student__organization=organization,
+                program__organization=organization,
+            )
+            .first()
+        )
         if enrollment and not enrollment.active:
             enrollment.active = True
             enrollment.save(update_fields=["active"])
@@ -1994,9 +2088,10 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
     section = "programs"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        org = getattr(request, "organization", None)
+        program = get_object_or_404(Program.objects.for_organization(org), pk=pk)
         user = request.user
-        role = get_user_role(user)
+        role = get_user_role(user, org=org)
         is_lead = role == "LeadMentor"
 
         groups = set()
@@ -2006,12 +2101,15 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 requested.extend(part.strip() for part in value.split(","))
             groups = {g for g in requested if g in _STUDENT_EXPORT_GROUPS}
 
-        can_view_sliding = can_user_read(user, "sliding_scale")
+        can_view_sliding = can_user_read(user, "sliding_scale", org=org)
+
+        enrollments = Enrollment.objects.for_organization(org).filter(program=program)
+        if org is not None:
+            enrollments = enrollments.filter(student__organization=org)
 
         if is_lead:
             enrollments = (
-                Enrollment.objects.filter(program=program)
-                .select_related(
+                enrollments.select_related(
                     "student",
                     "student__school",
                     "student__primary_contact_relationship__adult",
@@ -2030,9 +2128,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             )
         else:
             enrollments = (
-                Enrollment.objects.filter(
-                    program=program, active=True, student__graduated=False
-                )
+                enrollments.filter(active=True, student__graduated=False)
                 .select_related(
                     "student",
                     "student__school",
@@ -2071,7 +2167,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 class ProgramDocumentCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     """Add a blank document (e.g. PDF) to a Program. Shown on the Program
@@ -2084,8 +2180,13 @@ class ProgramDocumentCreateView(
     form_class = ProgramDocumentForm
     template_name = "programs/program_document_form.html"
 
+    permission_required = "programs.change_program"
+
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.program = get_object_or_404(
+            Program.objects.for_organization(getattr(request, "organization", None)),
+            pk=kwargs["pk"],
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -2110,7 +2211,7 @@ class ProgramDocumentCreateView(
 class ProgramDocumentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     UpdateView,
 ):
     permission_required = "programs.change_program"
@@ -2120,12 +2221,16 @@ class ProgramDocumentUpdateView(
     pk_url_kwarg = "doc_id"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.program = get_object_or_404(
+            Program.objects.for_organization(getattr(request, "organization", None)),
+            pk=kwargs["pk"],
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
         return get_object_or_404(
-            ProgramDocument, pk=self.kwargs["doc_id"], program=self.program
+            ProgramDocument.objects.filter(program=self.program),
+            pk=self.kwargs["doc_id"],
         )
 
     def get_form_kwargs(self):
@@ -2149,7 +2254,7 @@ class ProgramDocumentUpdateView(
 
 class ProgramDocumentDeleteView(
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     View,
 ):
     """Delete a Program Document. POST-only (with a JS confirm on the
@@ -2160,9 +2265,13 @@ class ProgramDocumentDeleteView(
     template_name = "programs/program_document_confirm_delete.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.program = get_object_or_404(
+            Program.objects.for_organization(getattr(request, "organization", None)),
+            pk=kwargs["pk"],
+        )
         self.document = get_object_or_404(
-            ProgramDocument, pk=kwargs["doc_id"], program=self.program
+            ProgramDocument.objects.filter(program=self.program),
+            pk=kwargs["doc_id"],
         )
         return super().dispatch(request, *args, **kwargs)
 
