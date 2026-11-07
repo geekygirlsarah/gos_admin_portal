@@ -17,13 +17,16 @@
 
                     <dl class="row">
                         <dt class="col-sm-3">Submissions</dt>
-                        <dd class="col-sm-9">{{ guest_form.submissions.count }}</dd>
+                        <dd class="col-sm-9">{{ submission_count }}</dd>
                     </dl>
 
-                    {% if guest_form.submissions.exists %}
+                    {% if deletion_blocked %}
                         <div class="alert alert-danger">
-                            <strong>Warning:</strong> This form has {{ guest_form.submissions.count }} submission(s).
-                            Deleting the form will also delete all associated submissions and uploaded files.
+                            This form has submissions with inconsistent organization links and cannot be deleted until reviewed.
+                        </div>
+                    {% elif submission_count %}
+                        <div class="alert alert-danger">
+                            <strong>Warning:</strong> Deleting the form will also delete its {{ submission_count }} local submission(s) and uploaded files.
                         </div>
                     {% endif %}
 
@@ -31,9 +34,13 @@
                         {% csrf_token %}
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                             <a href="{% url 'guest_form_manage_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                            {% if deletion_blocked %}
+                            <span class="btn btn-danger disabled" aria-disabled="true">Delete unavailable</span>
+                            {% else %}
                             <button type="submit" class="btn btn-danger">
                                 <i class="bi bi-trash me-1"></i> Yes, Delete
                             </button>
+                            {% endif %}
                         </div>
                     </form>
                 </div>

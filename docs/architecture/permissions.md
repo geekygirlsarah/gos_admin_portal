@@ -110,6 +110,20 @@ Do **not** use raw Django `has_perm()` checks or decorator checks. Use the stand
 - `DynamicWritePermissionMixin`: Gated on `can_user_write` for the specified `permission_section`.
 - `LoginRequiredMixin`: Standard authentication check (enforced globally via middleware).
 
+Application and guest-form review is restricted to a Lead Mentor in the
+resolved organization or a platform superuser. Global Django reviewer
+permissions do not grant access in another organization's tenant context; a
+missing organization context is denied.
+
+Badge prerequisite choices and rendered prerequisite links are restricted to
+the resolved organization. Program alumni routes validate the program against
+that same organization before including its name in the page.
+
+Guest-form review requires both the submission and its linked form to belong
+to the resolved organization. Tenant-owned forms with foreign-owned submissions
+cannot be deleted until the inconsistent links are reviewed; displayed counts
+include only local submissions.
+
 ---
 
 ## Object-Level Access Rules

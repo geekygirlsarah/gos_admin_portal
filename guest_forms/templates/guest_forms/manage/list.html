@@ -40,7 +40,7 @@
                                 <td>{% if form.is_required %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-muted"></i>{% endif %}</td>
                                 <td>{% if form.is_active %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-muted"></i>{% endif %}</td>
                                 <td>{{ form.display_order }}</td>
-                                <td>{{ form.submissions.count }}</td>
+                                <td>{{ form.tenant_submission_count }}</td>
                                 <td>
                                     <a href="{% url 'guest_form_edit' form.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
                                     <a href="{% url 'guest_form_delete' form.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>

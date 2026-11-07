@@ -42,7 +42,7 @@ class EmailSendConfirmModalTests(TestCase):
                 self.assertContains(response, marker)
 
     def _login_reviewer(self):
-        """Create a user with the application review permission and log in."""
+        """Create a tenant Lead Mentor who can review applications."""
         ct, _ = ContentType.objects.get_or_create(
             app_label="applications", model="application"
         )
@@ -58,7 +58,7 @@ class EmailSendConfirmModalTests(TestCase):
         UserOrganizationMembership.objects.create(
             user=user,
             organization=Organization.objects.get(slug="gos"),
-            role="Staff",
+            role="LeadMentor",
             is_active=True,
         )
         self.client.login(username="reviewer", password="password123")  # nosec B106

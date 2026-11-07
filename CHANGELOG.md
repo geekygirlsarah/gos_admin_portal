@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 - Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
 - The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
 - Travel trip creation and inline departures/costs now inherit the program organization, travel mentor and parent signups persist their organization, and the dashboard displays the travel event's actual location.
+- Application and guest-form review now requires a Lead Mentor in the current organization or a platform superuser; global reviewer permissions no longer cross tenant role boundaries.
+- Signed mentor-agreement uploads are no longer served from public media URLs and can be downloaded only by the owner, a same-organization Lead Mentor, or a platform superuser through an audited private route.
+- Badge prerequisite choices and displayed links now exclude foreign-organization badges, and program alumni pages no longer reveal a foreign program name.
+- Outreach inline shifts and signup collisions, plus travel departures, costs, and adult signup links, are now organization-scoped; mismatched records are left unchanged and are not exposed or notified.
+- Guest-form review and counts now require same-organization form/submission links; deletion is blocked before audit or cascade when foreign submissions exist. Parent/emergency-contact directories and mentor relationship edits now ignore inconsistent foreign links, while school choices remain shared.
 
 ## 2026-11-06
 

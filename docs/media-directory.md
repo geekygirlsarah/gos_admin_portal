@@ -54,6 +54,7 @@ the database reference to a newer location:
 | `photos/students/` | Student photos uploaded before the private student-photo path was introduced. | The `transition_private_media` command can copy supported referenced photos to `private/student_photos/` and update their current field reference. It deliberately keeps the source file. |
 | `photos/mentors/` | Mentor profile photos from the earlier mentor model/path. | The current adult profile upload path is `photos/adults/`; there is no general cleanup workflow for this legacy directory. |
 | `application_documents/` | Signed application documents uploaded before the organization-scoped private path was introduced. | The transition command can copy supported referenced files to `private/application_documents/` and update their current field reference. It deliberately keeps the source file. |
+| `signed/` | A possible earlier signed mentor-agreement submission path; test fixtures contain references, but production media use is unknown. | Direct Django media requests are denied. Existing records can be downloaded only through the tenant-scoped agreement submission endpoint. |
 
 The transition command is read-only unless explicitly run with `--execute` and
 does not purge legacy originals. A file under an old path is not necessarily
@@ -73,10 +74,11 @@ for its exact workflow and safeguards.
 
 ## Access and sensitivity
 
-The Django direct-media handler currently denies paths beginning with
-`application_documents/`, `photos/students/`, and `private/`. That protects
-those paths only when requests go through Django. A proxy, CDN, or separate
-storage origin may serve files independently and must be checked as well.
+The Django direct-media handler denies paths beginning with
+`agreement_submissions/`, `application_documents/`, `photos/students/`,
+`private/`, and `signed/`. That protects those paths only when requests go
+through Django. A proxy, CDN, or separate storage origin may serve files
+independently and must be checked as well.
 Other directory names are not access controls: for example, current
 `photos/adults/` and legacy `photos/mentors/` paths are not in Django's
 direct-media deny list. Treat uploads as sensitive according to their contents,

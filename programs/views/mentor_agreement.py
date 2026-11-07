@@ -1,18 +1,31 @@
+import mimetypes
+import os
+
 import markdown as md
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousFileOperation
-from django.http import Http404, HttpResponseForbidden
-from django.shortcuts import redirect, render
+from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.decorators import method_decorator
+from django.utils.http import (
+    content_disposition_header,
+    url_has_allowed_host_and_scheme,
+)
+from django.views import View
+from django.views.decorators.cache import never_cache
 
+from audit.events import AuditEvent
+from audit.service import log_event
 from programs.models import (
     MentorAgreement,
     MentorAgreementAcceptance,
     MentorAgreementSubmission,
 )
+from programs.permission_views import user_is_lead_mentor
 
 
 def mentor_agreement_view(request):
@@ -52,6 +65,13 @@ def mentor_agreement_view(request):
 
     pending = [a for a in active if a.id not in accepted_ids]
     already_accepted = [a for a in active if a.id in accepted_ids]
+    already_accepted_details = [
+        {
+            "agreement": agreement,
+            "submission": submissions_by_agreement.get(agreement.id),
+        }
+        for agreement in already_accepted
+    ]
 
     # Build pending details with content, document, and upload status
     pending_details = []
@@ -100,6 +120,7 @@ def mentor_agreement_view(request):
         {
             "pending_details": pending_details,
             "already_accepted": already_accepted,
+            "already_accepted_details": already_accepted_details,
         },
     )
 
@@ -129,6 +150,13 @@ def _handle_agree(
             {
                 "pending_details": pending_details,
                 "already_accepted": already_accepted,
+                "already_accepted_details": [
+                    {
+                        "agreement": agreement,
+                        "submission": submissions_by_agreement.get(agreement.id),
+                    }
+                    for agreement in already_accepted
+                ],
             },
         )
 
@@ -179,3 +207,54 @@ def _handle_upload(request, adult, pending, pending_details):
 
     messages.success(request, f"Signed copy uploaded for {agreement.title}.")
     return redirect("mentor_agreement")
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorAgreementSubmissionDownloadView(LoginRequiredMixin, View):
+    """Serve a signed agreement only to its owner or authorized org admins."""
+
+    def get(self, request, pk):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        submission = get_object_or_404(
+            MentorAgreementSubmission.objects.for_organization(organization)
+            .select_related("adult", "agreement")
+            .filter(
+                adult__organization=organization,
+                agreement__organization=organization,
+            ),
+            pk=pk,
+        )
+        adult = getattr(request.user, "adult_profile", None)
+        is_owner = (
+            adult is not None
+            and adult.pk == submission.adult_id
+            and adult.organization_id == organization.pk
+        )
+        if not (
+            is_owner
+            or request.user.is_superuser
+            or user_is_lead_mentor(request.user, org=organization)
+        ):
+            raise Http404
+        if not submission.file:
+            raise Http404
+
+        log_event(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            resource=submission,
+            request=request,
+            notes="Mentor agreement submission downloaded",
+        )
+        filename = os.path.basename(submission.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(
+            submission.file.open("rb"),
+            content_type=content_type or "application/octet-stream",
+        )
+        response["Content-Disposition"] = content_disposition_header(True, filename)
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response

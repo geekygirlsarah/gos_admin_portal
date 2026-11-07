@@ -1,8 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ValidationError
-from django.db.models import Value
+from django.db.models import Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
@@ -141,34 +142,65 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return Adult.objects.none()
+        relationships = (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                adult__organization=organization,
+                student__organization=organization,
+            )
+            .select_related("student")
+        )
         qs = (
-            active_parents(getattr(self.request, "organization", None))
+            active_parents(organization)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
                 )
             )
             .prefetch_related(
-                "students",
-                "adultstudentrelationship_set",
+                Prefetch(
+                    "adultstudentrelationship_set",
+                    queryset=relationships,
+                    to_attr="tenant_student_relationships",
+                )
             )
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
-            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+            program = get_object_or_404(
+                Program.objects.for_organization(organization), pk=program_id
+            )
+            eligible_adult_ids = relationships.filter(
+                student__enrollment__program=program,
+                student__enrollment__organization=organization,
+            ).values("adult_id")
+            qs = qs.filter(pk__in=eligible_adult_ids)
 
-        role = get_user_role(self.request.user, org=self.request.organization)
+        role = get_user_role(self.request.user, org=organization)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                student_ids = adult.students.values_list("id", flat=True)
-                qs = qs.filter(students__id__in=student_ids).distinct()
+                if adult.organization_id != organization.pk:
+                    return Adult.objects.none()
+                student_ids = relationships.filter(adult=adult).values("student_id")
+                qs = qs.filter(
+                    pk__in=relationships.filter(student_id__in=student_ids).values(
+                        "adult_id"
+                    )
+                )
             except:
                 qs = Adult.objects.none()
         elif role == "Student":
             try:
                 student = self.request.user.student_profile
-                qs = qs.filter(students=student).distinct()
+                if student.organization_id != organization.pk:
+                    return Adult.objects.none()
+                qs = qs.filter(
+                    pk__in=relationships.filter(student=student).values("adult_id")
+                )
             except:
                 qs = Adult.objects.none()
 
@@ -265,8 +297,11 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return Adult.objects.none()
         qs = (
-            active_alumni(getattr(self.request, "organization", None))
+            active_alumni(organization)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -283,7 +318,12 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         program_id = self.kwargs.get("program_id")
         if program_id:
-            ctx["program"] = get_object_or_404(Program, pk=program_id)
+            organization = getattr(self.request, "organization", None)
+            if organization is None:
+                raise Http404
+            ctx["program"] = get_object_or_404(
+                Program.objects.for_organization(organization), pk=program_id
+            )
         alumni = list(ctx.get("alumni") or ctx.get("object_list") or [])
         ctx["total_alumni_count"] = len(alumni)
         ctx["ok_to_contact_count"] = sum(1 for a in alumni if a.ok_to_contact)
@@ -599,21 +639,31 @@ class MentorUpdateView(
         ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
         adult = self.object
         if adult and adult.pk:
+            organization = getattr(self.request, "organization", None)
+            relationships = list(
+                AdultStudentRelationship.objects.for_organization(organization)
+                .filter(
+                    adult=adult,
+                    adult__organization=organization,
+                    student__organization=organization,
+                )
+                .select_related("student")
+                .order_by("student__last_name", "student__preferred_first_name")
+            )
             rels = {
-                r.student_id: (r.relationship_to_student, r.specific_relationship or "")
-                for r in adult.adultstudentrelationship_set.select_related(
-                    "student"
-                ).all()
+                relationship.student_id: (
+                    relationship.relationship_to_student,
+                    relationship.specific_relationship or "",
+                )
+                for relationship in relationships
             }
             ctx["linked_students"] = [
                 {
-                    "student": s,
-                    "rel": rels.get(s.pk, ("", ""))[0],
-                    "specific_rel": rels.get(s.pk, ("", ""))[1],
+                    "student": relationship.student,
+                    "rel": rels.get(relationship.student_id, ("", ""))[0],
+                    "specific_rel": rels.get(relationship.student_id, ("", ""))[1],
                 }
-                for s in adult.students.select_related("school").order_by(
-                    "last_name", "preferred_first_name"
-                )
+                for relationship in relationships
             ]
         return ctx
 
@@ -630,10 +680,34 @@ class MentorUpdateView(
             if k.startswith("student_specific_rel_")
         }
         valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return response
+        posted_student_ids = set()
+        for sid_str in rel_map:
+            try:
+                posted_student_ids.add(int(sid_str))
+            except (TypeError, ValueError):
+                continue
+        valid_student_ids = set(
+            Student.objects.for_organization(organization)
+            .filter(pk__in=posted_student_ids)
+            .values_list("pk", flat=True)
+        )
+        foreign_relationship_student_ids = set(
+            AdultStudentRelationship.objects.filter(
+                adult=self.object,
+                student_id__in=valid_student_ids,
+            )
+            .exclude(organization=organization)
+            .values_list("student_id", flat=True)
+        )
         for sid_str, rel in rel_map.items():
             try:
                 sid = int(sid_str)
             except (TypeError, ValueError):
+                continue
+            if sid not in valid_student_ids or sid in foreign_relationship_student_ids:
                 continue
             defaults = {}
             if rel in valid_keys:
@@ -643,6 +717,7 @@ class MentorUpdateView(
                 defaults["specific_relationship"] = specific
             if defaults:
                 AdultStudentRelationship.objects.update_or_create(
+                    organization=organization,
                     adult=self.object,
                     student_id=sid,
                     defaults=defaults,

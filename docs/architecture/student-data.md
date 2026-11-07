@@ -34,6 +34,13 @@ Student-Adult relationships are stored in the through-model `AdultStudentRelatio
 
 Student and adult detail/edit views must scope the profile lookup, relationship choices, and related enrollments, documents, and background checks to the request organization. Relationship writes must validate that both endpoints and the relationship row belong to that organization; inconsistent foreign-owned rows are not exposed or modified. A missing organization fails closed.
 
+Parent directories, emergency-contact lists, and mentor relationship controls
+apply the same rule to every `AdultStudentRelationship`: the relationship, the
+adult, and the student must belong to the request organization. Primary and
+secondary contact compatibility properties return no contact for an
+inconsistent link. `School` remains a shared catalog; `Student.school` choices
+are intentionally not tenant-filtered.
+
 ---
 
 ## Active vs. Inactive Students Scoping

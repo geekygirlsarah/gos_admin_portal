@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from badges.forms import BadgeForm
 from badges.models import Badge
 from organizations.models import Organization, UserOrganizationMembership
 from organizations.utils import get_default_organization
@@ -62,3 +63,73 @@ class BadgeTenantIsolationTests(TestCase):
 
         self.assertNotEqual(response.status_code, 200)
         self.assertTrue(Badge.objects.filter(pk=self.beta_badge.pk).exists())
+
+    def test_badge_forms_only_offer_same_organization_prerequisites(self):
+        response = self.tenant_get(reverse("badges:create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alpha Safety")
+        self.assertNotContains(response, "Beta Private Badge")
+
+    def test_badge_form_without_organization_has_no_prerequisite_choices(self):
+        form = BadgeForm(organization=None)
+
+        self.assertEqual(form.fields["prerequisites"].queryset.count(), 0)
+
+    def test_create_rejects_foreign_prerequisite(self):
+        response = self.tenant_post(
+            reverse("badges:create"),
+            {
+                "name": "New Alpha Badge",
+                "category": "Basics",
+                "level": "1",
+                "description": "",
+                "skills_required": "",
+                "how_to_earn": "",
+                "prerequisites": [str(self.beta_badge.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            Badge.objects.for_organization(self.alpha)
+            .filter(name="New Alpha Badge")
+            .exists()
+        )
+
+    def test_update_rejects_foreign_prerequisite(self):
+        response = self.tenant_post(
+            reverse("badges:edit", args=[self.alpha_badge.pk]),
+            {
+                "name": self.alpha_badge.name,
+                "category": self.alpha_badge.category,
+                "level": str(self.alpha_badge.level),
+                "description": self.alpha_badge.description,
+                "skills_required": self.alpha_badge.skills_required,
+                "how_to_earn": self.alpha_badge.how_to_earn,
+                "prerequisites": [str(self.beta_badge.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            self.alpha_badge.prerequisites.filter(pk=self.beta_badge.pk).exists()
+        )
+
+    def test_existing_foreign_prerequisite_is_not_displayed(self):
+        local_prerequisite = Badge.objects.create(
+            organization=self.alpha, name="Alpha Local Prerequisite"
+        )
+        self.alpha_badge.prerequisites.add(local_prerequisite, self.beta_badge)
+
+        list_response = self.tenant_get(reverse("badges:list"))
+        detail_response = self.tenant_get(
+            reverse("badges:detail", args=[self.alpha_badge.pk])
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "Alpha Local Prerequisite")
+        self.assertNotContains(list_response, "Beta Private Badge")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "Alpha Local Prerequisite")
+        self.assertNotContains(detail_response, "Beta Private Badge")

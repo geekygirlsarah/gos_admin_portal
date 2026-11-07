@@ -426,15 +426,29 @@ class OutreachShiftFormSetMixin:
     Requires at least one valid shift to save the event.
     """
 
+    def get_shift_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None or self.object is None:
+            return OutreachShift.objects.none()
+        return OutreachShift.objects.for_organization(organization).filter(
+            event=self.object,
+            event__organization=organization,
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.request.method == "POST":
             context["shift_formset"] = OutreachShiftFormSet(
-                self.request.POST, instance=self.object, prefix="shifts"
+                self.request.POST,
+                instance=self.object,
+                prefix="shifts",
+                queryset=self.get_shift_queryset(),
             )
         else:
             context["shift_formset"] = OutreachShiftFormSet(
-                instance=self.object, prefix="shifts"
+                instance=self.object,
+                prefix="shifts",
+                queryset=self.get_shift_queryset(),
             )
         return context
 

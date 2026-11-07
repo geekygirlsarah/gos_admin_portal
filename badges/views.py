@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -54,9 +55,18 @@ class BadgeManagePermissionMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
+class BadgeFormOrganizationMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
+
 class BadgeListView(LoginRequiredMixin, View):
     def get(self, request):
         org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404("Organization not found.")
         # If accessed with ?program=X, gate on that program's feature
         program_id = request.GET.get("program")
         if program_id:
@@ -69,8 +79,11 @@ class BadgeListView(LoginRequiredMixin, View):
             if not program.has_feature("badges"):
                 raise Http404("Badges are not enabled for this program.")
 
-        badges = (
-            Badge.objects.for_organization(org).prefetch_related("prerequisites").all()
+        badges = Badge.objects.for_organization(org).prefetch_related(
+            Prefetch(
+                "prerequisites",
+                queryset=Badge.objects.for_organization(org),
+            )
         )
         student = None
         earned_ids = set()
@@ -150,8 +163,14 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
     template_name = "badges/badge_detail.html"
 
     def get_queryset(self):
-        return Badge.objects.for_organization(
-            getattr(self.request, "organization", None)
+        org = getattr(self.request, "organization", None)
+        if org is None:
+            return Badge.objects.none()
+        return Badge.objects.for_organization(org).prefetch_related(
+            Prefetch(
+                "prerequisites",
+                queryset=Badge.objects.for_organization(org),
+            )
         )
 
     def get_context_data(self, **kwargs):
@@ -220,7 +239,12 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class BadgeCreateView(LoginRequiredMixin, BadgeManagePermissionMixin, CreateView):
+class BadgeCreateView(
+    LoginRequiredMixin,
+    BadgeManagePermissionMixin,
+    BadgeFormOrganizationMixin,
+    CreateView,
+):
     model = Badge
     form_class = BadgeForm
     template_name = "badges/badge_form.html"
@@ -243,16 +267,22 @@ class BadgeCreateView(LoginRequiredMixin, BadgeManagePermissionMixin, CreateView
         return resp
 
 
-class BadgeUpdateView(LoginRequiredMixin, BadgeManagePermissionMixin, UpdateView):
+class BadgeUpdateView(
+    LoginRequiredMixin,
+    BadgeManagePermissionMixin,
+    BadgeFormOrganizationMixin,
+    UpdateView,
+):
     model = Badge
     form_class = BadgeForm
     template_name = "badges/badge_form.html"
     success_url = reverse_lazy("badges:list")
 
     def get_queryset(self):
-        return Badge.objects.for_organization(
-            getattr(self.request, "organization", None)
-        )
+        org = getattr(self.request, "organization", None)
+        if org is None:
+            return Badge.objects.none()
+        return Badge.objects.for_organization(org)
 
     def form_valid(self, form):
         before = {"name": self.get_object().name, "level": self.get_object().level}

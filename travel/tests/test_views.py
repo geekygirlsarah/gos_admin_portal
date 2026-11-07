@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -1054,7 +1055,7 @@ class TravelOrganizationCreationTests(TestCase):
             role="LeadMentor",
             is_active=True,
         )
-        Adult.objects.create(
+        self.lead_adult = Adult.objects.create(
             organization=self.organization,
             user=self.lead,
             legal_first_name="Taylor",
@@ -1114,6 +1115,427 @@ class TravelOrganizationCreationTests(TestCase):
     def tenant_post(self, url, data=None, user=None):
         self.client.force_login(user or self.lead)
         return self.client.post(url, data=data or {}, HTTP_HOST=self.host)
+
+    def tenant_get(self, url, user=None):
+        self.client.force_login(user or self.lead)
+        return self.client.get(url, HTTP_HOST=self.host)
+
+    def create_foreign_event_children(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Child Beta",
+            slug="travel-child-beta",
+            subdomain="travel-child-beta",
+        )
+        departure = TravelDeparture.objects.create(
+            organization=foreign_organization,
+            event=self.event,
+            label="Beta Private Departure",
+            leave_date=self.start_date + timedelta(days=1),
+            meeting_location="Beta Private Location",
+        )
+        cost_option = TravelCostOption.objects.create(
+            organization=foreign_organization,
+            event=self.event,
+            name="Beta Private Cost",
+            amount="300.00",
+            sort_order=99,
+        )
+        return departure, cost_option
+
+    def test_event_edit_hides_foreign_departures_and_costs(self):
+        self.create_foreign_event_children()
+
+        response = self.tenant_get(
+            reverse("travel:event_edit", args=[self.program.pk, self.event.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Beta Private Departure")
+        self.assertNotContains(response, "Beta Private Cost")
+
+    def test_event_edit_cannot_modify_foreign_departures_and_costs(self):
+        foreign_departure, foreign_cost = self.create_foreign_event_children()
+        payload = {
+            "name": self.event.name,
+            "start_date": self.start_date.isoformat(),
+            "end_date": (self.start_date + timedelta(days=2)).isoformat(),
+            "location_name": self.event.location_name,
+            "location_address": self.event.location_address,
+            "description": self.event.description,
+            "departures-TOTAL_FORMS": "2",
+            "departures-INITIAL_FORMS": "2",
+            "departures-MIN_NUM_FORMS": "0",
+            "departures-MAX_NUM_FORMS": "1000",
+            "departures-0-id": str(self.departure.pk),
+            "departures-0-label": self.departure.label,
+            "departures-0-leave_date": self.departure.leave_date.isoformat(),
+            "departures-0-leave_time": "",
+            "departures-0-meeting_location": self.departure.meeting_location,
+            "departures-0-notes": self.departure.notes,
+            "departures-1-id": str(foreign_departure.pk),
+            "departures-1-label": "Tampered Foreign Departure",
+            "departures-1-leave_date": foreign_departure.leave_date.isoformat(),
+            "departures-1-leave_time": "",
+            "departures-1-meeting_location": foreign_departure.meeting_location,
+            "departures-1-notes": foreign_departure.notes,
+            "costs-TOTAL_FORMS": "2",
+            "costs-INITIAL_FORMS": "2",
+            "costs-MIN_NUM_FORMS": "0",
+            "costs-MAX_NUM_FORMS": "1000",
+            "costs-0-id": str(self.cost_option.pk),
+            "costs-0-name": self.cost_option.name,
+            "costs-0-amount": str(self.cost_option.amount),
+            "costs-0-unit_label": self.cost_option.unit_label,
+            "costs-0-notes": self.cost_option.notes,
+            "costs-0-sort_order": str(self.cost_option.sort_order),
+            "costs-1-id": str(foreign_cost.pk),
+            "costs-1-name": "Tampered Foreign Cost",
+            "costs-1-amount": "999.00",
+            "costs-1-unit_label": foreign_cost.unit_label,
+            "costs-1-notes": foreign_cost.notes,
+            "costs-1-sort_order": str(foreign_cost.sort_order),
+        }
+
+        self.tenant_post(
+            reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+            payload,
+        )
+
+        foreign_departure.refresh_from_db()
+        foreign_cost.refresh_from_db()
+        self.assertEqual(foreign_departure.label, "Beta Private Departure")
+        self.assertEqual(foreign_cost.name, "Beta Private Cost")
+        self.assertEqual(foreign_cost.amount, 300)
+
+    def test_mentor_signup_rejects_foreign_adult_profile(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Mentor Profile Beta",
+            slug="travel-mentor-profile-beta",
+            subdomain="travel-mentor-profile-beta",
+        )
+        foreign_mentor = User.objects.create_user(
+            username="foreign-profile-lead", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=foreign_mentor,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        foreign_adult = Adult.objects.create(
+            organization=foreign_organization,
+            user=foreign_mentor,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+
+        self.tenant_post(
+            reverse("travel:mentor_signup", args=[self.program.pk, self.event.pk]),
+            user=foreign_mentor,
+        )
+
+        self.assertFalse(
+            TravelMentorSignup.objects.filter(
+                event=self.event, adult=foreign_adult
+            ).exists()
+        )
+
+    def create_foreign_parent_linked_to_local_student(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Parent Profile Beta",
+            slug="travel-parent-profile-beta",
+            subdomain="travel-parent-profile-beta",
+        )
+        foreign_parent = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Parent",
+            is_parent=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.organization,
+            adult=foreign_parent,
+            student=self.student,
+        )
+        return foreign_parent
+
+    def test_parent_eligibility_form_excludes_foreign_adult(self):
+        foreign_parent = self.create_foreign_parent_linked_to_local_student()
+        form = TravelParentChaperoneStaffForm(program=self.program)
+
+        self.assertIn(self.parent, form.fields["adult"].queryset)
+        self.assertNotIn(foreign_parent, form.fields["adult"].queryset)
+
+    def test_lead_cannot_add_foreign_parent_as_chaperone(self):
+        foreign_parent = self.create_foreign_parent_linked_to_local_student()
+
+        self.tenant_post(
+            reverse("travel:chaperone_signup", args=[self.program.pk, self.event.pk]),
+            {"adult": str(foreign_parent.pk)},
+        )
+
+        self.assertFalse(
+            TravelParentChaperoneSignup.objects.filter(
+                event=self.event, adult=foreign_parent
+            ).exists()
+        )
+
+    def test_event_list_hides_foreign_adult_and_inline_child_links(self):
+        foreign_departure, foreign_cost = self.create_foreign_event_children()
+        foreign_organization = foreign_departure.organization
+        foreign_mentor = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Mentor Roster",
+            is_mentor=True,
+        )
+        foreign_parent = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Parent Roster",
+            is_parent=True,
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_mentor,
+            event=self.event,
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_parent,
+            event=self.event,
+        )
+
+        response = self.tenant_get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        for foreign_value in (
+            "Beta Private Departure",
+            "Beta Private Cost",
+            "Foreign Mentor Roster",
+            "Foreign Parent Roster",
+        ):
+            with self.subTest(value=foreign_value):
+                self.assertNotContains(response, foreign_value)
+
+    def test_cancel_views_do_not_mutate_mismatched_adult_signups(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Cancel Beta",
+            slug="travel-cancel-beta",
+            subdomain="travel-cancel-beta",
+        )
+        foreign_parent_user = User.objects.create_user(
+            username="foreign-parent-cancel", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=foreign_parent_user,
+            organization=self.organization,
+            role="Parent",
+            is_active=True,
+        )
+        foreign_parent = Adult.objects.create(
+            organization=foreign_organization,
+            user=foreign_parent_user,
+            legal_first_name="Foreign",
+            last_name="Cancel Parent",
+            is_parent=True,
+        )
+        parent_signup = TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_parent,
+            event=self.event,
+        )
+        foreign_mentor_user = User.objects.create_user(
+            username="foreign-mentor-cancel", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=foreign_mentor_user,
+            organization=self.organization,
+            role="Mentor",
+            is_active=True,
+        )
+        foreign_mentor = Adult.objects.create(
+            organization=foreign_organization,
+            user=foreign_mentor_user,
+            legal_first_name="Foreign",
+            last_name="Cancel Mentor",
+            is_mentor=True,
+        )
+        mentor_signup = TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_mentor,
+            event=self.event,
+        )
+
+        with (
+            patch(
+                "travel.views.notify_parent_chaperone_signup_cancelled"
+            ) as notify_parent,
+            patch("travel.views.notify_mentor_signup_cancelled") as notify_mentor,
+        ):
+            self.tenant_post(
+                reverse(
+                    "travel:chaperone_cancel", args=[self.program.pk, self.event.pk]
+                ),
+                user=foreign_parent_user,
+            )
+            self.tenant_post(
+                reverse("travel:mentor_cancel", args=[self.program.pk, self.event.pk]),
+                user=foreign_mentor_user,
+            )
+
+        self.assertTrue(
+            TravelParentChaperoneSignup.objects.filter(pk=parent_signup.pk).exists()
+        )
+        self.assertTrue(TravelMentorSignup.objects.filter(pk=mentor_signup.pk).exists())
+        notify_parent.assert_not_called()
+        notify_mentor.assert_not_called()
+
+    def test_lead_actions_ignore_mismatched_adult_signups(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Lead Action Beta",
+            slug="travel-lead-action-beta",
+            subdomain="travel-lead-action-beta",
+        )
+        foreign_mentor = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Driver",
+            is_mentor=True,
+        )
+        foreign_parent = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Removed Parent",
+            is_parent=True,
+        )
+        mentor_signup = TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_mentor,
+            event=self.event,
+        )
+        parent_signup = TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=foreign_parent,
+            event=self.event,
+        )
+
+        self.tenant_post(
+            reverse(
+                "travel:mentor_driver_toggle",
+                args=[self.program.pk, mentor_signup.pk],
+            )
+        )
+        self.tenant_post(
+            reverse(
+                "travel:chaperone_remove",
+                args=[self.program.pk, parent_signup.pk],
+            )
+        )
+
+        mentor_signup.refresh_from_db()
+        self.assertFalse(mentor_signup.is_driver)
+        self.assertTrue(
+            TravelParentChaperoneSignup.objects.filter(pk=parent_signup.pk).exists()
+        )
+
+    def test_mentor_signup_refuses_foreign_ownership_collision(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Mentor Collision Beta",
+            slug="travel-mentor-collision-beta",
+            subdomain="travel-mentor-collision-beta",
+        )
+        foreign_signup = TravelMentorSignup.objects.create(
+            organization=foreign_organization,
+            adult=self.lead_adult,
+            event=self.event,
+        )
+
+        self.tenant_post(
+            reverse("travel:mentor_signup", args=[self.program.pk, self.event.pk])
+        )
+
+        self.assertTrue(
+            TravelMentorSignup.objects.filter(pk=foreign_signup.pk).exists()
+        )
+        self.assertFalse(
+            TravelMentorSignup.objects.for_organization(self.organization)
+            .filter(adult=self.lead_adult, event=self.event)
+            .exists()
+        )
+
+    def test_parent_signup_refuses_foreign_ownership_collision(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Parent Collision Beta",
+            slug="travel-parent-collision-beta",
+            subdomain="travel-parent-collision-beta",
+        )
+        foreign_signup = TravelParentChaperoneSignup.objects.create(
+            organization=foreign_organization,
+            adult=self.parent,
+            event=self.event,
+        )
+
+        self.tenant_post(
+            reverse("travel:chaperone_signup", args=[self.program.pk, self.event.pk]),
+            {"adult": str(self.parent.pk)},
+        )
+
+        self.assertTrue(
+            TravelParentChaperoneSignup.objects.filter(pk=foreign_signup.pk).exists()
+        )
+        self.assertFalse(
+            TravelParentChaperoneSignup.objects.for_organization(self.organization)
+            .filter(adult=self.parent, event=self.event)
+            .exists()
+        )
+
+    def test_signup_paths_do_not_attach_foreign_departure(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Departure Beta",
+            slug="travel-departure-beta",
+            subdomain="travel-departure-beta",
+        )
+        foreign_departure = TravelDeparture.objects.create(
+            organization=foreign_organization,
+            event=self.event,
+            label="Beta Private Departure",
+            leave_date=self.start_date + timedelta(days=1),
+        )
+
+        self.tenant_post(
+            reverse("travel:mentor_signup", args=[self.program.pk, self.event.pk]),
+            {"departure": str(foreign_departure.pk)},
+        )
+        self.tenant_post(
+            reverse("travel:chaperone_signup", args=[self.program.pk, self.event.pk]),
+            {
+                "adult": str(self.parent.pk),
+                "departure": str(foreign_departure.pk),
+            },
+        )
+        self.tenant_post(
+            reverse("travel:signup", args=[self.program.pk, self.event.pk]),
+            {
+                "student": str(self.student.pk),
+                "departure": str(foreign_departure.pk),
+            },
+            user=self.lead,
+        )
+
+        mentor_signup = TravelMentorSignup.objects.for_organization(
+            self.organization
+        ).get(event=self.event, adult=self.lead_adult)
+        parent_signup = TravelParentChaperoneSignup.objects.for_organization(
+            self.organization
+        ).get(event=self.event, adult=self.parent)
+        student_signup = TravelSignup.objects.for_organization(self.organization).get(
+            event=self.event, student=self.student
+        )
+        self.assertEqual(mentor_signup.departure, self.departure)
+        self.assertEqual(parent_signup.departure, self.departure)
+        self.assertEqual(student_signup.departure, self.departure)
 
     def test_lead_creates_trip_departures_and_costs_with_tenant_ownership(self):
         payload = {

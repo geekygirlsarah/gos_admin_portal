@@ -582,16 +582,24 @@ class ApplicationEmailForm(forms.Form):
 
 
 class _ReviewerRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
-    """Require reviewer delegation or Lead Mentor membership in this tenant."""
+    """Require a Lead Mentor in the request organization or a superuser."""
 
-    permission_required = REVIEW_PERM
     raise_exception = False  # default behavior: redirect to login
 
     def has_permission(self):
-        return super().has_permission() or user_is_lead_mentor(
-            self.request.user,
-            org=getattr(self.request, "organization", None),
+        user = self.request.user
+        organization = getattr(self.request, "organization", None)
+        return user.is_superuser or (
+            organization is not None and user_is_lead_mentor(user, org=organization)
         )
+
+    def handle_no_permission(self):
+        if (
+            getattr(self.request, "organization", None) is None
+            and not self.request.user.is_superuser
+        ):
+            raise Http404
+        return super().handle_no_permission()
 
 
 @method_decorator(login_required, name="dispatch")

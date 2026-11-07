@@ -384,15 +384,20 @@ class Adult(models.Model):
         """Return a list of Student objects related to this adult,
         with an 'attached_rel' attribute for each student.
         """
-        if not self.pk:
+        if not self.pk or self.organization_id is None:
             return []
-        rels = {
-            r.student_id: r.relationship_to_student
-            for r in self.adultstudentrelationship_set.all()
-        }
-        students = list(self.students.all())
-        for s in students:
-            s.attached_rel = rels.get(s.pk, "parent")
+        relationships = getattr(self, "tenant_student_relationships", None)
+        if relationships is None:
+            relationships = self.adultstudentrelationship_set.filter(
+                organization_id=self.organization_id,
+                adult__organization_id=self.organization_id,
+                student__organization_id=self.organization_id,
+            ).select_related("student")
+        students = []
+        for relationship in relationships:
+            student = relationship.student
+            student.attached_rel = relationship.relationship_to_student
+            students.append(student)
         return students
 
     def requires_background_check(self, active_types=None) -> bool:

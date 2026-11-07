@@ -100,6 +100,10 @@
                                     <small class="text-muted ms-2">
                                         {{ item.submission.uploaded_at|date:"M j, Y g:i A" }}
                                     </small>
+                                    <a class="btn btn-sm btn-outline-secondary ms-2"
+                                       href="{% url 'mentor_agreement_submission_download' item.submission.pk %}">
+                                        View signed copy
+                                    </a>
                                 </div>
                                 {% else %}
                                 <div class="mb-2">
@@ -141,6 +145,20 @@
                     </div>
                     {% endfor %}
 
+                    {% if already_accepted_details %}
+                    <div class="mb-3">
+                        <strong>Previously accepted signed copies:</strong>
+                        {% for item in already_accepted_details %}
+                            {% if item.submission %}
+                            <div>
+                                {{ item.agreement.title }}:
+                                <a href="{% url 'mentor_agreement_submission_download' item.submission.pk %}">View signed copy</a>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
                     <div class="d-flex gap-2">
                         <button type="submit" name="action" value="agree" class="btn btn-primary" id="agree-btn" disabled>
                             <i class="bi bi-check-circle me-1"></i>I Agree
@@ -156,6 +174,14 @@
                     <i class="bi bi-check-circle me-2"></i>
                     You have already accepted all required mentor agreements.
                 </div>
+                {% for item in already_accepted_details %}
+                    {% if item.submission %}
+                    <p>
+                        {{ item.agreement.title }} signed copy:
+                        <a href="{% url 'mentor_agreement_submission_download' item.submission.pk %}">View signed copy</a>
+                    </p>
+                    {% endif %}
+                {% endfor %}
                 <a href="{% url 'profile_dashboard' %}" class="btn btn-primary">
                     <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
                 </a>

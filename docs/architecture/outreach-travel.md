@@ -13,6 +13,11 @@ Outreach events manage volunteer community opportunities where students particip
 - **`OutreachSignup`**: Student sign-up linked to a specific `OutreachShift` (`unique_together = ("student", "shift")`).
 - **`OutreachMentorSignup`**: Adult mentor registration supporting a shift (`unique_together = ("adult", "shift")`, no capacity limit).
 
+Tenant event editors include only shifts owned by the event organization. Signup
+management rejects a selected student or mentor when an existing signup for
+the same shift is owned by another organization; the conflicting row is left
+unchanged and no notification is sent.
+
 ### Saved Locations (`OutreachLocation`)
 - Directory of venues (`name`, `address`) managed by mentors.
 - Event creation form uses an AJAX modal to add locations dynamically without leaving the form.
@@ -44,6 +49,13 @@ Program-scoped travel management for competition trips and events (`/programs/<i
 - **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`).
 - **`TravelMentorSignup`**: Mentor registrations with `is_driver` flag and departure choice.
 - **`TravelParentChaperoneSignup`**: Parent chaperone roster.
+
+Departure and cost-option editors and event-list rosters are scoped to the
+resolved organization, and signup POSTs accept only departures owned by that
+organization. Mentor and parent signup profiles and their adult-student
+eligibility relationships must also belong to that organization. Existing
+mismatched links are hidden from tenant rosters and are not changed or notified;
+signup conflicts are left for separate review.
 
 ### Parent Approval Workflow & Notifications
 - Students submit initial sign-ups (`interested`).

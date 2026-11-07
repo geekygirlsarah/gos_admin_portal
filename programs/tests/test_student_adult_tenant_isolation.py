@@ -9,6 +9,7 @@ from programs.models import (
     AdultStudentRelationship,
     BackgroundCheck,
     BackgroundCheckType,
+    School,
     Student,
 )
 from programs.permission_views import can_user_delete, can_user_read, can_user_write
@@ -61,6 +62,7 @@ class StudentAdultTenantIsolationTests(TestCase):
             legal_first_name="Private Beta",
             last_name="Adult",
             is_parent=True,
+            phone_number="412-555-0999",
         )
 
     def get_tenant(self, name, pk):
@@ -206,6 +208,182 @@ class StudentAdultTenantIsolationTests(TestCase):
             ).exists()
         )
 
+    def test_parent_directory_hides_foreign_student_relationship(self):
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.local_adult,
+            student=self.foreign_student,
+            relationship_to_student="parent",
+        )
+
+        response = self.client.get(reverse("parent_list"), HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Student")
+
+    def test_emergency_contacts_hide_foreign_adult_relationship(self):
+        relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=self.foreign_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+        self.local_student.primary_contact_relationship = relationship
+        self.local_student.save(update_fields=["primary_contact_relationship"])
+
+        response = self.client.get(
+            reverse("student_emergency_contacts"), HTTP_HOST=self.host
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Adult")
+        self.assertNotContains(response, "412-555-0999")
+
+    def _create_mentor_with_foreign_student_relationship(self):
+        mentor_user = get_user_model().objects.create_user(
+            username="profile-alpha-mentor", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=mentor_user,
+            organization=self.alpha,
+            role="Mentor",
+            is_active=True,
+        )
+        mentor = Adult.objects.create(
+            organization=self.alpha,
+            user=mentor_user,
+            legal_first_name="Alpha",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=mentor,
+            student=self.foreign_student,
+            relationship_to_student="grandparent",
+        )
+        return mentor_user, mentor, relationship
+
+    def test_mentor_edit_hides_foreign_student_relationship(self):
+        mentor_user, mentor, _ = self._create_mentor_with_foreign_student_relationship()
+        self.client.force_login(mentor_user)
+
+        response = self.client.get(
+            reverse("mentor_edit", args=[mentor.pk]), HTTP_HOST=self.host
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Student")
+
+    def test_mentor_edit_does_not_update_foreign_relationship(self):
+        mentor_user, mentor, relationship = (
+            self._create_mentor_with_foreign_student_relationship()
+        )
+        self.client.force_login(mentor_user)
+
+        response = self.client.post(
+            reverse("mentor_edit", args=[mentor.pk]),
+            {
+                "legal_first_name": "Alpha",
+                "last_name": "Mentor",
+                f"student_rel_{self.foreign_student.pk}": "sibling",
+            },
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        relationship.refresh_from_db()
+        self.assertEqual(relationship.organization, self.beta)
+        self.assertEqual(relationship.relationship_to_student, "grandparent")
+
+    def test_parent_directory_hides_foreign_student_relationship(self):
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.local_adult,
+            student=self.foreign_student,
+            relationship_to_student="parent",
+        )
+
+        response = self.client.get(reverse("parent_list"), HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Student")
+
+    def test_emergency_contacts_hide_foreign_adult_relationship(self):
+        relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=self.foreign_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+        self.local_student.primary_contact_relationship = relationship
+        self.local_student.save(update_fields=["primary_contact_relationship"])
+
+        response = self.client.get(
+            reverse("student_emergency_contacts"), HTTP_HOST=self.host
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Adult")
+        self.assertNotContains(response, "412-555-0999")
+
+    def create_mentor_with_foreign_student_relationship(self):
+        mentor_user = get_user_model().objects.create_user(
+            username="profile-alpha-mentor", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=mentor_user,
+            organization=self.alpha,
+            role="Mentor",
+            is_active=True,
+        )
+        mentor = Adult.objects.create(
+            organization=self.alpha,
+            user=mentor_user,
+            legal_first_name="Alpha",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=mentor,
+            student=self.foreign_student,
+            relationship_to_student="grandparent",
+        )
+        return mentor_user, mentor, relationship
+
+    def test_mentor_edit_hides_foreign_student_relationship(self):
+        mentor_user, mentor, _ = self.create_mentor_with_foreign_student_relationship()
+        self.client.force_login(mentor_user)
+
+        response = self.client.get(
+            reverse("mentor_edit", args=[mentor.pk]), HTTP_HOST=self.host
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Beta Student")
+
+    def test_mentor_edit_does_not_update_foreign_relationship(self):
+        mentor_user, mentor, relationship = (
+            self.create_mentor_with_foreign_student_relationship()
+        )
+        self.client.force_login(mentor_user)
+
+        response = self.client.post(
+            reverse("mentor_edit", args=[mentor.pk]),
+            {
+                "legal_first_name": "Alpha",
+                "last_name": "Mentor",
+                f"student_rel_{self.foreign_student.pk}": "sibling",
+            },
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        relationship.refresh_from_db()
+        self.assertEqual(relationship.organization, self.beta)
+        self.assertEqual(relationship.relationship_to_student, "grandparent")
+
     def test_profile_forms_keep_lead_controls_and_only_offer_local_people(self):
         student_form = StudentForm(user=self.user, organization=self.alpha)
         adult_form = AdultForm(user=self.user, organization=self.alpha)
@@ -218,6 +396,12 @@ class StudentAdultTenantIsolationTests(TestCase):
         self.assertEqual(
             list(adult_form.fields["students"].queryset), [self.local_student]
         )
+
+    def test_student_form_keeps_the_shared_school_catalog(self):
+        shared_school = School.objects.create(name="Shared Catalog School")
+        student_form = StudentForm(user=self.user, organization=self.alpha)
+
+        self.assertIn(shared_school, student_form.fields["school"].queryset)
 
     def test_background_check_save_does_not_delete_foreign_owned_child(self):
         check_type = BackgroundCheckType.objects.create(

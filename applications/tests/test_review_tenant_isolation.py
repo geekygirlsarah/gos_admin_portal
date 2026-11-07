@@ -96,6 +96,47 @@ class ApplicationReviewTenantIsolationTests(TestCase):
         self.assertContains(response, application.application_id)
         self.assertContains(response, reverse("application_review_list"))
 
+    def test_global_reviewer_permission_does_not_override_tenant_role(self):
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.beta,
+            role="Student",
+            is_active=True,
+        )
+        application = self.make_application(
+            organization=self.beta,
+            program=self.beta_program,
+            email="private-beta-review@example.test",
+        )
+
+        response = self.client.get(
+            reverse("application_review_list"), HTTP_HOST="review-beta.localhost"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(str(application.application_id).encode(), response.content)
+        self.assertNotIn(b"private-beta-review@example.test", response.content)
+
+    def test_superuser_can_review_current_organization(self):
+        admin = get_user_model().objects.create_superuser(
+            username="platform-review-admin", email="admin@example.test"
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(
+            reverse("application_review_list"), HTTP_HOST="review-beta.localhost"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_global_reviewer_permission_without_organization_fails_closed(self):
+        request = RequestFactory().get(reverse("application_review_list"))
+        request.user = self.user
+        view = ApplicationReviewListView()
+        view.request = request
+
+        self.assertFalse(view.has_permission())
+
     def tenant_get(self, path, **kwargs):
         return self.client.get(path, HTTP_HOST=self.alpha_host, **kwargs)
 
