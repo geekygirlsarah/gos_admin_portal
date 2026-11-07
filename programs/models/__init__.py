@@ -49,6 +49,7 @@ from .programs import (
     _program_document_upload_to,
 )
 from .schools import RaceEthnicity, School, SchoolDistrict
+from .student_photo_retention import StudentPhotoRetentionInventory
 from .students import (
     Student,
     StudentDocument,
@@ -91,6 +92,7 @@ __all__ = [
     "SlidingScaleSettings",
     "Student",
     "StudentDocument",
+    "StudentPhotoRetentionInventory",
     "SubTeam",
     "TaxForm",
     "Team",
