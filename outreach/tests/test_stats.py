@@ -1,14 +1,98 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
+from types import SimpleNamespace
 
 from django.contrib.auth.models import User
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
+from attendance.models import AttendanceSession
+from organizations.models import Organization
+from outreach import utils as outreach_utils
 from outreach.models import OutreachShift, OutreachSignup
 from outreach.tests.factories import create_outreach_event, record_full_attendance
 from outreach.utils import get_student_outreach_stats
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
+
+
+class OutreachAttendanceOverlapCalculationTests(TestCase):
+    def at(self, hour, minute=0):
+        return timezone.make_aware(datetime(2026, 8, 1, hour, minute))
+
+    def signup(self, start, end, finalized=True):
+        return SimpleNamespace(
+            checked_in_at=start,
+            checked_out_at=end,
+            is_finalized=finalized,
+        )
+
+    def session(self, start, end):
+        return SimpleNamespace(check_in=start, check_out=end)
+
+    def test_overlap_unions_multiple_signups_and_sessions(self):
+        signups = [
+            self.signup(self.at(10), self.at(12)),
+            self.signup(self.at(11), self.at(13)),
+            self.signup(self.at(10), self.at(12), finalized=False),
+        ]
+        sessions = [
+            self.session(self.at(9, 30), self.at(11)),
+            self.session(self.at(10, 30), self.at(11, 30)),
+            self.session(self.at(12, 30), self.at(14)),
+            self.session(self.at(13), self.at(14)),
+        ]
+
+        overlap_hours = outreach_utils.compute_attendance_overlap_hours(
+            signups, sessions
+        )
+
+        self.assertEqual(overlap_hours, 2.0)
+
+    def test_boundary_touching_intervals_do_not_overlap(self):
+        signups = [self.signup(self.at(10), self.at(11))]
+        sessions = [self.session(self.at(9), self.at(10))]
+
+        overlap_hours = outreach_utils.compute_attendance_overlap_hours(
+            signups, sessions
+        )
+
+        self.assertEqual(overlap_hours, 0.0)
+
+    def test_full_overlap_and_no_attendance(self):
+        signups = [self.signup(self.at(10), self.at(12))]
+
+        full_overlap_hours = outreach_utils.compute_attendance_overlap_hours(
+            signups, [self.session(self.at(10), self.at(12))]
+        )
+        no_overlap_hours = outreach_utils.compute_attendance_overlap_hours(signups, [])
+
+        self.assertEqual(full_overlap_hours, 2.0)
+        self.assertEqual(no_overlap_hours, 0.0)
+
+    def test_open_attendance_session_is_capped_at_now(self):
+        signups = [self.signup(self.at(10), self.at(12))]
+        sessions = [self.session(self.at(11), None)]
+
+        overlap_hours = outreach_utils.compute_attendance_overlap_hours(
+            signups, sessions, now=self.at(11, 30)
+        )
+
+        self.assertEqual(overlap_hours, 0.5)
+
+    def test_incomplete_or_invalid_intervals_do_not_add_overlap(self):
+        signups = [
+            self.signup(self.at(10), None, finalized=False),
+            self.signup(self.at(12), self.at(11)),
+        ]
+        sessions = [self.session(self.at(10), self.at(12))]
+
+        overlap_hours = outreach_utils.compute_attendance_overlap_hours(
+            signups, sessions
+        )
+
+        self.assertEqual(overlap_hours, 0.0)
 
 
 class OutreachStatsTest(TestCase):
@@ -116,6 +200,77 @@ class OutreachStatsTest(TestCase):
         self.assertContains(resp, "Alice Zuberg")
         self.assertContains(resp, "1")  # Championed
         self.assertContains(resp, "5")  # Hours
+
+    def test_stats_modal_uses_bulk_same_organization_sessions_across_programs(self):
+        organization = self.program.organization
+        attendance_program = Program.objects.create(
+            name="Attendance Program", organization=organization
+        )
+        other_organization = Organization.objects.create(
+            name="Other Organization", slug="other-organization"
+        )
+        other_program = Program.objects.create(
+            name="Other Program", organization=other_organization
+        )
+        other_student = Student.objects.create(
+            legal_first_name="Bea",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            student=other_student, program=self.program, active=True
+        )
+        other_signup = OutreachSignup.objects.create(
+            student=other_student,
+            shift=self.event1.shifts.first(),
+            role=OutreachSignup.HELPER,
+        )
+        record_full_attendance(other_signup, self.event1.shifts.first())
+
+        AttendanceSession.objects.create(
+            program=attendance_program,
+            student=self.student,
+            organization=organization,
+            check_in=self.at_time(10, 30),
+            check_out=self.at_time(11, 30),
+        )
+        AttendanceSession.objects.create(
+            program=attendance_program,
+            student=other_student,
+            organization=organization,
+            check_in=self.at_time(10, 30),
+            check_out=self.at_time(11, 30),
+        )
+        AttendanceSession.objects.create(
+            program=other_program,
+            student=self.student,
+            organization=other_organization,
+            check_in=self.at_time(10, 30),
+            check_out=self.at_time(11, 30),
+        )
+
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = reverse("outreach:student_stats", args=[self.program.id])
+        with CaptureQueriesContext(connection) as captured_queries:
+            resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Overlap Hours")
+        self.assertContains(resp, "1.0")
+        student_stats = {stat["name"]: stat for stat in resp.context["student_stats"]}
+        self.assertEqual(student_stats["Alice Zuberg"]["overlap_hours"], 1.0)
+        self.assertEqual(student_stats["Alice Zuberg"]["hours"], 5.0)
+        self.assertEqual(student_stats["Bea Student"]["overlap_hours"], 1.0)
+        attendance_queries = [
+            query
+            for query in captured_queries.captured_queries
+            if AttendanceSession._meta.db_table in query["sql"]
+        ]
+        self.assertEqual(len(attendance_queries), 1)
+
+    def at_time(self, hour, minute=0):
+        return timezone.make_aware(datetime(2026, 8, 1, hour, minute))
 
 
 class OutreachStatsUpcomingAndPendingHoursTests(TestCase):
