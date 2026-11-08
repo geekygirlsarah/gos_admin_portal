@@ -7,6 +7,7 @@ from .review import (
     GuestFormManageListView,
     GuestFormReviewDetailView,
     GuestFormReviewListView,
+    GuestFormSubmissionDownloadView,
     GuestFormUpdateView,
 )
 
@@ -16,6 +17,7 @@ __all__ = [
     "GuestFormSubmittedView",
     "GuestFormReviewListView",
     "GuestFormReviewDetailView",
+    "GuestFormSubmissionDownloadView",
     "GuestFormManageListView",
     "GuestFormCreateView",
     "GuestFormUpdateView",

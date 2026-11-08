@@ -106,13 +106,42 @@ class DynamicWritePermissionMixin(DynamicPermissionMixin):
 
 
 class TenantLeadMentorPermissionRequiredMixin(PermissionRequiredMixin):
-    """Allow the configured Django permission or a Lead Mentor in this tenant."""
+    """Require a tenant lead; limit legacy global permissions to one tenant."""
+
+    allow_global_permission = False
 
     def has_permission(self):
-        return super().has_permission() or user_is_lead_mentor(
-            self.request.user,
-            org=getattr(self.request, "organization", None),
-        )
+        organization = getattr(self.request, "organization", None)
+        user = self.request.user
+        if organization is None:
+            return False
+        if user.is_superuser:
+            return True
+
+        from organizations.models import UserOrganizationMembership
+
+        memberships = UserOrganizationMembership.objects.filter(user=user)
+        if memberships.filter(
+            organization=organization,
+            role="LeadMentor",
+            is_active=True,
+        ).exists():
+            return True
+        if self.allow_global_permission:
+            return super().has_permission()
+        if memberships.exclude(organization=organization).exists():
+            return False
+        if not memberships.filter(organization=organization, is_active=True).exists():
+            return False
+        return super().has_permission()
+
+
+class SharedSchoolCatalogPermissionRequiredMixin(
+    TenantLeadMentorPermissionRequiredMixin
+):
+    """Use the shared catalog's global permissions without scoping its owner."""
+
+    allow_global_permission = True
 
 
 class BackgroundChecksInlineMixin:

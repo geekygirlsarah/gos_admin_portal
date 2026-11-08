@@ -8,6 +8,8 @@ from django.views.static import serve
 _PRIVATE_MEDIA_PREFIXES = (
     "agreement_submissions/",
     "application_documents/",
+    "guest_form_submissions/",
+    "photos/adults/",
     "photos/students/",
     "private/",
     "signed/",

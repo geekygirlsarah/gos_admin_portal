@@ -603,6 +603,11 @@ class SlidingScaleCreateView(
     template_name = "programs/sliding_scale_form.html"
     section = "sliding_scale"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
@@ -612,6 +617,10 @@ class SlidingScaleCreateView(
         # The sliding scale is no longer tied to a single program — it applies
         # across all of the student's programs — so we simply create the record.
         obj = form.save(commit=False)
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
+        obj.organization = organization
         if (
             not obj.reviewed_by
             and getattr(self.request, "user", None)
@@ -651,7 +660,20 @@ class SlidingScaleUpdateView(
     section = "sliding_scale"
 
     def get_object(self, queryset=None):
-        return get_object_or_404(SlidingScale, pk=self.kwargs["sliding_id"])
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
+        return get_object_or_404(
+            SlidingScale.objects.for_organization(organization).filter(
+                student__organization=organization
+            ),
+            pk=self.kwargs["sliding_id"],
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -851,8 +873,14 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
     template_name = "programs/sliding_scale_review_detail.html"
 
     def get_object(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
         return get_object_or_404(
-            SlidingScale.objects.filter(status=SlidingScale.STATUS_PENDING),
+            SlidingScale.objects.for_organization(organization).filter(
+                status=SlidingScale.STATUS_PENDING,
+                student__organization=organization,
+            ),
             pk=self.kwargs["pk"],
         )
 
@@ -863,8 +891,11 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
             application.family_size, application.adjusted_gross_income
         )
         existing_approved_sliding_scales = (
-            SlidingScale.objects.filter(
-                student=application.student, status=SlidingScale.STATUS_APPROVED
+            SlidingScale.objects.for_organization(request.organization)
+            .filter(
+                student=application.student,
+                student__organization=request.organization,
+                status=SlidingScale.STATUS_APPROVED,
             )
             .exclude(pk=application.pk)
             .order_by(

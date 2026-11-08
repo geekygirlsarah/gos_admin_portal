@@ -79,8 +79,13 @@ Sensitive uploads must not be publicly accessible through direct media URLs.
 Protected files are delivered through authorized application endpoints:
 
 - `student_photo` (`/programs/students/<pk>/photo/`)
+- `adult_photo` (`/programs/adults/<pk>/photo/`), for active members of the
+  adult's organization or platform superusers
 - `student_document_download`
   (`/programs/documents/<pk>/download/`)
+- `guest_form_submission_download`
+  (`/guest/review/<submission_id>/download/`), for the organization's Lead
+  Mentors or platform superusers; downloads are audited
 - `program_digital_signout_signature`
   (`/attendance/signout/<pk>/signature/`)
 - `apply_step10_document_download` and
@@ -96,13 +101,14 @@ Every protected-file endpoint must enforce:
 Storage, reverse-proxy, CDN, and deployment configuration must not expose the
 underlying paths of protected uploads publicly.
 
-The application's `/media/` handler rejects the sensitive legacy photo and
-application-document directories and all `private/` paths in both debug and
-production configurations. This guard is database-free; private files are
-streamed only by the authorized endpoints above. New student photos and signed
-application uploads use organization-scoped random storage paths under the
-existing `MEDIA_ROOT`; these paths are not authorization tokens. Existing files
-are not moved automatically, and their direct legacy URLs remain blocked.
+The application's `/media/` handler rejects `photos/adults/`, `photos/students/`,
+`guest_form_submissions/`, `application_documents/`, and all `private/` paths in
+both debug and production configurations. This guard is database-free; protected
+adult photos and signed guest submissions are streamed only by their authorized
+endpoints above. New student photos and signed application uploads use
+organization-scoped random storage paths under the existing `MEDIA_ROOT`; these
+paths are not authorization tokens. Existing adult photos and guest submissions
+are not moved automatically, and their direct Django media URLs remain blocked.
 
 Replaced private student-photo files are not deleted during upload. The
 `cleanup_student_photos` operator command tracks unreferenced private student

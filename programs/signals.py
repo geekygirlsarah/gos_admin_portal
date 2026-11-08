@@ -456,7 +456,11 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     if not created:
         return
 
-    from .utils import get_student_balance_data, send_templated_notification
+    from .utils import send_templated_notification
+    from .utils.balances import (
+        InconsistentBalanceStatementError,
+        TenantBalanceStatementCalculator,
+    )
 
     student = instance.student
     program = instance.program
@@ -469,7 +473,19 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     if not parents:
         return
 
-    balance_data = get_student_balance_data(student, program)
+    organization = instance.organization
+    if (
+        organization is None
+        or student.organization_id != organization.pk
+        or program.organization_id != organization.pk
+    ):
+        return
+
+    calculator = TenantBalanceStatementCalculator(organization, [student], [program])
+    try:
+        balance_data = calculator.get_balance_data(student, program)
+    except InconsistentBalanceStatementError:
+        return
     balance = balance_data["balance"]
 
     via = dict(instance.PAID_VIA_CHOICES).get(instance.paid_via, instance.paid_via)

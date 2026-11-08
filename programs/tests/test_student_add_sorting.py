@@ -71,7 +71,9 @@ class StudentSortingTest(TestCase):
         Enrollment.objects.create(student=self.s4, program=self.program)
         Enrollment.objects.create(student=self.s5, program=self.program)
 
-        form = SlidingScaleForm(program=self.program)
+        form = SlidingScaleForm(
+            program=self.program, organization=self.program.organization
+        )
         students = list(form.fields["student"].queryset)
 
         def get_sort_name(s):

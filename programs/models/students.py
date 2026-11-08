@@ -327,25 +327,40 @@ class Student(models.Model):
 
     def _set_contact(self, slot, adult):
         """Assign a primary/secondary contact, creating the through row."""
+        from django.core.exceptions import ValidationError
+
         from .adults import Adult, AdultStudentRelationship
 
         if adult is None:
             setattr(self, f"{slot}_contact_relationship", None)
             self.__dict__.pop(f"_pending_{slot}_contact", None)
             return
+        if (
+            self.organization_id is not None
+            and adult.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                "A student contact must belong to the same organization."
+            )
         if self.pk is None:
             # Unsaved Student: defer creating the through row until save() so
             # there's a student PK to reference.
             self.__dict__[f"_pending_{slot}_contact"] = adult
             setattr(self, f"{slot}_contact_relationship", None)
             return
-        rel, _ = AdultStudentRelationship.objects.get_or_create(
-            adult=adult, student=self
+        rel, _ = AdultStudentRelationship.objects.for_organization(
+            self.organization_id
+        ).get_or_create(
+            organization_id=self.organization_id,
+            adult=adult,
+            student=self,
         )
         setattr(self, f"{slot}_contact_relationship", rel)
         self.__dict__.pop(f"_pending_{slot}_contact", None)
         if not adult.is_parent:
-            Adult.objects.filter(pk=adult.pk).update(is_parent=True)
+            Adult.objects.filter(
+                pk=adult.pk, organization_id=self.organization_id
+            ).update(is_parent=True)
 
     def _same_organization_relationships(self):
         from .adults import AdultStudentRelationship
@@ -367,6 +382,8 @@ class Student(models.Model):
 
     def _resolve_deferred_contacts(self):
         """Create through rows for contacts assigned before the first save."""
+        from django.core.exceptions import ValidationError
+
         from .adults import Adult, AdultStudentRelationship
 
         changed = False
@@ -374,12 +391,25 @@ class Student(models.Model):
             pending = self.__dict__.pop(f"_pending_{slot}_contact", None)
             if pending is None:
                 continue
-            rel, _ = AdultStudentRelationship.objects.get_or_create(
-                adult=pending, student=self
+            if (
+                self.organization_id is None
+                or pending.organization_id != self.organization_id
+            ):
+                raise ValidationError(
+                    "A student contact must belong to the same organization."
+                )
+            rel, _ = AdultStudentRelationship.objects.for_organization(
+                self.organization_id
+            ).get_or_create(
+                organization_id=self.organization_id,
+                adult=pending,
+                student=self,
             )
             setattr(self, f"{slot}_contact_relationship", rel)
             if not pending.is_parent:
-                Adult.objects.filter(pk=pending.pk).update(is_parent=True)
+                Adult.objects.filter(
+                    pk=pending.pk, organization_id=self.organization_id
+                ).update(is_parent=True)
             changed = True
         if changed:
             super().save(

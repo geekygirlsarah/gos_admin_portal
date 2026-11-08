@@ -1,7 +1,14 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import (
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UserPassesTestMixin,
+)
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.views.generic import View
+
+from organizations.models import UserOrganizationMembership
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..models import (
@@ -14,12 +21,31 @@ from ..models import (
     Student,
 )
 from ..utils import redirect_back
-from .mixins import logger
+from .mixins import TenantLeadMentorPermissionRequiredMixin, logger
 
 
-class ImportDashboardView(LoginRequiredMixin, View):
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+class ImportDashboardView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        organization = getattr(self.request, "organization", None)
+        return organization is not None and (
+            self.request.user.is_superuser
+            or UserOrganizationMembership.objects.filter(
+                user=self.request.user,
+                organization=organization,
+                is_active=True,
+            ).exists()
+        )
+
     def get(self, request):
-        programs = Program.objects.all().order_by("name")
+        organization = _request_organization(request)
+        programs = Program.objects.for_organization(organization).order_by("name")
         programs_with_attendance = [p for p in programs if p.has_feature("attendance")]
         return render(
             request,
@@ -31,10 +57,13 @@ class ImportDashboardView(LoginRequiredMixin, View):
         )
 
 
-class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class StudentImportView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.add_student"
 
     def post(self, request):
+        organization = _request_organization(request)
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
@@ -119,9 +148,10 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return None
 
             def get_or_create_parent(first, last, email):
+                parents = Adult.objects.for_organization(organization)
                 # Try to find by email first
                 if email:
-                    p = Adult.objects.filter(personal_email__iexact=email).first()
+                    p = parents.filter(personal_email__iexact=email).first()
                     if p:
                         if overwrite:
                             changed_parent = False
@@ -136,7 +166,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         return p
                 # Next try by name match
                 if first and last:
-                    p = Adult.objects.filter(
+                    p = parents.filter(
                         legal_first_name__iexact=first, last_name__iexact=last
                     ).first()
                     if p:
@@ -152,6 +182,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 # If we have at least one of name or email, create
                 if first or last or email:
                     return Adult.objects.create(
+                        organization=organization,
                         legal_first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
@@ -224,7 +255,10 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if grad and str(grad).isdigit():
                     grad_year = int(str(grad))
 
-                obj, created_flag = Student.objects.get_or_create(
+                obj, created_flag = Student.objects.for_organization(
+                    organization
+                ).get_or_create(
+                    organization=organization,
                     last_name=last,
                     legal_first_name=legal_first,
                     defaults={
@@ -362,15 +396,23 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         contact_changed = True
                     # Ensure M2M link exists (both sides)
                     if primary.id and not obj.adults.filter(id=primary.id).exists():
-                        obj.adults.add(primary)
-                        primary.students.add(obj)
+                        obj.adults.add(
+                            primary, through_defaults={"organization": organization}
+                        )
+                        primary.students.add(
+                            obj, through_defaults={"organization": organization}
+                        )
                 if secondary:
                     if obj.secondary_contact_id != getattr(secondary, "id", None):
                         obj.secondary_contact = secondary
                         contact_changed = True
                     if secondary.id and not obj.adults.filter(id=secondary.id).exists():
-                        obj.adults.add(secondary)
-                        secondary.students.add(obj)
+                        obj.adults.add(
+                            secondary, through_defaults={"organization": organization}
+                        )
+                        secondary.students.add(
+                            obj, through_defaults={"organization": organization}
+                        )
                 if contact_changed:
                     obj.save(
                         update_fields=[
@@ -394,10 +436,13 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect_back(request, "import_dashboard")
 
 
-class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ParentImportView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.add_adult"
 
     def post(self, request):
+        organization = _request_organization(request)
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
@@ -459,7 +504,10 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     "Phone",
                     "Phone Number",
                 )
-                obj, created_flag = Adult.objects.get_or_create(
+                obj, created_flag = Adult.objects.for_organization(
+                    organization
+                ).get_or_create(
+                    organization=organization,
                     legal_first_name=first,
                     last_name=last,
                     defaults={
@@ -503,7 +551,9 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect_back(request, "import_dashboard")
 
 
-class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class RelationshipImportView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     """
     Re-link existing Students to Parent/Adult records and set relationship types.
     Safe to run multiple times (idempotent). Optionally supports dry-run.
@@ -512,6 +562,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = "programs.change_student"
 
     def post(self, request):
+        organization = _request_organization(request)
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
@@ -617,10 +668,11 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return None
 
             def resolve_student(d):
+                students = Student.objects.for_organization(organization)
                 # Priority: ID -> Org/Andrew ID -> (First/Legal First + Last + DOB) -> (First/Legal First + Last)
                 sid = val(d, "student_id", "Student ID", "ID")
                 if sid and str(sid).isdigit():
-                    st = Student.objects.filter(pk=int(str(sid))).first()
+                    st = students.filter(pk=int(str(sid))).first()
                     if st:
                         return st
 
@@ -634,7 +686,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     "Account ID",
                 )
                 if aid:
-                    st = Student.objects.filter(org_account_id__iexact=aid).first()
+                    st = students.filter(org_account_id__iexact=aid).first()
                     if st:
                         return st
 
@@ -646,7 +698,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if not last or not legal_first:
                     return None
 
-                qs = Student.objects.filter(
+                qs = students.filter(
                     last_name__iexact=last, legal_first_name__iexact=legal_first
                 )
                 if dob:
@@ -656,7 +708,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     return qs.first()
                 if count == 0 and first and first != legal_first:
                     # Try match on preferred first + last (+dob)
-                    qs = Student.objects.filter(
+                    qs = students.filter(
                         last_name__iexact=last, preferred_first_name__iexact=first
                     )
                     if dob:
@@ -668,10 +720,11 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             def find_or_create_parent(first, last, email):
                 # Try resolve by email first
                 p = None
+                adults = Adult.objects.for_organization(organization)
                 if email:
-                    p = Adult.objects.filter(personal_email__iexact=email).first()
+                    p = adults.filter(personal_email__iexact=email).first()
                 if not p and first and last:
-                    p = Adult.objects.filter(
+                    p = adults.filter(
                         legal_first_name__iexact=first, last_name__iexact=last
                     ).first()
                 created = False
@@ -679,6 +732,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if dry_run or not can_create_parents:
                         return None, False, True  # would create
                     p = Adult.objects.create(
+                        organization=organization,
                         legal_first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
@@ -781,12 +835,18 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     rel_key = normalize_rel(g["rel"])
                     rel_key = rel_key or "parent"
                     if not dry_run:
-                        _, rel_created = (
-                            AdultStudentRelationship.objects.update_or_create(
-                                adult=adult,
-                                student=student,
-                                defaults={"relationship_to_student": rel_key},
-                            )
+                        (
+                            _,
+                            rel_created,
+                        ) = AdultStudentRelationship.objects.for_organization(
+                            organization
+                        ).update_or_create(
+                            adult=adult,
+                            student=student,
+                            defaults={
+                                "organization": organization,
+                                "relationship_to_student": rel_key,
+                            },
                         )
                         if rel_created:
                             linked += 1
@@ -841,10 +901,13 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect_back(request, "import_dashboard")
 
 
-class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class MentorImportView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     permission_required = "programs.add_adult"
 
     def post(self, request):
+        organization = _request_organization(request)
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
@@ -905,7 +968,10 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     d, "org_account_id", "andrew_id", "Andrew ID", "AndrewID"
                 )
                 role = val(d, "role", "Role") or "mentor"
-                obj, created_flag = Adult.objects.get_or_create(
+                obj, created_flag = Adult.objects.for_organization(
+                    organization
+                ).get_or_create(
+                    organization=organization,
                     legal_first_name=first,
                     last_name=last,
                     defaults={

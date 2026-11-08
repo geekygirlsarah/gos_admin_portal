@@ -305,6 +305,38 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertIn("Initial payment", html_content)
         self.assertIn("$60.00", html_content)
 
+    def test_payment_notification_does_not_disclose_foreign_fee(self):
+        from organizations.models import Organization
+
+        foreign_org = Organization.objects.create(
+            name="Payment Fee Beta",
+            slug="payment-fee-beta",
+            subdomain="payment-fee-beta",
+        )
+        Fee.objects.create(
+            organization=foreign_org,
+            program=self.program,
+            name="Beta Secret Fee",
+            amount=Decimal("999.00"),
+        )
+        mail.outbox = []
+
+        Payment.objects.create(
+            organization=self.program.organization,
+            student=self.student,
+            program=self.program,
+            amount=Decimal("40.00"),
+            paid_on=timezone.now().date(),
+            paid_via="cash",
+        )
+
+        contents = "\n".join(
+            message.body + "\n" + "\n".join(part[0] for part in message.alternatives)
+            for message in mail.outbox
+        )
+        self.assertNotIn("Beta Secret Fee", contents)
+        self.assertNotIn("999.00", contents)
+
     def test_sliding_scale_approved_directly_sends_email(self):
         mail.outbox = []
         SlidingScale.objects.create(

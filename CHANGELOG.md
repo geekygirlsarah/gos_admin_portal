@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Badge prerequisite choices and displayed links now exclude foreign-organization badges, and program alumni pages no longer reveal a foreign program name.
 - Outreach inline shifts and signup collisions, plus travel departures, costs, and adult signup links, are now organization-scoped; mismatched records are left unchanged and are not exposed or notified.
 - Guest-form review and counts now require same-organization form/submission links; deletion is blocked before audit or cascade when foreign submissions exist. Parent/emergency-contact directories and mentor relationship edits now ignore inconsistent foreign links, while school choices remain shared.
+- Tenant administrative views no longer accept a global Django permission as a grant in another organization; program, student/adult, relationship, and attendance imports scope existing records and explicitly assign new ownership while the shared school catalog remains global.
+- Sliding-scale review and student selections are organization-scoped, and payment notifications with inconsistent cross-organization fee data are withheld rather than including foreign financial details.
+- Guest forms and submissions now persist their organization without relying on the test-only default hook; signed submissions require an audited tenant-review download, and direct media URLs are blocked.
+- Adult photos are served only through a protected endpoint for active members of the photo owner's organization or platform superusers; direct media URLs are blocked.
 
 ## 2026-11-06
 

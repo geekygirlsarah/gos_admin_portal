@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import Http404
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
+from django.utils.http import content_disposition_header
 from django.views import View
+from django.views.decorators.cache import never_cache
 
 from audit.events import AuditEvent
 from audit.service import log_event
@@ -150,18 +156,61 @@ class GuestFormCreateView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/manage/form.html"
 
     def get(self, request):
+        if getattr(request, "organization", None) is None:
+            raise Http404
         form = GuestFormForm()
         ctx = {"form": form, "is_create": True}
         return render(request, self.template_name, ctx)
 
     def post(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         form = GuestFormForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
+            guest_form = form.save(commit=False)
+            guest_form.organization = organization
+            guest_form.save()
             messages.success(request, "Guest form created.")
             return redirect("guest_form_manage_list")
         ctx = {"form": form, "is_create": True}
         return render(request, self.template_name, ctx)
+
+
+@method_decorator(never_cache, name="dispatch")
+class GuestFormSubmissionDownloadView(GuestFormReviewRequiredMixin, View):
+    """Serve a signed guest form only to an authorized organization reviewer."""
+
+    def get(self, request, submission_id):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        submission = get_object_or_404(
+            GuestFormSubmission.objects.for_organization(organization)
+            .select_related("guest_form")
+            .filter(guest_form__organization=organization),
+            pk=submission_id,
+        )
+        if not submission.file:
+            raise Http404
+
+        log_event(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            resource=submission,
+            request=request,
+            notes="Signed guest form submission downloaded",
+        )
+        filename = os.path.basename(submission.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(
+            submission.file.open("rb"),
+            content_type=content_type or "application/octet-stream",
+        )
+        response["Content-Disposition"] = content_disposition_header(True, filename)
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class GuestFormUpdateView(GuestFormReviewRequiredMixin, View):

@@ -9,7 +9,8 @@ from cryptography.fernet import Fernet
 from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -25,6 +26,7 @@ from programs.models import (
     Student,
     TaxForm,
 )
+from programs.views.finances import SlidingScaleReviewDecideView
 
 
 def _gos():
@@ -221,6 +223,44 @@ class SlidingScaleApplicationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "form-control")
         self.assertContains(response, "sliding-scale-estimate")
+
+    def test_sliding_scale_create_rejects_foreign_student_choice(self):
+        foreign_org = Organization.objects.create(
+            name="Sliding Scale Beta",
+            slug="sliding-scale-beta",
+            subdomain="sliding-scale-beta",
+        )
+        foreign_student = Student.objects.create(
+            organization=foreign_org,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        self._login_lead_with_add_permission()
+        url = reverse("sliding_scale_create")
+
+        response = self.client.get(url, HTTP_HOST="gos.localhost")
+
+        self.assertEqual(response.status_code, 200)
+        choices = list(response.context["form"].fields["student"].queryset)
+        self.assertEqual(choices, [self.student])
+        self.assertNotIn(foreign_student, choices)
+
+        response = self.client.post(
+            url,
+            {
+                "student": foreign_student.pk,
+                "family_size": 3,
+                "adjusted_gross_income": "30000.00",
+                "percent": "50.00",
+                "date": "",
+                "expiration_date": "",
+                "notes": "",
+            },
+            HTTP_HOST="gos.localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SlidingScale.objects.filter(student=foreign_student).exists())
 
     def test_lead_mentor_can_create_sliding_scale_with_household_info(self):
         self._login_lead_with_add_permission()
@@ -482,6 +522,69 @@ class SlidingScaleApplicationTests(TestCase):
         self.assertEqual(application.tax_forms.count(), 0)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Approved", mail.outbox[0].subject)
+
+    def test_foreign_pending_application_cannot_be_viewed_or_decided(self):
+        foreign_org = Organization.objects.create(
+            name="Review Beta",
+            slug="sliding-review-beta",
+            subdomain="sliding-review-beta",
+        )
+        foreign_student = Student.objects.create(
+            organization=foreign_org,
+            legal_first_name="Foreign",
+            last_name="Financial Applicant",
+        )
+        application = SlidingScale.objects.create(
+            organization=foreign_org,
+            student=foreign_student,
+            family_size=4,
+            adjusted_gross_income=Decimal("30000.00"),
+            status=SlidingScale.STATUS_PENDING,
+        )
+        url = reverse("sliding_scale_review_decide", args=[application.pk])
+        view = SlidingScaleReviewDecideView.as_view()
+        factory = RequestFactory()
+        get_request = factory.get(url)
+        get_request.user = self.lead_mentor_user
+        get_request.organization = _gos()
+        post_request = factory.post(
+            url, {"action": "decline", "decline_reason": "Not authorized"}
+        )
+        post_request.user = self.lead_mentor_user
+        post_request.organization = _gos()
+
+        with self.assertRaises(Http404):
+            view(get_request, pk=application.pk)
+        with self.assertRaises(Http404):
+            view(post_request, pk=application.pk)
+        application.refresh_from_db()
+        self.assertEqual(application.status, SlidingScale.STATUS_PENDING)
+
+    def test_scale_with_foreign_student_cannot_be_edited(self):
+        foreign_org = Organization.objects.create(
+            name="Scale Student Beta",
+            slug="scale-student-beta",
+            subdomain="scale-student-beta",
+        )
+        foreign_student = Student.objects.create(
+            organization=foreign_org,
+            legal_first_name="Foreign",
+            last_name="Scale Student",
+        )
+        scale = SlidingScale.objects.create(
+            organization=_gos(),
+            student=foreign_student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
+        )
+        permission = Permission.objects.get(codename="change_slidingscale")
+        self.lead_mentor_user.user_permissions.add(permission)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        response = self.client.get(reverse("sliding_scale_edit", args=[scale.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
 
     def test_approval_succeeds_even_if_tax_form_file_is_locked(self):
         application = self._create_pending_application()

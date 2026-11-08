@@ -118,7 +118,7 @@
                 <td class="ps-3">
                   <div class="d-flex align-items-center gap-2">
                     {% if p.photo %}
-                      <img src="{{ p.photo.url }}" alt="{{ p.display_name }}" class="avatar avatar-32 rounded-circle" style="width: 32px; height: 32px; object-fit: cover;"/>
+                      <img src="{% url 'adult_photo' pk=p.pk %}" alt="{{ p.display_name }}" class="avatar avatar-32 rounded-circle" style="width: 32px; height: 32px; object-fit: cover;"/>
                     {% else %}
                       <div class="rounded-circle bg-light border text-muted d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 13px;">
                         <i class="bi bi-person"></i>

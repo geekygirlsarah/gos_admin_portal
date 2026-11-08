@@ -115,6 +115,17 @@ resolved organization or a platform superuser. Global Django reviewer
 permissions do not grant access in another organization's tenant context; a
 missing organization context is denied.
 
+Tenant administrative views that use
+`TenantLeadMentorPermissionRequiredMixin` require a resolved organization and a
+Lead Mentor membership in that organization, or a platform superuser. Legacy
+global Django permissions are accepted only when the user has an active
+membership in the resolved organization and no membership rows in another
+organization; an organization-A permission cannot authorize a lower-role member
+in organization B. `SharedSchoolCatalogPermissionRequiredMixin` is the explicit
+exception for the shared school catalog. Student, parent/adult, mentor,
+relationship, and attendance imports scope existing records and new ownership
+to the request organization.
+
 Badge prerequisite choices and rendered prerequisite links are restricted to
 the resolved organization. Program alumni routes validate the program against
 that same organization before including its name in the page.

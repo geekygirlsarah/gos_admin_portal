@@ -115,7 +115,7 @@
                     <h2 class="h5 mb-0">Uploaded File</h2>
                 </div>
                 <div class="card-body">
-                    <a href="{{ submission.file.url }}" target="_blank" class="btn btn-outline-primary">
+                    <a href="{% url 'guest_form_submission_download' submission.pk %}" class="btn btn-outline-primary">
                         <i class="bi bi-file-earmark me-1"></i> View Submitted File
                     </a>
                     <p class="form-text mt-2">{{ submission.file.name|cut:"guest_form_submissions/" }} ({{ submission.file.size|filesizeformat }})</p>

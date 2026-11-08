@@ -47,7 +47,7 @@
       <div class="row align-items-center g-3">
         <div class="col-auto">
           {% if adult.photo %}
-            <img src="{{ adult.photo.url }}" alt="{{ adult.display_name }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 80px; height: 80px; object-fit: cover;">
+            <img src="{% url 'adult_photo' pk=adult.pk %}" alt="{{ adult.display_name }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 80px; height: 80px; object-fit: cover;">
           {% else %}
             <div class="rounded-circle bg-white shadow-sm border d-flex align-items-center justify-content-center text-muted" style="width: 80px; height: 80px; font-size: 32px;">
               <i class="bi bi-person"></i>

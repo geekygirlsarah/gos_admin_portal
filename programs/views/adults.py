@@ -1,14 +1,20 @@
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import Http404
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils.http import content_disposition_header
+from django.views import View
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
 from audit.mixins import SensitiveDataViewMixin
+from organizations.models import UserOrganizationMembership
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import AdultForm, ParentMergeForm
@@ -830,3 +836,45 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
             f"All student relationships were transferred.",
         )
         return super().form_valid(form)
+
+
+class AdultPhotoView(LoginRequiredMixin, View):
+    """Serve an adult photo only to an active member of its organization."""
+
+    def get(self, request, pk):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        adult = get_object_or_404(
+            Adult.objects.for_organization(organization).exclude(photo=""),
+            pk=pk,
+        )
+        if (
+            not request.user.is_superuser
+            and not UserOrganizationMembership.objects.filter(
+                user=request.user,
+                organization=organization,
+                is_active=True,
+            ).exists()
+        ):
+            raise Http404
+
+        filename = os.path.basename(adult.photo.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        if content_type not in {
+            "image/bmp",
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/webp",
+        }:
+            content_type = "application/octet-stream"
+        response = FileResponse(adult.photo.open("rb"), content_type=content_type)
+        response["Content-Disposition"] = content_disposition_header(
+            content_type.startswith("image/"), filename
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
