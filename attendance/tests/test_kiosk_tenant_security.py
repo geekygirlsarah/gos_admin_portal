@@ -638,7 +638,7 @@ class KioskTenantSecurityTests(TestCase):
         self.set_unlocked(self.alpha_kiosk)
         response = self.client.get(
             reverse("api_kiosk_lookup", args=[self.alpha_kiosk.pk]),
-            {"name": "Disallowed"},
+            {"name": "Disallowed Student"},
             HTTP_HOST=self.alpha_host,
         )
         self.assertEqual(response.status_code, 200)

@@ -1,6 +1,7 @@
 """Tests for the kiosk ping health-check endpoint."""
 
 import json
+from unittest.mock import patch
 
 from django.core import signing
 from django.test import Client, TestCase
@@ -37,6 +38,7 @@ class KioskPingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertTrue(data["ok"])
+        self.assertFalse(data["unlocked"])
 
     def test_ping_does_not_require_unlock_cookie(self):
         self.client.cookies.clear()
@@ -45,6 +47,26 @@ class KioskPingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertTrue(data["ok"])
+        self.assertFalse(data["unlocked"])
+
+    def test_ping_reports_valid_unlock_cookie(self):
+        self.set_unlocked()
+        response = self.client.get(reverse("api_kiosk_ping", args=[self.kiosk.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["unlocked"])
+
+    def test_ping_reports_expired_unlock_cookie(self):
+        self.set_unlocked()
+        with patch("attendance.kiosk_utils._COOKIE_MAX_AGE", -1):
+            response = self.client.get(reverse("api_kiosk_ping", args=[self.kiosk.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["unlocked"])
+
+    def test_ping_reports_invalid_unlock_cookie(self):
+        self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = "invalid"
+        response = self.client.get(reverse("api_kiosk_ping", args=[self.kiosk.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["unlocked"])
 
     def test_ping_inactive_kiosk_returns_404(self):
         self.kiosk.is_active = False
@@ -80,3 +102,5 @@ class KioskPingTests(TestCase):
         content = response.content.decode()
         self.assertIn("/ping/", content)
         self.assertIn("scheduleReconnectPing", content)
+        self.assertIn("setInterval", content)
+        self.assertIn("Kiosk is locked.", content)

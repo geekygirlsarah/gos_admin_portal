@@ -81,8 +81,8 @@ def kiosk_ping(request, kiosk_id):
     """GET /api/v1/kiosk/<id>/ping/
     Lightweight health check. Verifies the kiosk config exists and the server is up.
     """
-    _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
-    return JsonResponse({"ok": True})
+    config = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
+    return JsonResponse({"ok": True, "unlocked": _is_unlocked(request, config)})
 
 
 @require_POST
@@ -340,6 +340,16 @@ def kiosk_tap(request, kiosk_id):
 
         if not (student or adult):
             return JsonResponse({"error": "Member not found."}, status=400)
+    else:
+        if not isinstance(visitor_name, str):
+            return JsonResponse(
+                {"error": "Visitor name must include at least two parts."}, status=400
+            )
+        visitor_name = visitor_name.strip()
+        if len(visitor_name.split()) < 2:
+            return JsonResponse(
+                {"error": "Visitor name must include at least two parts."}, status=400
+            )
 
     try:
         evt = record_tap(
@@ -449,38 +459,40 @@ def kiosk_lookup(request, kiosk_id):
     elif name:
         parts = name.split()
         # Search students
-        student_qs = _active_students_for_kiosk(config)
-        for part in parts:
-            student_qs = student_qs.filter(
-                Q(preferred_first_name__icontains=part)
-                | Q(last_name__icontains=part)
-                | Q(legal_first_name__icontains=part)
+        if len(parts) >= 2:
+            student_qs = _active_students_for_kiosk(config).filter(
+                (
+                    Q(preferred_first_name__iexact=parts[0])
+                    | Q(legal_first_name__iexact=parts[0])
+                ),
+                last_name__iexact=" ".join(parts[1:]),
             )
-        for s in student_qs[:10]:
-            results.append(
-                {
-                    "id": s.pk,
-                    "name": _person_first_name(student=s),
-                    "type": "student",
-                }
-            )
+            for s in student_qs[:10]:
+                results.append(
+                    {
+                        "id": s.pk,
+                        "name": _person_first_name(student=s),
+                        "type": "student",
+                    }
+                )
 
-        # Search mentors/adults
-        adult_qs = active_mentors(organization=config.organization)
-        for part in parts:
-            adult_qs = adult_qs.filter(
-                Q(legal_first_name__icontains=part)
-                | Q(preferred_first_name__icontains=part)
-                | Q(last_name__icontains=part)
+        # Search mentors/adults by exact first and full last name.
+        if len(parts) >= 2:
+            adult_qs = active_mentors(organization=config.organization).filter(
+                (
+                    Q(legal_first_name__iexact=parts[0])
+                    | Q(preferred_first_name__iexact=parts[0])
+                ),
+                last_name__iexact=" ".join(parts[1:]),
             )
-        for a in adult_qs[:10]:
-            results.append(
-                {
-                    "id": a.pk,
-                    "name": _person_first_name(adult=a),
-                    "type": "mentor",
-                }
-            )
+            for a in adult_qs[:10]:
+                results.append(
+                    {
+                        "id": a.pk,
+                        "name": _person_first_name(adult=a),
+                        "type": "mentor",
+                    }
+                )
 
     return JsonResponse({"students": results})
 

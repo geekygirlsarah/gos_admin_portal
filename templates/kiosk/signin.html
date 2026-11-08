@@ -248,7 +248,7 @@
         <div class="col-md-6">
             <div class="kiosk-column kiosk-column-member shadow">
                 <div class="kiosk-column-header">MEMBER SIGN-IN</div>
-                <p class="kiosk-column-hint">Tap your RFID fob, or type your first and last name.</p>
+                <p class="kiosk-column-hint">Tap your RFID fob, or type your first and last name exactly.</p>
                 <div class="mb-3">
                     <label for="memberInput" class="form-label">RFID Card / Full Name</label>
                     <input
@@ -277,7 +277,7 @@
                     <strong>Are you a Girls of Steel student or mentor?</strong>
                     Use the <strong>Members</strong> side (left) so we can log your hours correctly.
                 </div>
-                <p class="kiosk-column-hint">Enter your name and optional team number to record your visit.</p>
+                <p class="kiosk-column-hint">Enter your first and last name (at least two parts) and optional team number.</p>
                 <div class="mb-3">
                     <label for="guestInput" class="form-label">Your Full Name</label>
                     <input
@@ -572,6 +572,31 @@
         });
     }
 
+    function kioskResponseError(response, data) {
+        var message = response.status >= 500
+            ? "Server error " + response.status
+            : (data && data.error) || "Server error " + response.status;
+        var error = new Error(message);
+        if (response.status === 403 && data && data.error === "Kiosk is locked.") {
+            error.code = "kiosk_locked";
+        }
+        return error;
+    }
+
+    function returnToUnlockIfLocked(error) {
+        if (!error || error.code !== "kiosk_locked") return false;
+        window.location.reload();
+        return true;
+    }
+
+    function checkUnlockStatus(data) {
+        if (data && data.unlocked === false) {
+            window.location.reload();
+            return false;
+        }
+        return true;
+    }
+
     function showServiceDown() {
         document.getElementById("serviceDownOverlay").classList.remove("d-none");
         document.getElementById("serviceDownStatus").textContent = "Trying to reconnect\u2026";
@@ -586,7 +611,8 @@
         if (_reconnectTimer) clearTimeout(_reconnectTimer);
         _reconnectTimer = setTimeout(function () {
             ping()
-                .then(function () {
+                .then(function (data) {
+                    if (!checkUnlockStatus(data)) return;
                     hideServiceDown();
                     softReset();
                 })
@@ -721,7 +747,14 @@
         return fetch("/api/v1/kiosk/" + KIOSK_ID + "/lookup/?" + qs, {
             method: "GET",
             headers: { "X-CSRFToken": getCookie("csrftoken") },
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) {
+            if (!r.ok) {
+                return r.json().catch(function () { return {}; }).then(function (data) {
+                    throw kioskResponseError(r, data);
+                });
+            }
+            return r.json();
+        });
     }
 
     // ── record tap ───────────────────────────────────────────────────────────
@@ -735,8 +768,8 @@
             body: JSON.stringify(payload),
         }).then(function (r) {
             if (!r.ok) {
-                return r.json().then(function (d) {
-                    throw new Error(d.error || "Server error " + r.status);
+                return r.json().catch(function () { return {}; }).then(function (d) {
+                    throw kioskResponseError(r, d);
                 });
             }
             return r.json();
@@ -771,6 +804,12 @@
                 var students = (data && data.students) || [];
 
                 if (students.length > 0) {
+                    if (students.length > 1) {
+                        var ambiguityMessage = "This name matches multiple members. Please ask a mentor for help.";
+                        showToast(ambiguityMessage, false);
+                        showFlash(ambiguityMessage, false);
+                        return;
+                    }
                     if (lookupParams.rfid) {
                         payload.rfid_uid = lookupParams.rfid;
                     } else {
@@ -786,8 +825,9 @@
                     document.getElementById("memberSignInBtn").disabled = false;
                     input.focus();
                     if (!lookupParams.rfid) {
-                        showToast("Member not found. If you are a visitor, please use the Visitor / Guest section on the right.", false);
-                        showFlash("Member not found. If you are a visitor, please use the Visitor / Guest section on the right.", false);
+                        var noMatchMessage = "No exact member match found. Check the spelling and enter the member's first and last name exactly, or tap their RFID card. Visitors should use the Visitor / Guest section.";
+                        showToast(noMatchMessage, false);
+                        showFlash(noMatchMessage, false);
                     } else {
                         input.value = "";
                         showToast("RFID card not recognized. Please try typing your full name.", false);
@@ -824,7 +864,9 @@
                 });
             })
             .catch(function (err) {
-                if (isNetworkError(err)) {
+                if (returnToUnlockIfLocked(err)) {
+                    return;
+                } else if (isNetworkError(err)) {
                     showServiceDown();
                 } else {
                     showToast("Error: " + err.message, false);
@@ -849,6 +891,12 @@
         if (!name) {
             showToast("Please enter your full name.", false);
             showFlash("Please enter your full name.", false);
+            return;
+        }
+        if (name.split(/\s+/).length < 2) {
+            var nameError = "Please enter your first and last name (at least two parts).";
+            showToast(nameError, false);
+            showFlash(nameError, false);
             return;
         }
         var teamRaw = (teamInput.value || "").trim();
@@ -907,7 +955,9 @@
             });
         })
         .catch(function (err) {
-            if (isNetworkError(err)) {
+            if (returnToUnlockIfLocked(err)) {
+                return;
+            } else if (isNetworkError(err)) {
                 showServiceDown();
             } else {
                 showToast("Error: " + err.message, false);
@@ -944,7 +994,11 @@
             headers: { "X-CSRFToken": getCookie("csrftoken") },
         })
         .then(function (r) {
-            if (!r.ok) throw new Error("Failed to load who's here.");
+            if (!r.ok) {
+                return r.json().catch(function () { return {}; }).then(function (data) {
+                    throw kioskResponseError(r, data);
+                });
+            }
             return r.json();
         })
         .then(function (data) {
@@ -973,6 +1027,7 @@
             }
         })
         .catch(function (err) {
+            if (returnToUnlockIfLocked(err)) return;
             loading.classList.add("d-none");
             error.textContent = err.message;
             error.classList.remove("d-none");
@@ -1061,7 +1116,10 @@
                 if (idleTimeout) clearTimeout(idleTimeout);
                 idleTimeout = setTimeout(function() {
                     if (document.getElementById("memberInput")) {
-                        ping().then(softReset).catch(showServiceDown);
+                        ping().then(function (data) {
+                            if (!checkUnlockStatus(data)) return;
+                            softReset();
+                        }).catch(showServiceDown);
                     }
                 }, idleDurationSecs * 1000);
             }
@@ -1071,6 +1129,14 @@
                 document.addEventListener(evt, resetIdleTimeout, false);
             });
         })();
+
+        setInterval(function () {
+            if (!document.getElementById("memberInput")) return;
+            ping().then(function (data) {
+                if (!checkUnlockStatus(data)) return;
+                hideServiceDown();
+            }).catch(showServiceDown);
+        }, 30000);
     }
 
     initSignin();

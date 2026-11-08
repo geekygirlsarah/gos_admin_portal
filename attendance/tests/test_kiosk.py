@@ -10,7 +10,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from attendance.kiosk_utils import _otp_cache_key, _otp_ready_cache_key
-from attendance.models import KioskConfig, RFIDCard
+from attendance.models import AttendanceEvent, KioskConfig, RFIDCard
 from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
@@ -125,6 +125,19 @@ class KioskPageViewTests(TestCase):
         self.assertIn("Girls of Steel student", content)
         self.assertIn("Members side", content)
 
+    def test_kiosk_page_explains_name_requirements_and_ambiguous_matches(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        response = self.client.get(url)
+        content = response.content.decode()
+        self.assertIn("type your first and last name", content)
+        self.assertIn("No exact member match found.", content)
+        self.assertIn("at least two parts", content)
+        self.assertIn(
+            "This name matches multiple members. Please ask a mentor for help.",
+            content,
+        )
+
     def test_kiosk_page_focuses_member_input_after_guest_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
         _set_unlocked_cookie(self.client, self.kiosk_config)
@@ -229,10 +242,11 @@ class KioskPageViewTests(TestCase):
             "not just the bottom toast.",
         )
         self.assertIn(
-            'showFlash("Member not found',
+            "showFlash(noMatchMessage, false);",
             content,
-            "An unmatched member name should trigger the full-screen red flash.",
+            "An unmatched member name should explain the exact-match requirement in the full-screen red flash.",
         )
+        self.assertIn("No exact member match found.", content)
 
     def test_kiosk_page_has_show_flash_function(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
@@ -534,6 +548,40 @@ class KioskProxyTapTests(TestCase):
         data = response.json()
         self.assertIn(data["event_type"], ["IN", "OUT"])
 
+    def test_tap_rejects_visitor_name_with_only_one_part(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"visitor_name": "Taylor"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("at least two parts", response.json()["error"])
+        self.assertFalse(AttendanceEvent.objects.exists())
+
+    def test_tap_rejects_non_string_visitor_name(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"visitor_name": ["Taylor", "Smith"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AttendanceEvent.objects.exists())
+
+    def test_tap_accepts_visitor_with_multipart_surname(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"visitor_name": "Taylor van Buren"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AttendanceEvent.objects.get().visitor_name, "Taylor van Buren")
+
 
 class KioskProxyLookupTests(TestCase):
     def setUp(self):
@@ -552,15 +600,67 @@ class KioskProxyLookupTests(TestCase):
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Bob"})
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"], "Kiosk is locked.")
 
     def test_lookup_with_cookie_by_name(self):
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
-        response = self.client.get(url, {"name": "Bob"})
+        response = self.client.get(url, {"name": "Bob Jones"})
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("students", data)
         self.assertGreaterEqual(len(data["students"]), 1)
+
+    def test_lookup_does_not_match_student_by_first_name_only(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Bob"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["students"], [])
+
+    def test_lookup_requires_exact_student_first_and_last_names(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        for name in ("Bobby Jones", "Bob Jonesy", "Bob Smith"):
+            with self.subTest(name=name):
+                response = self.client.get(url, {"name": name})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["students"], [])
+
+    def test_lookup_student_name_match_is_case_insensitive(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "bOB jONES"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [person["id"] for person in response.json()["students"]],
+            [self.student.pk],
+        )
+
+    def test_lookup_student_matches_multi_part_last_name(self):
+        student = Student.objects.create(
+            legal_first_name="Ana", last_name="van der Meer"
+        )
+        Enrollment.objects.create(student=student, program=self.program, active=True)
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "ANA VAN DER MEER"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [person["id"] for person in response.json()["students"]], [student.pk]
+        )
+
+    def test_lookup_returns_all_duplicate_exact_student_matches(self):
+        duplicate = Student.objects.create(legal_first_name="Bob", last_name="Jones")
+        Enrollment.objects.create(student=duplicate, program=self.program, active=True)
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Bob Jones"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {person["id"] for person in response.json()["students"]},
+            {self.student.pk, duplicate.pk},
+        )
 
     def test_lookup_with_cookie_by_rfid(self):
         _set_unlocked_cookie(self.client, self.kiosk_config)
@@ -587,7 +687,7 @@ class KioskProxyLookupTests(TestCase):
         Enrollment.objects.create(student=student, program=self.program, active=True)
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
-        response = self.client.get(url, {"name": "Babs Smith"})
+        response = self.client.get(url, {"name": "bABS sMITH"})
         self.assertEqual(response.status_code, 200)
         data = response.json()
         ids = [s["id"] for s in data["students"]]
@@ -600,7 +700,7 @@ class KioskProxyLookupTests(TestCase):
         Enrollment.objects.create(student=student, program=self.program, active=True)
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
-        response = self.client.get(url, {"name": "Barbara Smith"})
+        response = self.client.get(url, {"name": "bARBARA sMITH"})
         self.assertEqual(response.status_code, 200)
         data = response.json()
         ids = [s["id"] for s in data["students"]]
@@ -824,14 +924,12 @@ class KioskFirstNameTests(TestCase):
 
     # ── lookup endpoint ────────────────────────────────────────────────
 
-    def test_lookup_student_returns_first_name(self):
+    def test_lookup_student_requires_full_name(self):
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Ada"})
         data = response.json()
-        names = [s["name"] for s in data["students"]]
-        self.assertIn("Ada", names)
-        self.assertNotIn("Ada Lovelace", names)
+        self.assertEqual(data["students"], [])
 
     def test_lookup_student_by_rfid_returns_first_name(self):
         _set_unlocked_cookie(self.client, self.kiosk_config)
@@ -843,21 +941,59 @@ class KioskFirstNameTests(TestCase):
     def test_lookup_mentor_returns_preferred_first_name(self):
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
-        response = self.client.get(url, {"name": "Bobby"})
+        response = self.client.get(url, {"name": "Bobby Martin"})
         data = response.json()
-        names = [s["name"] for s in data["students"]]
-        self.assertIn("Bobby", names)
-        self.assertNotIn("Bobby Martin", names)
+        mentors = [person for person in data["students"] if person["type"] == "mentor"]
+        self.assertEqual([person["id"] for person in mentors], [self.mentor.pk])
+        self.assertEqual(mentors[0]["name"], "Bobby")
 
-    def test_lookup_mentor_without_preferred_returns_first_name(self):
+    def test_lookup_mentor_requires_exact_full_name(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        for name in ("Bobby", "Bobby Mart", "Bobby Martinson", "Robert Smith"):
+            with self.subTest(name=name):
+                response = self.client.get(url, {"name": name})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["students"], [])
+
+    def test_lookup_mentor_matches_legal_first_name_case_insensitively(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "rOBERT mARTIN"})
+        mentors = [
+            person
+            for person in response.json()["students"]
+            if person["type"] == "mentor"
+        ]
+        self.assertEqual([person["id"] for person in mentors], [self.mentor.pk])
+
+    def test_lookup_mentor_matches_multipart_last_name(self):
+        self.mentor.last_name = "van der Meer"
+        self.mentor.save()
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "bOBBY VAN DER MEER"})
+        mentors = [
+            person
+            for person in response.json()["students"]
+            if person["type"] == "mentor"
+        ]
+        self.assertEqual([person["id"] for person in mentors], [self.mentor.pk])
+
+    def test_lookup_mentor_without_preferred_requires_full_legal_name(self):
         self.mentor.preferred_first_name = None
         self.mentor.save()
         _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Robert"})
-        data = response.json()
-        names = [s["name"] for s in data["students"]]
-        self.assertIn("Robert", names)
+        self.assertEqual(response.json()["students"], [])
+        response = self.client.get(url, {"name": "Robert Martin"})
+        mentors = [
+            person
+            for person in response.json()["students"]
+            if person["type"] == "mentor"
+        ]
+        self.assertEqual([person["id"] for person in mentors], [self.mentor.pk])
 
     # ── who-is-here endpoint ───────────────────────────────────────────
 

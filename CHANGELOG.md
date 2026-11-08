@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-07
 
 ### Fixed
+- Attendance kiosk student lookup now requires an exact case-insensitive first and last name, ambiguous member matches ask for mentor help, and visitor sign-in requires at least two name parts.
+- Attendance kiosk member name misses now explain the exact first-and-last-name requirement, and expired unlock cookies return mentors to unlock without being reported as a service outage.
 - Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
 - The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
 - Travel trip creation and inline departures/costs now inherit the program organization, travel mentor and parent signups persist their organization, and the dashboard displays the travel event's actual location.
