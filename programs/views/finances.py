@@ -720,16 +720,11 @@ class SlidingScaleUpdateView(
         return redirect("sliding_scale_review_list")
 
 
-class SlidingScaleTaxFormDeleteView(
-    LoginRequiredMixin, DynamicWritePermissionMixin, View
-):
-    section = "sliding_scale"
-    permission_required = "programs.change_slidingscale"
+class SlidingScaleTaxFormDeleteView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
     def test_func(self):
-        # Allow users with change_slidingscale permission in addition to LeadMentors
-        if self.request.user.has_perm("programs.change_slidingscale"):
-            return True
+        if getattr(self.request, "organization", None) is None:
+            return False
         return super().test_func()
 
     def post(self, request, sliding_id, form_id):
@@ -763,9 +758,8 @@ class SlidingScaleTaxFormViewView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     or download it, without ever exposing the encrypted bytes on disk."""
 
     def test_func(self):
-        # Allow users with change_slidingscale permission in addition to LeadMentors
-        if self.request.user.has_perm("programs.change_slidingscale"):
-            return True
+        if getattr(self.request, "organization", None) is None:
+            return False
         return super().test_func()
 
     def get(self, request, sliding_id, form_id):

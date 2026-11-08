@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-08
+
+### Fixed
+- Sliding-scale tax-form access now requires a Lead Mentor in the resolved organization or a platform superuser, and parent-derived student, finance, and travel permissions reject inconsistent cross-organization relationships and enrollments.
+
 ## 2026-11-07
 
 ### Fixed

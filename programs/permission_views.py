@@ -1,10 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.db import models
+from django.db.models import F, Q
 from django.shortcuts import redirect
 
 from .models import (
     Adult,
+    AdultStudentRelationship,
     Enrollment,
     Fee,
     Payment,
@@ -271,6 +273,79 @@ def _object_matches_organization(obj, org):
     return object_org_id is None or object_org_id == getattr(org, "pk", org)
 
 
+def _parent_relationships(adult, org):
+    if adult is None or org is None:
+        return AdultStudentRelationship.objects.none()
+    organization_id = getattr(org, "pk", org)
+    if adult.organization_id != organization_id:
+        return AdultStudentRelationship.objects.none()
+    return AdultStudentRelationship.objects.for_organization(org).filter(
+        organization_id=organization_id,
+        adult_id=adult.pk,
+        adult__organization_id=organization_id,
+        student__organization_id=organization_id,
+    )
+
+
+def _parent_has_student(adult, student, org):
+    if student is None or org is None:
+        return False
+    organization_id = getattr(org, "pk", org)
+    if student.organization_id != organization_id:
+        return False
+    return _parent_relationships(adult, org).filter(student_id=student.pk).exists()
+
+
+def _parent_has_program_enrollment(adult, program, org):
+    if program is None or org is None:
+        return False
+    organization_id = getattr(org, "pk", org)
+    if program.organization_id != organization_id:
+        return False
+    return (
+        Enrollment.objects.for_organization(org)
+        .filter(
+            organization_id=organization_id,
+            program_id=program.pk,
+            program__organization_id=organization_id,
+            student__organization_id=organization_id,
+            student_id__in=_parent_relationships(adult, org).values("student_id"),
+        )
+        .exists()
+    )
+
+
+def _travel_object_matches_organization(obj, org):
+    if org is None:
+        return False
+    organization_id = getattr(org, "pk", org)
+    if getattr(obj, "organization_id", None) != organization_id:
+        return False
+    queryset = obj.__class__.objects.for_organization(org).filter(
+        pk=obj.pk,
+        organization_id=organization_id,
+        event__organization_id=organization_id,
+    )
+    if hasattr(obj, "student_id"):
+        queryset = queryset.filter(student__organization_id=organization_id)
+    if hasattr(obj, "adult_id"):
+        queryset = queryset.filter(adult__organization_id=organization_id)
+    return (
+        queryset.filter(
+            Q(event__program__isnull=True)
+            | Q(event__program__organization_id=organization_id)
+        )
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization_id=organization_id,
+                departure__event_id=F("event_id"),
+            )
+        )
+        .exists()
+    )
+
+
 def can_user_read(user, section, obj=None, org=None):
     if not _object_matches_organization(obj, org):
         return False
@@ -307,7 +382,7 @@ def can_user_read(user, section, obj=None, org=None):
                 return True
             # Own child
             try:
-                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                if _parent_has_student(user.adult_profile, obj, org):
                     return True
             except (Adult.DoesNotExist, AttributeError):
                 pass
@@ -369,21 +444,23 @@ def can_user_read(user, section, obj=None, org=None):
             adult = user.adult_profile
             if isinstance(obj, Student):
                 # Parents can only read their own students
-                return obj in adult.students.all()
+                return _parent_has_student(adult, obj, org)
             if isinstance(obj, Adult):
                 # Parents can only read their own profile
-                return obj == adult
+                return (
+                    obj == adult
+                    and org is not None
+                    and obj.organization_id == getattr(org, "pk", org)
+                )
             if isinstance(obj, (Payment, SlidingScale)):
                 # Parents can only read their own students' payments/sliding scale
-                return obj.student in adult.students.all()
+                return _parent_has_student(adult, obj.student, org)
             if isinstance(obj, Fee):
                 # Parents can see fees for programs their students are enrolled in
-                return Enrollment.objects.filter(
-                    student__adults=adult, program=obj.program
-                ).exists()
+                return _parent_has_program_enrollment(adult, obj.program, org)
             if isinstance(obj, Program):
                 # Parents can see programs their students are enrolled in
-                return obj.enrollment_set.filter(student__adults=adult).exists()
+                return _parent_has_program_enrollment(adult, obj, org)
         except (Adult.DoesNotExist, AttributeError):
             return False
 
@@ -393,21 +470,23 @@ def can_user_read(user, section, obj=None, org=None):
             adult = user.adult_profile
             if isinstance(obj, Student):
                 # Parents can only read their own students
-                return obj in adult.students.all()
+                return _parent_has_student(adult, obj, org)
             if isinstance(obj, Adult):
                 # Parents can only read their own profile
-                return obj == adult
+                return (
+                    obj == adult
+                    and org is not None
+                    and obj.organization_id == getattr(org, "pk", org)
+                )
             if isinstance(obj, (Payment, SlidingScale)):
                 # Parents can only read their own students' payments/sliding scale
-                return obj.student in adult.students.all()
+                return _parent_has_student(adult, obj.student, org)
             if isinstance(obj, Fee):
                 # Parents can see fees for programs their students are enrolled in
-                return Enrollment.objects.filter(
-                    student__adults=adult, program=obj.program
-                ).exists()
+                return _parent_has_program_enrollment(adult, obj.program, org)
             if isinstance(obj, Program):
                 # Parents can see programs their students are enrolled in
-                return obj.enrollment_set.filter(student__adults=adult).exists()
+                return _parent_has_program_enrollment(adult, obj, org)
         except (Adult.DoesNotExist, AttributeError):
             return False
     elif role == "Alumni" and obj:
@@ -517,13 +596,17 @@ def can_user_write(user, section, obj=None, org=None):
                     adult = user.adult_profile
                 except Adult.DoesNotExist:
                     return False
-                return adult.students.filter(pk=obj.student_id).exists()
+                return _travel_object_matches_organization(
+                    obj, org
+                ) and _parent_has_student(adult, obj.student, org)
             if isinstance(obj, TravelParentChaperoneSignup):
                 try:
                     adult = user.adult_profile
                 except Adult.DoesNotExist:
                     return False
-                return obj.adult_id == adult.pk
+                return obj.adult_id == adult.pk and _travel_object_matches_organization(
+                    obj, org
+                )
         return False
     if role == "Alumni" and section == "travel":
         return False
@@ -601,7 +684,7 @@ def can_user_write(user, section, obj=None, org=None):
                 return True
             # Own child
             try:
-                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                if _parent_has_student(user.adult_profile, obj, org):
                     return True
             except (Adult.DoesNotExist, AttributeError):
                 pass
@@ -642,7 +725,7 @@ def can_user_write(user, section, obj=None, org=None):
         try:
             adult = user.adult_profile
             if isinstance(obj, Student):
-                return obj in adult.students.all()
+                return _parent_has_student(adult, obj, org)
             if isinstance(obj, Adult):
                 return obj == adult
         except (Adult.DoesNotExist, AttributeError):

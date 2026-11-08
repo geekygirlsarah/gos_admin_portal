@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -9,10 +11,17 @@ from programs.models import (
     AdultStudentRelationship,
     BackgroundCheck,
     BackgroundCheckType,
+    Enrollment,
+    Program,
     School,
     Student,
 )
 from programs.permission_views import can_user_delete, can_user_read, can_user_write
+from travel.models import (
+    TravelEvent,
+    TravelParentChaperoneSignup,
+    TravelSignup,
+)
 
 
 class StudentAdultTenantIsolationTests(TestCase):
@@ -78,6 +87,18 @@ class StudentAdultTenantIsolationTests(TestCase):
             HTTP_HOST=self.host,
         )
 
+    def create_parent_user(self, adult, username):
+        parent_user = get_user_model().objects.create_user(username=username)
+        adult.user = parent_user
+        adult.save(update_fields=["user"])
+        UserOrganizationMembership.objects.update_or_create(
+            user=parent_user,
+            organization=self.alpha,
+            role="Parent",
+            defaults={"is_active": True},
+        )
+        return parent_user
+
     def test_foreign_student_detail_and_edit_are_not_accessible(self):
         for route in ("student_detail", "student_edit"):
             with self.subTest(route=route):
@@ -125,6 +146,154 @@ class StudentAdultTenantIsolationTests(TestCase):
         self.assertFalse(
             can_user_read(
                 plain_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+
+    def test_parent_permissions_require_organization_owned_relationship(self):
+        parent_user = self.create_parent_user(self.local_adult, "profile-parent")
+        AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=self.local_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+
+        self.assertFalse(
+            can_user_read(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+        self.assertFalse(
+            can_user_write(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+        self.assertFalse(
+            can_user_delete(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+
+        self.client.force_login(parent_user)
+        for route in ("student_detail", "student_edit"):
+            with self.subTest(route=route):
+                response = self.get_tenant(route, self.local_student.pk)
+                self.assertNotEqual(response.status_code, 200)
+
+    def test_parent_permissions_require_organization_owned_adult(self):
+        parent_user = self.create_parent_user(
+            self.foreign_adult, "profile-foreign-parent"
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.foreign_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+
+        self.assertFalse(
+            can_user_read(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+        self.assertFalse(
+            can_user_write(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+
+    def test_parent_can_access_own_student_with_local_relationship(self):
+        parent_user = self.create_parent_user(self.local_adult, "profile-local-parent")
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.local_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+
+        self.assertTrue(
+            can_user_read(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+        self.assertTrue(
+            can_user_write(
+                parent_user, "student_info", self.local_student, org=self.alpha
+            )
+        )
+
+    def test_parent_finance_program_access_requires_local_enrollment(self):
+        parent_user = self.create_parent_user(
+            self.local_adult, "profile-finance-parent"
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.local_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+        program = Program.objects.create(
+            organization=self.alpha,
+            name="Parent access program",
+        )
+        foreign_enrollment = Enrollment.objects.create(
+            organization=self.beta,
+            program=program,
+            student=self.local_student,
+        )
+
+        self.assertFalse(can_user_read(parent_user, "fees", program, org=self.alpha))
+
+        foreign_enrollment.delete()
+        Enrollment.objects.create(
+            organization=self.alpha,
+            program=program,
+            student=self.local_student,
+        )
+        self.assertTrue(can_user_read(parent_user, "fees", program, org=self.alpha))
+
+    def test_parent_travel_permissions_validate_signup_ownership(self):
+        parent_user = self.create_parent_user(self.local_adult, "profile-travel-parent")
+        program = Program.objects.create(
+            organization=self.alpha,
+            name="Parent travel program",
+        )
+        event = TravelEvent.objects.create(
+            organization=self.alpha,
+            program=program,
+            name="Parent travel event",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 2),
+        )
+        signup = TravelSignup.objects.create(
+            organization=self.alpha,
+            student=self.local_student,
+            event=event,
+        )
+        relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=self.local_adult,
+            student=self.local_student,
+            relationship_to_student="parent",
+        )
+
+        self.assertFalse(can_user_write(parent_user, "travel", signup, org=self.alpha))
+
+        relationship.organization = self.alpha
+        relationship.save(update_fields=["organization"])
+        self.assertTrue(can_user_write(parent_user, "travel", signup, org=self.alpha))
+
+        foreign_parent_user = self.create_parent_user(
+            self.foreign_adult, "profile-foreign-travel-parent"
+        )
+        chaperone_signup = TravelParentChaperoneSignup.objects.create(
+            organization=self.alpha,
+            adult=self.foreign_adult,
+            event=event,
+        )
+        self.assertFalse(
+            can_user_write(
+                foreign_parent_user, "travel", chaperone_signup, org=self.alpha
             )
         )
 

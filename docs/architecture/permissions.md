@@ -135,6 +135,11 @@ to the resolved organization. Tenant-owned forms with foreign-owned submissions
 cannot be deleted until the inconsistent links are reviewed; displayed counts
 include only local submissions.
 
+Sliding-scale tax-form viewing and deletion require a resolved organization and
+a Lead Mentor in that organization or a platform superuser. A global Django
+permission does not grant tax-form access, and missing organization context is
+denied.
+
 ---
 
 ## Object-Level Access Rules
@@ -149,10 +154,17 @@ If an explicit request organization is supplied, the object must belong to that 
 - Write access to outreach events/shifts is restricted to shifts they champion.
 
 ### Parents
-- Read access to their own linked students (`adult.students.all()`).
+- Read access to their own linked students only when the relationship, Adult,
+  and Student all belong to the resolved organization.
 - Can apply for sliding-scale discounts and view student balance sheets.
-- Can approve/decline travel signups only for their own students (`parent.students.filter(pk=...)`).
-- Can self-register as parent chaperones for programs where they have active students.
+- Finance access to a program requires a same-organization Enrollment, Student,
+  Program, and parent relationship; inconsistent ownership links do not grant
+  access.
+- Can approve/decline travel signups only when the signup, event, student, and
+  parent relationship belong to the same organization.
+- Can manage their own chaperone signup only when the parent, signup, event, and
+  any departure belong to the same organization; registration eligibility still
+  requires an active student in the trip's program.
 
 ### Mentors
 - Read access to current and upcoming programs (`active=True` and status in `"Active"`, `"Upcoming"`). Past/ended programs remain visible on lists as plain text without active management links.
