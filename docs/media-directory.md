@@ -75,12 +75,12 @@ for its exact workflow and safeguards.
 ## Access and sensitivity
 
 The Django direct-media handler denies paths beginning with
-`agreement_submissions/`, `application_documents/`, `guest_form_submissions/`,
-`photos/adults/`, `photos/students/`, `private/`, and `signed/`. That protects
-those paths only when requests go through Django. A proxy, CDN, or separate
-storage origin may serve files independently and must be checked as well.
-Other directory names are not access controls: for example, legacy
-`photos/mentors/` paths are not in Django's direct-media deny list. Treat uploads
+`agreement_submissions/`, `application_documents/`, `digital_signouts/`,
+`guest_form_submissions/`, `photos/adults/`, `photos/mentors/`,
+`photos/students/`, `private/`, `signed/`, `student_documents/`, and
+`tax_forms/`. These denials protect paths only when requests go through Django;
+a proxy, CDN, or separate storage origin may serve files independently and must
+be checked as well. Other directory names are not access controls. Treat uploads
 as sensitive according to their contents, and verify direct and authorized
 access through the actual production serving path before changing storage or
 access rules. See

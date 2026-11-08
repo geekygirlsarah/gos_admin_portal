@@ -18,6 +18,7 @@ from django.test import TestCase
 
 from audit.events import AuditEvent
 from audit.models import AuditLog
+from organizations.models import Organization
 from programs.models import Adult, AdultStudentRelationship, Student
 
 
@@ -306,3 +307,60 @@ class FindDuplicateParentsTests(TestCase):
         ).first()
         self.assertIsNotNone(audit)
         self.assertIn(str(source.pk), audit.notes)
+
+    def test_fix_does_not_merge_matching_parents_across_organizations(self):
+        gos = Organization.objects.get(slug="gos")
+        beta = Organization.objects.create(
+            name="Duplicate Parent Beta",
+            slug="duplicate-parent-beta",
+            subdomain="duplicate-parent-beta",
+        )
+        local = _parent(
+            "Taylor", "Parent", personal_email="taylor@example.test", organization=gos
+        )
+        foreign = _parent(
+            "Taylor",
+            "Parent",
+            personal_email="taylor@example.test",
+            organization=beta,
+        )
+
+        output = self._run()
+        self.assertIn("No duplicate parents found", output)
+        self._run(fix=True)
+
+        self.assertTrue(Adult.objects.filter(pk=local.pk).exists())
+        self.assertTrue(Adult.objects.filter(pk=foreign.pk).exists())
+
+    def test_fix_skips_duplicate_group_with_foreign_relationship(self):
+        gos = Organization.objects.get(slug="gos")
+        beta = Organization.objects.create(
+            name="Relationship Beta",
+            slug="relationship-beta",
+            subdomain="relationship-beta",
+        )
+        keep = _parent(
+            "Taylor", "Parent", personal_email="taylor@example.test", organization=gos
+        )
+        source = _parent(
+            "Taylor", "Parent", personal_email="taylor@example.test", organization=gos
+        )
+        foreign_student = Student.objects.create(
+            organization=beta,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        relationship = AdultStudentRelationship.objects.create(
+            organization=beta,
+            adult=source,
+            student=foreign_student,
+        )
+
+        output = self._run(fix=True)
+
+        self.assertTrue(Adult.objects.filter(pk=keep.pk).exists())
+        self.assertTrue(Adult.objects.filter(pk=source.pk).exists())
+        relationship.refresh_from_db()
+        self.assertEqual(relationship.organization_id, beta.pk)
+        self.assertEqual(relationship.adult_id, source.pk)
+        self.assertIn("SKIPPED", output)

@@ -337,6 +337,34 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertNotIn("Beta Secret Fee", contents)
         self.assertNotIn("999.00", contents)
 
+    def test_foreign_fee_does_not_trigger_local_fee_notification(self):
+        from organizations.models import Organization
+
+        foreign_org = Organization.objects.create(
+            name="New Fee Beta",
+            slug="new-fee-beta",
+            subdomain="new-fee-beta",
+        )
+        mail.outbox = []
+
+        Fee.objects.create(
+            organization=foreign_org,
+            program=self.program,
+            name="Beta Secret Fee",
+            amount=Decimal("999.00"),
+        )
+
+        contents = "\n".join(
+            message.subject
+            + "\n"
+            + message.body
+            + "\n"
+            + "\n".join(part[0] for part in message.alternatives)
+            for message in mail.outbox
+        )
+        self.assertNotIn("Beta Secret Fee", contents)
+        self.assertNotIn("999.00", contents)
+
     def test_sliding_scale_approved_directly_sends_email(self):
         mail.outbox = []
         SlidingScale.objects.create(

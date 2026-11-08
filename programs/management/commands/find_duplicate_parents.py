@@ -33,6 +33,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -219,22 +220,32 @@ def _phone_duplicates(no_email):
 
 
 def find_duplicate_groups(parents):
-    """Group duplicate-looking parents into (strong, review) group dicts.
+    """Group duplicate-looking parents within their organization.
 
     Each strong group dict has ``kind``, ``label`` and ``adults``; review
     groups additionally carry a ``note`` explaining why they were flagged.
     """
-    by_email = defaultdict(list)
-    no_email = []
+    by_organization = defaultdict(list)
     for adult in parents:
-        key = _email_key(adult.personal_email)
-        if key:
-            by_email[key].append(adult)
-        else:
-            no_email.append(adult)
+        by_organization[adult.organization_id].append(adult)
 
-    strong, review = _email_duplicates(by_email)
-    strong.extend(_phone_duplicates(no_email))
+    strong = []
+    review = []
+    for organization_parents in by_organization.values():
+        by_email = defaultdict(list)
+        no_email = []
+        for adult in organization_parents:
+            key = _email_key(adult.personal_email)
+            if key:
+                by_email[key].append(adult)
+            else:
+                no_email.append(adult)
+
+        organization_strong, organization_review = _email_duplicates(by_email)
+        strong.extend(organization_strong)
+        strong.extend(_phone_duplicates(no_email))
+        review.extend(organization_review)
+
     return strong, review
 
 
@@ -258,10 +269,15 @@ def _load_relationships(parents):
         return relations
     rels = (
         AdultStudentRelationship.objects.filter(adult_id__in=[a.pk for a in parents])
-        .select_related("student")
+        .select_related("adult", "student")
         .order_by("student__pk")
     )
     for rel in rels:
+        if (
+            rel.organization_id != rel.adult.organization_id
+            or rel.student.organization_id != rel.adult.organization_id
+        ):
+            continue
         label = rel.relationship_to_student or "parent"
         if rel.specific_relationship:
             label = f"{label}/{rel.specific_relationship}"
@@ -314,13 +330,7 @@ class Command(BaseCommand):
         """
         from audit.events import AuditEvent
         from audit.service import log_event
-        from programs.utils import transfer_user_account
-        from programs.views.adults import (
-            _carry_over_missing_parent_fields,
-            _merge_parent_role_flags,
-            _transfer_parent_related_records,
-            _transfer_parent_relationships,
-        )
+        from programs.utils.merges import perform_parent_merge
 
         skipped = []
         merged_info = {}
@@ -330,26 +340,24 @@ class Command(BaseCommand):
                 continue
             keep = _pick_keep(group["adults"])
             sources = [a for a in group["adults"] if a.pk != keep.pk]
-            source_snapshots = []
-            for source in sources:
-                source_pk = source.pk
-                source_name = source.display_name
-                source_snapshots.append(
-                    (
-                        source_pk,
-                        source_name,
-                        _relationship_labels(relations_by_adult, source_pk),
-                    )
+            source_snapshots = [
+                (
+                    source.pk,
+                    source.display_name,
+                    _relationship_labels(relations_by_adult, source.pk),
                 )
+                for source in sources
+            ]
+            try:
                 with transaction.atomic():
-                    _transfer_parent_relationships(keep, source)
-                    _transfer_parent_related_records(keep, source)
-                    changed = _carry_over_missing_parent_fields(keep, source)
-                    changed = _merge_parent_role_flags(keep, source) or changed
-                    changed = transfer_user_account(keep, source) or changed
-                    if changed:
-                        keep.save()
-                    source.delete()
+                    for source in sources:
+                        perform_parent_merge(keep, source)
+                    keep.refresh_from_db()
+            except ValidationError:
+                skipped.append(group)
+                continue
+
+            for source_pk, source_name, rels in source_snapshots:
                 log_event(
                     request=None,
                     event=AuditEvent.RECORDS_MERGED,
@@ -419,8 +427,8 @@ class Command(BaseCommand):
                     )
             elif group in skipped:
                 self.stdout.write(
-                    "    SKIPPED: multiple records have their own login "
-                    "account -- likely different people; merge manually."
+                    "    SKIPPED: multiple login accounts or inconsistent "
+                    "organization ownership; review manually."
                 )
             self.stdout.write("")
 
@@ -442,7 +450,16 @@ class Command(BaseCommand):
     def _fmt_adult(self, adult, tag, relations_by_adult):
         email = _email_key(adult.personal_email) or "-"
         phone = _phone_key(adult.phone_number) or "-"
-        students = adult.students.count()
+        students = (
+            AdultStudentRelationship.objects.filter(
+                organization_id=adult.organization_id,
+                adult=adult,
+                student__organization_id=adult.organization_id,
+            )
+            .values("student_id")
+            .distinct()
+            .count()
+        )
         login = adult.user.email if adult.user_id else "-"
         rels = "; ".join(_relationship_labels(relations_by_adult, adult.pk)) or "-"
         return (

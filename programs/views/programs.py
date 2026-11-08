@@ -2359,19 +2359,59 @@ class ProgramDocumentDeleteView(
         )
 
     def post(self, request, *args, **kwargs):
+        from applications.models import ApplicationDocumentSubmission
         from audit.service import log_deletion
 
-        name = self.document.name
-        log_deletion(
-            resource=self.document,
-            request=request,
-            before={
-                "name": name,
-                "program": str(self.program),
-                "file_name": self.document.file.name if self.document.file else None,
-            },
-            notes=f"Program document deleted from {self.program}.",
-        )
-        self.document.delete()
+        from ..models import StudentDocument
+
+        organization_id = self.program.organization_id
+        with transaction.atomic():
+            document = get_object_or_404(
+                ProgramDocument.objects.select_for_update().filter(
+                    program=self.program,
+                    program__organization_id=organization_id,
+                ),
+                pk=self.document.pk,
+            )
+            self.document = document
+            student_submissions = StudentDocument.objects.filter(
+                program_document=document
+            )
+            list(student_submissions.select_for_update().values_list("pk", flat=True))
+            application_submissions = ApplicationDocumentSubmission.objects.filter(
+                document=document
+            )
+            list(
+                application_submissions.select_for_update().values_list("pk", flat=True)
+            )
+            has_foreign_student_submission = student_submissions.exclude(
+                student__organization_id=organization_id
+            ).exists()
+            has_foreign_application_submission = application_submissions.exclude(
+                organization_id=organization_id,
+                application__organization_id=organization_id,
+                application__program__organization_id=organization_id,
+            ).exists()
+            if has_foreign_student_submission or has_foreign_application_submission:
+                messages.error(
+                    request,
+                    "This document has submissions from another organization and cannot be deleted until reviewed.",
+                )
+                return redirect("program_detail", pk=self.program.pk)
+
+            name = self.document.name
+            log_deletion(
+                resource=self.document,
+                request=request,
+                before={
+                    "name": name,
+                    "program": str(self.program),
+                    "file_name": (
+                        self.document.file.name if self.document.file else None
+                    ),
+                },
+                notes=f"Program document deleted from {self.program}.",
+            )
+            self.document.delete()
         messages.success(request, f"Deleted document \u201c{name}\u201d.")
         return redirect("program_detail", pk=self.program.pk)

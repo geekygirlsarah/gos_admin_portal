@@ -66,6 +66,16 @@ Merging helpers in `programs/utils/merges.py` handle deduplication atomically wh
 
 Merge forms and their displayed relationship data are scoped to the current request organization. The merge helpers independently require saved keep/source records from the same organization and validate the ownership chain for related records before transferring or deleting anything. If a relationship, financial, attendance, travel, document, or other merge-related row is inconsistently owned, the operation is rejected without partial changes. A missing organization provides no merge choices and cannot be used to perform a merge.
 
+The `find_duplicate_parents --fix` maintenance command groups candidates only
+within one organization and uses the same ownership-validated parent merge
+helper. Cross-organization lookalikes are never combined; inconsistent related
+records cause the entire duplicate group to be skipped for manual review.
+
+Deleting a `ProgramDocument` is also blocked before audit logging when its
+student or application submissions include foreign-owned records, avoiding a
+cascade into another organization. A document with only local submissions keeps
+the existing deletion workflow.
+
 Alumni matching and conversion use the student's organization: only adults in that organization can be matched, and a newly created alumni adult is explicitly owned by it. A foreign-owned adult already linked to the student, or a matching adult linked to a different student, blocks conversion rather than being relinked across organizations.
 
 ### Student Merge (`perform_student_merge`, `student_merge` view)

@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from attendance.models import AttendanceSession
 from calendar_feeds.models import CalendarEvent, CalendarFeed
+from organizations.models import Organization
 from outreach.models import (
     OutreachEvent,
     OutreachMentorSignup,
@@ -37,6 +38,7 @@ from programs.services.digest import (
     collect_student_digest_data,
     get_weekly_digest_recipients,
 )
+from travel.models import TravelEvent, TravelMentorSignup
 
 
 class WeeklyDigestServiceTests(TestCase):
@@ -208,6 +210,89 @@ class WeeklyDigestServiceTests(TestCase):
 
         # shift2 needs a mentor (0 signed up)
         self.assertGreaterEqual(len(data["needs_support_shifts"]), 1)
+
+    def test_mentor_digest_excludes_foreign_outreach_travel_and_attendance(self):
+        foreign_org = Organization.objects.create(
+            name="Digest Beta", slug="digest-beta", subdomain="digest-beta"
+        )
+        foreign_program = Program.objects.create(
+            organization=foreign_org,
+            name="Beta Confidential Program",
+            active=True,
+            start_date=self.today - datetime.timedelta(days=30),
+        )
+        attendance_feature = ProgramFeature.objects.create(
+            organization=foreign_org,
+            key="attendance",
+            name="Attendance",
+        )
+        foreign_program.features.add(attendance_feature)
+        AttendanceSession.objects.create(
+            organization=foreign_org,
+            program=foreign_program,
+            adult=self.mentor,
+            check_in=timezone.now() - datetime.timedelta(hours=2),
+            check_out=timezone.now(),
+            duration_minutes=120,
+        )
+        AttendanceSession.objects.create(
+            organization=foreign_org,
+            program=self.program,
+            adult=self.mentor,
+            check_in=timezone.now() - datetime.timedelta(hours=2),
+            check_out=timezone.now(),
+            duration_minutes=120,
+        )
+        foreign_event = OutreachEvent.objects.create(
+            organization=foreign_org,
+            program=foreign_program,
+            name="Beta Confidential Outreach",
+            location_name="Beta Venue",
+            location_address="Beta Address",
+        )
+        foreign_shift = OutreachShift.objects.create(
+            organization=foreign_org,
+            event=foreign_event,
+            date=self.today + datetime.timedelta(days=3),
+            start_time=datetime.time(10, 0),
+            end_time=datetime.time(12, 0),
+        )
+        OutreachMentorSignup.objects.create(
+            organization=foreign_org,
+            adult=self.mentor,
+            shift=foreign_shift,
+        )
+        foreign_trip = TravelEvent.objects.create(
+            organization=foreign_org,
+            program=foreign_program,
+            name="Beta Confidential Trip",
+            start_date=self.today + datetime.timedelta(days=3),
+            end_date=self.today + datetime.timedelta(days=4),
+        )
+        TravelMentorSignup.objects.create(
+            organization=foreign_org,
+            adult=self.mentor,
+            event=foreign_trip,
+        )
+
+        data = collect_mentor_digest_data(
+            self.mentor, days_ahead=7, reference_date=self.today
+        )
+
+        shift_names = {
+            shift["event_name"]
+            for shift in data["confirmed_shifts"] + data["needs_support_shifts"]
+        }
+        self.assertNotIn("Beta Confidential Outreach", shift_names)
+        self.assertNotIn(
+            "Beta Confidential Trip",
+            {trip["event_name"] for trip in data["travel_highlights"]},
+        )
+        self.assertNotIn(
+            foreign_program,
+            [row["program"] for row in data["attendance_stats"]["by_program"]],
+        )
+        self.assertEqual(data["attendance_stats"]["recent_days"], 0)
 
     def test_empty_state_suppression(self):
         # Another student with no shifts, no open opportunities (e.g. past events only), no attendance

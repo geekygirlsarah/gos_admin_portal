@@ -101,14 +101,14 @@ Every protected-file endpoint must enforce:
 Storage, reverse-proxy, CDN, and deployment configuration must not expose the
 underlying paths of protected uploads publicly.
 
-The application's `/media/` handler rejects `photos/adults/`, `photos/students/`,
-`guest_form_submissions/`, `application_documents/`, and all `private/` paths in
-both debug and production configurations. This guard is database-free; protected
-adult photos and signed guest submissions are streamed only by their authorized
-endpoints above. New student photos and signed application uploads use
-organization-scoped random storage paths under the existing `MEDIA_ROOT`; these
-paths are not authorization tokens. Existing adult photos and guest submissions
-are not moved automatically, and their direct Django media URLs remain blocked.
+The application's `/media/` handler rejects `agreement_submissions/`,
+`application_documents/`, `digital_signouts/`, `guest_form_submissions/`,
+`photos/adults/`, `photos/mentors/`, `photos/students/`, `private/`, `signed/`,
+`student_documents/`, and `tax_forms/` in both debug and production
+configurations. This guard is database-free. Files remain at their existing paths;
+authorized downloads continue through their protected application endpoints.
+The guard only applies to requests routed through Django: storage origins,
+reverse proxies, and CDNs must independently avoid public access to these paths.
 
 Replaced private student-photo files are not deleted during upload. The
 `cleanup_student_photos` operator command tracks unreferenced private student

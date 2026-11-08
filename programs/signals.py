@@ -421,12 +421,27 @@ def _send_fee_notification(student, program, fee):
     from .models import Enrollment
     from .utils import send_templated_notification
 
+    organization_id = fee.organization_id
+    if (
+        organization_id is None
+        or student.organization_id != organization_id
+        or program.organization_id != organization_id
+    ):
+        return
+
     # Never notify for inactive students (graduated or deactivated enrollment)
     if student.graduated:
         return
     if (
-        Enrollment.objects.filter(student=student, program=program)
-        .exclude(active=True)
+        not Enrollment.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student=student,
+            student__organization_id=organization_id,
+            program=program,
+            program__organization_id=organization_id,
+            active=True,
+        )
         .exists()
     ):
         return
@@ -532,6 +547,11 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
     from .models import SlidingScale
 
     student = instance.student
+    if (
+        instance.organization_id is None
+        or student.organization_id != instance.organization_id
+    ):
+        return
     old_status = getattr(instance, "_old_status", None)
 
     if created and instance.status == SlidingScale.STATUS_PENDING:
@@ -558,7 +578,12 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
         from audit.service import log_deletion
 
         audit_request = get_current_request()
-        for tax_form in instance.tax_forms.all():
+        tax_forms = instance.tax_forms.filter(
+            organization_id=instance.organization_id,
+            sliding_scale__organization_id=instance.organization_id,
+            sliding_scale__student__organization_id=instance.organization_id,
+        )
+        for tax_form in tax_forms:
             log_deletion(
                 resource=tax_form,
                 request=audit_request,
@@ -593,10 +618,20 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
     from .models import Enrollment
     from .utils import get_lead_mentor_notification_email, send_templated_notification
 
+    organization_id = sliding_scale.organization_id
+    if organization_id is None or student.organization_id != organization_id:
+        return
+
     programs = list(
-        Enrollment.objects.filter(student=student, active=True).values_list(
-            "program__name", flat=True
+        Enrollment.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student=student,
+            student__organization_id=organization_id,
+            program__organization_id=organization_id,
+            active=True,
         )
+        .values_list("program__name", flat=True)
     )
 
     context = {
@@ -630,10 +665,20 @@ def _notify_sliding_scale_processed(student, sliding_scale):
     from .models import Enrollment
     from .utils import send_templated_notification
 
+    organization_id = sliding_scale.organization_id
+    if organization_id is None or student.organization_id != organization_id:
+        return
+
     programs = list(
-        Enrollment.objects.filter(student=student, active=True).values_list(
-            "program__name", flat=True
+        Enrollment.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student=student,
+            student__organization_id=organization_id,
+            program__organization_id=organization_id,
+            active=True,
         )
+        .values_list("program__name", flat=True)
     )
 
     parents = [

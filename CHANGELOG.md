@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Sliding-scale tax-form access now requires a Lead Mentor in the resolved organization or a platform superuser, and parent-derived student, finance, and travel permissions reject inconsistent cross-organization relationships and enrollments.
+- Direct Django media URLs now also deny student documents, digital sign-out signatures, tax forms, and legacy mentor photos; existing files and storage paths are unchanged.
+- Application conversion now matches profiles within the application organization, explicitly owns newly created records, and stops on foreign or inconsistent linked records without repairing them.
+- Parent sliding-scale apply/withdraw, finance notifications, and review queues now fail closed on mismatched owners; local tax forms still clean up while foreign-linked forms are preserved for review.
+- Weekly mentor digests and outreach reminders omit cross-organization records, and program-document deletion and duplicate-parent fixes refuse unsafe cross-tenant cascades or merges.
 
 ## 2026-11-07
 

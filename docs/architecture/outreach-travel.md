@@ -24,6 +24,11 @@ not block a local signup or reveal the other event's name. Event deletion is
 refused for review if it would cascade into a foreign-owned shift or signup; the
 refusal happens before notification or audit logging, and preserves the records.
 
+Scheduled outreach reminders send only for shifts, signups, students or mentors,
+events, and optional programs with consistent organization ownership. The weekly
+mentor digest similarly scopes outreach shifts, attendance, and travel highlights
+to the mentor's organization. Mismatched rows are omitted rather than repaired.
+
 ### Saved Locations (`OutreachLocation`)
 - Directory of venues (`name`, `address`) managed by mentors.
 - Event creation form uses an AJAX modal to add locations dynamically without leaving the form.

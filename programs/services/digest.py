@@ -5,7 +5,7 @@ import logging
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from django.db.models import Sum
+from django.db.models import F, Prefetch, Q, Sum
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
@@ -88,66 +88,80 @@ def compute_attendance_stats(
     total_hours = 0.0
     total_recent_hours = 0.0
     program_attendance = []
+    organization_id = getattr(person_obj, "organization_id", None)
 
     for prog in programs:
-        if prog.has_feature("attendance"):
-            qs = AttendanceSession.objects.filter(program=prog)
-            if is_student:
-                qs = qs.filter(student=person_obj)
-            else:
-                qs = qs.filter(adult=person_obj)
+        if (
+            organization_id is None
+            or prog.organization_id != organization_id
+            or not prog.has_feature("attendance")
+        ):
+            continue
+        qs = AttendanceSession.objects.filter(
+            organization_id=organization_id,
+            program=prog,
+            program__organization_id=organization_id,
+        )
+        if is_student:
+            qs = qs.filter(student=person_obj, student__organization_id=organization_id)
+        else:
+            qs = qs.filter(adult=person_obj, adult__organization_id=organization_id)
 
-            total_mins = qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
-            prog_total_hours = round(total_mins / 60.0, 1)
+        total_mins = qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
+        prog_total_hours = round(total_mins / 60.0, 1)
 
-            # Weeks elapsed matching hours chart logic
-            if prog.start_date:
-                overall_start_date = prog.start_date
-            else:
-                earliest = qs.order_by("check_in").first()
-                overall_start_date = earliest.check_in.date() if earliest else None
+        # Weeks elapsed matching hours chart logic
+        if prog.start_date:
+            overall_start_date = prog.start_date
+        else:
+            earliest = qs.order_by("check_in").first()
+            overall_start_date = earliest.check_in.date() if earliest else None
 
-            if overall_start_date:
-                days = (ref_date - overall_start_date).days
-                weeks_elapsed = max((days + 6) // 7, 1)
-            else:
-                weeks_elapsed = 1
+        if overall_start_date:
+            days = (ref_date - overall_start_date).days
+            weeks_elapsed = max((days + 6) // 7, 1)
+        else:
+            weeks_elapsed = 1
 
-            prog_avg_per_week = (
-                round(prog_total_hours / weeks_elapsed, 1) if weeks_elapsed > 0 else 0.0
-            )
+        prog_avg_per_week = (
+            round(prog_total_hours / weeks_elapsed, 1) if weeks_elapsed > 0 else 0.0
+        )
 
-            # Recent sessions in past days_ahead
-            recent_start = ref_date - datetime.timedelta(days=days_ahead)
-            recent_qs = qs.filter(
-                check_in__date__gte=recent_start, check_in__date__lte=ref_date
-            )
-            prog_recent_days = recent_qs.values("check_in__date").distinct().count()
-            recent_mins = (
-                recent_qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
-            )
-            prog_recent_hours = round(recent_mins / 60.0, 1)
+        # Recent sessions in past days_ahead
+        recent_start = ref_date - datetime.timedelta(days=days_ahead)
+        recent_qs = qs.filter(
+            check_in__date__gte=recent_start, check_in__date__lte=ref_date
+        )
+        prog_recent_days = recent_qs.values("check_in__date").distinct().count()
+        recent_mins = recent_qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
+        prog_recent_hours = round(recent_mins / 60.0, 1)
 
-            total_hours += prog_total_hours
-            total_recent_hours += prog_recent_hours
+        total_hours += prog_total_hours
+        total_recent_hours += prog_recent_hours
 
-            program_attendance.append(
-                {
-                    "program": prog,
-                    "total_hours": prog_total_hours,
-                    "avg_hours_per_week": prog_avg_per_week,
-                    "recent_days": prog_recent_days,
-                    "recent_hours": prog_recent_hours,
-                    "week_hours": prog_recent_hours,
-                }
-            )
+        program_attendance.append(
+            {
+                "program": prog,
+                "total_hours": prog_total_hours,
+                "avg_hours_per_week": prog_avg_per_week,
+                "recent_days": prog_recent_days,
+                "recent_hours": prog_recent_hours,
+                "week_hours": prog_recent_hours,
+            }
+        )
 
     recent_start = ref_date - datetime.timedelta(days=days_ahead)
-    all_qs = AttendanceSession.objects.filter(program__in=programs)
+    all_qs = AttendanceSession.objects.filter(
+        organization_id=organization_id,
+        program__in=programs,
+        program__organization_id=organization_id,
+    )
     if is_student:
-        all_qs = all_qs.filter(student=person_obj)
+        all_qs = all_qs.filter(
+            student=person_obj, student__organization_id=organization_id
+        )
     else:
-        all_qs = all_qs.filter(adult=person_obj)
+        all_qs = all_qs.filter(adult=person_obj, adult__organization_id=organization_id)
     recent_all_qs = all_qs.filter(
         check_in__date__gte=recent_start, check_in__date__lte=ref_date
     )
@@ -470,11 +484,21 @@ def collect_mentor_digest_data(
     end_date = ref_date + datetime.timedelta(days=days_ahead)
 
     # 1. Confirmed mentor signups
+    organization_id = adult.organization_id
     confirmed_signups = list(
-        OutreachMentorSignup.objects.filter(
+        OutreachMentorSignup.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
             adult=adult,
+            adult__organization_id=organization_id,
+            shift__organization_id=organization_id,
+            shift__event__organization_id=organization_id,
             shift__date__gte=ref_date,
             shift__date__lte=end_date,
+        )
+        .filter(
+            Q(shift__event__program__isnull=True)
+            | Q(shift__event__program__organization_id=organization_id)
         )
         .select_related("shift", "shift__event", "shift__event__program")
         .order_by("shift__date", "shift__start_time")
@@ -500,14 +524,43 @@ def collect_mentor_digest_data(
         )
 
     # 2. Needs support shifts across active programs
+    local_student_signups = (
+        OutreachSignup.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student__organization_id=organization_id,
+            shift__organization_id=organization_id,
+            shift__event__organization_id=organization_id,
+            shift__event__program__organization_id=organization_id,
+        )
+        .select_related("student")
+    )
+    local_mentor_signups = (
+        OutreachMentorSignup.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            adult__organization_id=organization_id,
+            shift__organization_id=organization_id,
+            shift__event__organization_id=organization_id,
+            shift__event__program__organization_id=organization_id,
+        )
+        .select_related("adult")
+    )
     upcoming_shifts = list(
-        OutreachShift.objects.filter(
+        OutreachShift.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            event__organization_id=organization_id,
+            event__program__organization_id=organization_id,
             event__program__active=True,
             date__gte=ref_date,
             date__lte=end_date,
         )
         .select_related("event", "event__program")
-        .prefetch_related("signups", "mentor_signups")
+        .prefetch_related(
+            Prefetch("signups", queryset=local_student_signups),
+            Prefetch("mentor_signups", queryset=local_mentor_signups),
+        )
         .order_by("date", "start_time")
     )
 
@@ -543,7 +596,11 @@ def collect_mentor_digest_data(
     needs_support_shifts = needs_support_shifts[:8]
 
     # 3. Mentor attendance hours
-    active_progs = list(Program.objects.filter(active=True))
+    active_progs = list(
+        Program.objects.for_organization(organization_id).filter(
+            organization_id=organization_id, active=True
+        )
+    )
     attendance_stats = compute_attendance_stats(
         adult,
         programs=active_progs,
@@ -558,11 +615,27 @@ def collect_mentor_digest_data(
         from travel.models import TravelMentorSignup
 
         travel_signups = list(
-            TravelMentorSignup.objects.filter(
+            TravelMentorSignup.objects.for_organization(organization_id)
+            .filter(
+                organization_id=organization_id,
                 adult=adult,
+                adult__organization_id=organization_id,
+                event__organization_id=organization_id,
                 event__end_date__gte=ref_date,
                 event__start_date__lte=end_date + datetime.timedelta(days=14),
-            ).select_related("event")
+            )
+            .select_related("event")
+            .filter(
+                Q(event__program__isnull=True)
+                | Q(event__program__organization_id=organization_id)
+            )
+            .filter(
+                Q(departure__isnull=True)
+                | Q(
+                    departure__organization_id=organization_id,
+                    departure__event_id=F("event_id"),
+                )
+            )
         )
         for ts in travel_signups:
             travel_highlights.append(

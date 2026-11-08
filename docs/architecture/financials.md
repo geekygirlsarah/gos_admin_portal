@@ -34,8 +34,15 @@ Records a payment made by or on behalf of a student against a specific program f
 ### Workflow & Review
 1. **Application**: Parents apply from the Payments portal page (`sliding_scale_apply`), providing household size, AGI data, and optional `TaxForm` documentation.
 2. **Review & Decision**: Lead Mentors review submissions via `sliding_scale_review_list` / `sliding_scale_review_decide`.
-3. **Document Auto-Deletion**: Uploaded `TaxForm` files are automatically deleted upon decision to protect sensitive financial records.
+3. **Document Auto-Deletion**: Same-organization `TaxForm` files are automatically deleted upon decision to protect sensitive financial records. Foreign-owned or mismatched forms are preserved for review; parent withdrawal is refused if deleting the application would cascade into a foreign-owned form.
 4. **Configuration**: Sliding-scale recommendation formulas (base income thresholds and household multipliers) are configured in the singleton `SlidingScaleSettings` model via Portal Settings → Sliding Scale tab.
+
+Parent applications and withdrawals require the student, parent profile,
+relationship, sliding-scale record, and tax forms to be consistent with the
+resolved organization. New scales and tax forms explicitly inherit that owner.
+Review queues and email notifications include only same-organization students,
+programs, fees, and related records; inconsistent records are left unchanged and
+do not contribute foreign details to local notices.
 
 ---
 
@@ -57,4 +64,7 @@ Balance emails use saved organization branding or a Momentum fallback. The share
 
 Program fee management, balance sheets, and dues lists must resolve programs and students within the request organization. Fee assignment choices require a same-organization active enrollment, and fee assignment changes do not mutate inconsistent foreign-owned rows. Balance views use the tenant-validated calculator; inconsistent financial ownership makes the affected balance unavailable, and dues totals are withheld when an enrollment or displayed balance cannot be verified safely. Sliding-scale tax-form reads and deletions require the tax form, sliding-scale record, and student to belong to the current organization. Missing tenant context fails closed.
 
-The separate fee-added and payment-recorded notification templates still contain GoS/CMU payment destinations, and the payments page can default to a CMU payment URL. These paths are not made tenant-safe by the balance-statement changes and should be reviewed before use by other organizations.
+Fee-added and payment-recorded notifications omit financial details when fee,
+program, student, or enrollment ownership is inconsistent. Their templates still
+contain GoS/CMU payment destinations, and the payments page can default to a CMU
+payment URL; review these destinations before use by other organizations.

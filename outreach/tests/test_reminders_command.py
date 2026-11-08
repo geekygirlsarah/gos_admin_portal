@@ -9,6 +9,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
+from organizations.models import Organization
 from organizations.utils import get_organization_email_settings
 from outreach.models import OutreachMentorSignup, OutreachSignup
 from outreach.tests.factories import create_outreach_event
@@ -224,3 +225,54 @@ class SendOutreachRemindersCommandTest(TestCase):
         call_command("send_outreach_reminders", stdout=out)
         self.assertEqual(len(mail.outbox), 0)
         self.assertIn("No outreach shifts found", out.getvalue())
+
+    def test_reminders_skip_foreign_owned_signups_on_local_shift(self):
+        foreign_org = Organization.objects.create(
+            name="Reminder Beta", slug="reminder-beta", subdomain="reminder-beta"
+        )
+        foreign_student = Student.objects.create(
+            organization=foreign_org,
+            legal_first_name="Foreign",
+            last_name="Student",
+            personal_email="foreign-student@example.com",
+        )
+        foreign_mentor = Adult.objects.create(
+            organization=foreign_org,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            personal_email="foreign-mentor@example.com",
+            is_mentor=True,
+            mentor_active=True,
+        )
+        OutreachSignup.objects.bulk_create(
+            [
+                OutreachSignup(
+                    organization=foreign_org,
+                    student=foreign_student,
+                    shift=self.tomorrow_shift,
+                    role=OutreachSignup.HELPER,
+                )
+            ]
+        )
+        OutreachMentorSignup.objects.bulk_create(
+            [
+                OutreachMentorSignup(
+                    organization=foreign_org,
+                    adult=foreign_mentor,
+                    shift=self.tomorrow_shift,
+                )
+            ]
+        )
+        mail.outbox.clear()
+
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            stdout=StringIO(),
+        )
+
+        recipients = {message.to[0] for message in mail.outbox}
+        self.assertEqual(
+            recipients,
+            {"student1@example.com", "student2@example.com", "mentor@example.com"},
+        )
