@@ -1142,6 +1142,100 @@ class TravelOrganizationCreationTests(TestCase):
         )
         return departure, cost_option
 
+    def test_event_delete_refuses_foreign_cascades_and_related_link_changes(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Delete Beta",
+            slug="travel-delete-beta",
+            subdomain="travel-delete-beta",
+        )
+        foreign_departure, foreign_cost = self.create_foreign_event_children()
+        foreign_student = Student.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Signup Student",
+        )
+        foreign_student_with_departure = Student.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Departure Student",
+        )
+        foreign_student_with_cost = Student.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Cost Student",
+        )
+        foreign_program = Program.objects.create(
+            organization=foreign_organization, name="Foreign Travel Program"
+        )
+        foreign_event = TravelEvent.objects.create(
+            organization=foreign_organization,
+            program=foreign_program,
+            name="Foreign Trip",
+            start_date=self.start_date,
+            end_date=self.start_date + timedelta(days=2),
+        )
+        direct_signup = TravelSignup.objects.create(
+            organization=foreign_organization,
+            student=foreign_student,
+            event=self.event,
+        )
+        departure_signup = TravelSignup.objects.create(
+            organization=foreign_organization,
+            student=foreign_student_with_departure,
+            event=foreign_event,
+            departure=self.departure,
+        )
+        cost_signup = TravelSignup.objects.create(
+            organization=foreign_organization,
+            student=foreign_student_with_cost,
+            event=foreign_event,
+        )
+        cost_signup.cost_items.add(self.cost_option)
+        foreign_mentor = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        foreign_parent = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Parent",
+            is_parent=True,
+        )
+        mentor_signup = TravelMentorSignup.objects.create(
+            organization=foreign_organization,
+            adult=foreign_mentor,
+            event=self.event,
+        )
+        parent_signup = TravelParentChaperoneSignup.objects.create(
+            organization=foreign_organization,
+            adult=foreign_parent,
+            event=self.event,
+        )
+
+        with patch("audit.mixins.log_deletion") as log_deletion:
+            response = self.tenant_post(
+                reverse("travel:event_delete", args=[self.program.pk, self.event.pk])
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(TravelEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertTrue(
+            TravelDeparture.objects.filter(pk=foreign_departure.pk).exists()
+        )
+        self.assertTrue(TravelCostOption.objects.filter(pk=foreign_cost.pk).exists())
+        self.assertTrue(TravelSignup.objects.filter(pk=direct_signup.pk).exists())
+        departure_signup.refresh_from_db()
+        self.assertEqual(departure_signup.departure_id, self.departure.pk)
+        cost_signup.refresh_from_db()
+        self.assertTrue(cost_signup.cost_items.filter(pk=self.cost_option.pk).exists())
+        self.assertTrue(TravelMentorSignup.objects.filter(pk=mentor_signup.pk).exists())
+        self.assertTrue(
+            TravelParentChaperoneSignup.objects.filter(pk=parent_signup.pk).exists()
+        )
+        log_deletion.assert_not_called()
+
     def test_event_edit_hides_foreign_departures_and_costs(self):
         self.create_foreign_event_children()
 

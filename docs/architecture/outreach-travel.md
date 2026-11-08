@@ -18,6 +18,12 @@ management rejects a selected student or mentor when an existing signup for
 the same shift is owned by another organization; the conflicting row is left
 unchanged and no notification is sent.
 
+Student overlap validation compares only records whose signup, student, shift,
+and event belong to the same organization. An inconsistent foreign overlap does
+not block a local signup or reveal the other event's name. Event deletion is
+refused for review if it would cascade into a foreign-owned shift or signup; the
+refusal happens before notification or audit logging, and preserves the records.
+
 ### Saved Locations (`OutreachLocation`)
 - Directory of venues (`name`, `address`) managed by mentors.
 - Event creation form uses an AJAX modal to add locations dynamically without leaving the form.
@@ -56,6 +62,11 @@ organization. Mentor and parent signup profiles and their adult-student
 eligibility relationships must also belong to that organization. Existing
 mismatched links are hidden from tenant rosters and are not changed or notified;
 signup conflicts are left for separate review.
+
+Trip deletion is refused before audit logging if a foreign-owned departure,
+cost option, or signup would be deleted or changed. This includes foreign
+signups attached to a local departure or cost option; the trip and all linked
+records are preserved for review rather than detached or reassigned.
 
 ### Parent Approval Workflow & Notifications
 - Students submit initial sign-ups (`interested`).

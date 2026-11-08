@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from calendar_feeds.models import CalendarEvent, CalendarFeed
+from calendar_feeds.models import CalendarEvent, CalendarFeed, EventException
 from calendar_feeds.sources.outreach import initial_sync as initial_outreach_sync
 from calendar_feeds.sources.outreach import sync_outreach_shift
 from calendar_feeds.sources.travel import initial_sync as initial_travel_sync
@@ -199,6 +199,36 @@ class CalendarSourceTenantIsolationTests(TestCase):
 
         self.assertTrue(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
 
+    def test_travel_delete_preserves_local_calendar_event_with_foreign_exception(self):
+        trip = self.make_travel_event(self.alpha, self.alpha_program, "Alpha trip")
+        calendar_event = self.make_calendar_event(self.alpha_travel_feed, trip)
+        exception = EventException.objects.create(
+            organization=self.beta,
+            event=calendar_event,
+            original_date=trip.start_date,
+            change_type=EventException.CHANGE_DELETED,
+        )
+
+        trip.delete()
+
+        self.assertTrue(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
+        self.assertTrue(EventException.objects.filter(pk=exception.pk).exists())
+
+    def test_travel_delete_removes_local_calendar_event_and_exception(self):
+        trip = self.make_travel_event(self.alpha, self.alpha_program, "Alpha trip")
+        calendar_event = self.make_calendar_event(self.alpha_travel_feed, trip)
+        exception = EventException.objects.create(
+            organization=self.alpha,
+            event=calendar_event,
+            original_date=trip.start_date,
+            change_type=EventException.CHANGE_DELETED,
+        )
+
+        trip.delete()
+
+        self.assertFalse(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
+        self.assertFalse(EventException.objects.filter(pk=exception.pk).exists())
+
     def test_outreach_initial_sync_ignores_foreign_owned_shift(self):
         alpha_shift = self.make_outreach_shift(
             self.alpha, self.alpha_program, "Alpha outreach"
@@ -269,3 +299,39 @@ class CalendarSourceTenantIsolationTests(TestCase):
         shift.delete()
 
         self.assertTrue(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
+
+    def test_outreach_delete_preserves_local_calendar_event_with_foreign_exception(
+        self,
+    ):
+        shift = self.make_outreach_shift(
+            self.alpha, self.alpha_program, "Alpha outreach"
+        )
+        calendar_event = self.make_calendar_event(self.alpha_outreach_feed, shift)
+        exception = EventException.objects.create(
+            organization=self.beta,
+            event=calendar_event,
+            original_date=shift.date,
+            change_type=EventException.CHANGE_DELETED,
+        )
+
+        shift.delete()
+
+        self.assertTrue(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
+        self.assertTrue(EventException.objects.filter(pk=exception.pk).exists())
+
+    def test_outreach_delete_removes_local_calendar_event_and_exception(self):
+        shift = self.make_outreach_shift(
+            self.alpha, self.alpha_program, "Alpha outreach"
+        )
+        calendar_event = self.make_calendar_event(self.alpha_outreach_feed, shift)
+        exception = EventException.objects.create(
+            organization=self.alpha,
+            event=calendar_event,
+            original_date=shift.date,
+            change_type=EventException.CHANGE_DELETED,
+        )
+
+        shift.delete()
+
+        self.assertFalse(CalendarEvent.objects.filter(pk=calendar_event.pk).exists())
+        self.assertFalse(EventException.objects.filter(pk=exception.pk).exists())

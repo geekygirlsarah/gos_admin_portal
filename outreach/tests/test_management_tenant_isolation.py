@@ -84,6 +84,22 @@ class OutreachManagementTenantIsolationTests(TestCase):
         )
         return event, shift
 
+    def make_alpha_student(self, username):
+        student_user = get_user_model().objects.create_user(username=username)
+        UserOrganizationMembership.objects.create(
+            user=student_user,
+            organization=self.alpha,
+            role="Student",
+            is_active=True,
+        )
+        student = Student.objects.create(
+            organization=self.alpha,
+            user=student_user,
+            legal_first_name="Alpha",
+            last_name="Signup Student",
+        )
+        return student_user, student
+
     def tenant_get(self, path):
         return self.client.get(path, HTTP_HOST=self.alpha_host)
 
@@ -244,6 +260,119 @@ class OutreachManagementTenantIsolationTests(TestCase):
                 self.assertNotEqual(response.status_code, 200)
                 self.assertNotIn(b"Beta Private Event", response.content)
                 self.assertNotIn(b"BetaPrivate", response.content)
+
+    def test_self_signup_ignores_foreign_mismatched_overlap(self):
+        student_user, student = self.make_alpha_student("alpha-overlap-student")
+        OutreachSignup.objects.create(
+            organization=self.beta,
+            shift=self.beta_shift,
+            student=student,
+            role=OutreachSignup.HELPER,
+        )
+        self.client.force_login(student_user)
+
+        with patch("outreach.services.notify_outreach_signup"):
+            response = self.client.post(
+                reverse(
+                    "outreach:shift_signup",
+                    args=[self.alpha_program.pk, self.alpha_shift.pk],
+                ),
+                {"role": OutreachSignup.HELPER},
+                HTTP_HOST=self.alpha_host,
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Beta Private Event")
+        self.assertTrue(
+            OutreachSignup.objects.filter(
+                organization=self.alpha,
+                shift=self.alpha_shift,
+                student=student,
+            ).exists()
+        )
+
+    def test_self_signup_still_reports_local_overlapping_event(self):
+        student_user, student = self.make_alpha_student("alpha-local-overlap-student")
+        local_event, local_shift = self.make_event(
+            self.alpha, self.alpha_program, "Alpha Conflict Event"
+        )
+        local_shift.date = self.alpha_shift.date
+        local_shift.save(update_fields=["date"])
+        OutreachSignup.objects.create(
+            organization=self.alpha,
+            shift=local_shift,
+            student=student,
+            role=OutreachSignup.HELPER,
+        )
+        self.client.force_login(student_user)
+
+        response = self.client.post(
+            reverse(
+                "outreach:shift_signup",
+                args=[self.alpha_program.pk, self.alpha_shift.pk],
+            ),
+            {"role": OutreachSignup.HELPER},
+            HTTP_HOST=self.alpha_host,
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, local_event.name)
+        self.assertFalse(
+            OutreachSignup.objects.filter(
+                organization=self.alpha,
+                shift=self.alpha_shift,
+                student=student,
+            ).exists()
+        )
+
+    def test_event_delete_refuses_to_cascade_into_foreign_shift_and_signup(self):
+        foreign_shift = OutreachShift.objects.create(
+            organization=self.beta,
+            event=self.alpha_event,
+            date=timezone.localdate() + timedelta(days=2),
+            start_time=time(10),
+            end_time=time(12),
+        )
+        foreign_signup = OutreachSignup.objects.create(
+            organization=self.beta,
+            shift=foreign_shift,
+            student=self.beta_student,
+            role=OutreachSignup.HELPER,
+        )
+        foreign_mentor = Adult.objects.create(
+            organization=self.beta,
+            legal_first_name="Beta",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        foreign_mentor_signup = OutreachMentorSignup.objects.create(
+            organization=self.beta,
+            adult=foreign_mentor,
+            shift=foreign_shift,
+        )
+
+        with (
+            patch("outreach.services.notify_outreach_event_deleted") as notify,
+            patch("audit.mixins.log_deletion") as log_deletion,
+        ):
+            response = self.tenant_post(
+                reverse(
+                    "outreach:event_delete",
+                    args=[self.alpha_program.pk, self.alpha_event.pk],
+                )
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(OutreachEvent.objects.filter(pk=self.alpha_event.pk).exists())
+        self.assertTrue(OutreachShift.objects.filter(pk=foreign_shift.pk).exists())
+        self.assertTrue(OutreachSignup.objects.filter(pk=foreign_signup.pk).exists())
+        self.assertTrue(
+            OutreachMentorSignup.objects.filter(pk=foreign_mentor_signup.pk).exists()
+        )
+        notify.assert_not_called()
+        log_deletion.assert_not_called()
 
     def test_foreign_shift_signup_management_does_not_change_signups(self):
         url = reverse(

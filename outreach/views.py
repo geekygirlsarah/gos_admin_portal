@@ -560,6 +560,37 @@ class OutreachEventDeleteView(
     def audit_snapshot(self, obj):
         return {"name": obj.name, "program_id": obj.program_id}
 
+    def post(self, request, *args, **kwargs):
+        with transaction.atomic():
+            event = get_object_or_404(
+                self.get_queryset().select_for_update(), pk=kwargs.get("pk")
+            )
+            shifts = list(OutreachShift.objects.select_for_update().filter(event=event))
+            shift_ids = [shift.pk for shift in shifts]
+            signups = list(
+                OutreachSignup.objects.select_for_update().filter(
+                    shift_id__in=shift_ids
+                )
+            )
+            mentor_signups = list(
+                OutreachMentorSignup.objects.select_for_update().filter(
+                    shift_id__in=shift_ids
+                )
+            )
+            has_foreign_records = any(
+                row.organization_id != event.organization_id
+                for row in [*shifts, *signups, *mentor_signups]
+            )
+            if has_foreign_records:
+                messages.error(
+                    request,
+                    "This event cannot be deleted because related records need review.",
+                )
+                return redirect("outreach:event_list", program_id=self.program.id)
+
+            self.object = event
+            return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         from outreach.services import notify_outreach_event_deleted
 

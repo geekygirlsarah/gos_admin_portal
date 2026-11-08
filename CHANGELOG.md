@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Sliding-scale review and student selections are organization-scoped, and payment notifications with inconsistent cross-organization fee data are withheld rather than including foreign financial details.
 - Guest forms and submissions now persist their organization without relying on the test-only default hook; signed submissions require an audited tenant-review download, and direct media URLs are blocked.
 - Adult photos are served only through a protected endpoint for active members of the photo owner's organization or platform superusers; direct media URLs are blocked.
+- Outreach and travel event deletion now refuses foreign-owned cascades; calendar source cleanup preserves rows with foreign exceptions. RFID management hides inconsistent foreign owners and refuses reassignment, outreach overlap validation ignores inconsistent foreign signups, and calendar feed management no longer displays foreign program names.
 
 ## 2026-11-06
 

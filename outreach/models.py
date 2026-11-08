@@ -320,7 +320,11 @@ class OutreachSignup(models.Model):
             if shift.date and shift.start_time and shift.end_time:
                 overlapping = (
                     OutreachSignup.objects.filter(
+                        organization_id=self.organization_id,
                         student_id=self.student_id,
+                        student__organization_id=self.organization_id,
+                        shift__organization_id=self.organization_id,
+                        shift__event__organization_id=self.organization_id,
                         shift__date=shift.date,
                         shift__start_time__lt=shift.end_time,
                         shift__end_time__gt=shift.start_time,

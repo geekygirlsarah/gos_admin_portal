@@ -3,6 +3,7 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.db.models import Case, CharField, F, Value, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -184,7 +185,17 @@ class FeedListView(OrganizationRequiredMixin, LeadMentorRequiredMixin, ListView)
 
     def get_queryset(self):
         org = getattr(self.request, "organization", None)
-        return CalendarFeed.objects.for_organization(org).order_by("name")
+        return (
+            CalendarFeed.objects.for_organization(org)
+            .annotate(
+                local_program_name=Case(
+                    When(program__organization_id=org.pk, then=F("program__name")),
+                    default=Value(""),
+                    output_field=CharField(),
+                )
+            )
+            .order_by("name")
+        )
 
 
 class FeedCreateView(OrganizationRequiredMixin, LeadMentorRequiredMixin, View):

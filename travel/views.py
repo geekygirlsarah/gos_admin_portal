@@ -450,6 +450,67 @@ class TravelEventDeleteView(
             "program_id": obj.program_id,
         }
 
+    def post(self, request, *args, **kwargs):
+        with transaction.atomic():
+            event = get_object_or_404(
+                self.get_queryset().select_for_update(), pk=kwargs.get("pk")
+            )
+            departures = list(
+                TravelDeparture.objects.select_for_update().filter(event=event)
+            )
+            cost_options = list(
+                TravelCostOption.objects.select_for_update().filter(event=event)
+            )
+            departure_ids = [departure.pk for departure in departures]
+            cost_option_ids = [option.pk for option in cost_options]
+
+            related_signup_ids = set(
+                TravelSignup.objects.filter(departure_id__in=departure_ids).values_list(
+                    "pk", flat=True
+                )
+            )
+            if cost_option_ids:
+                related_signup_ids.update(
+                    TravelSignup.objects.filter(
+                        cost_items__in=cost_option_ids
+                    ).values_list("pk", flat=True)
+                )
+
+            signups = list(TravelSignup.objects.select_for_update().filter(event=event))
+            related_signups = list(
+                TravelSignup.objects.select_for_update().filter(
+                    pk__in=related_signup_ids
+                )
+            )
+            mentor_signups = list(
+                TravelMentorSignup.objects.select_for_update().filter(event=event)
+            )
+            parent_signups = list(
+                TravelParentChaperoneSignup.objects.select_for_update().filter(
+                    event=event
+                )
+            )
+            has_foreign_records = any(
+                row.organization_id != event.organization_id
+                for row in [
+                    *departures,
+                    *cost_options,
+                    *signups,
+                    *related_signups,
+                    *mentor_signups,
+                    *parent_signups,
+                ]
+            )
+            if has_foreign_records:
+                messages.error(
+                    request,
+                    "This trip cannot be deleted because related records need review.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            self.object = event
+            return super().post(request, *args, **kwargs)
+
     def dispatch(self, request, *args, **kwargs):
         org = getattr(request, "organization", None)
         self.program = get_object_or_404(

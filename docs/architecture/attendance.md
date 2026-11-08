@@ -19,6 +19,13 @@ Attendance data is tracked via two primary models in `attendance/models.py`:
 ### Visitor Management (`VisitorManagementView`)
 Visitor names are denormalized on attendance records. Lead Mentors can merge and standardize misspelled visitor names via the Visitor Management tool (`/attendance/visitors/`), ensuring consistent hour tracking and reporting.
 
+### RFID Card Management (`/attendance/rfid/`)
+Assigned cards are listed only when the linked student or adult belongs to the
+card's organization. A card owned locally but linked to a foreign person is
+hidden; assignment by that card's UID is refused before existing local cards
+are deactivated or the inconsistent link is changed. Leave such records intact
+for separate review.
+
 ---
 
 ## Reporting & Visualizations

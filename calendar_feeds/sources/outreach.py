@@ -8,6 +8,8 @@ to CalendarEvent records when a CalendarFeed with source_type=OUTREACH exists.
 import logging
 from datetime import datetime, time
 
+from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -81,7 +83,7 @@ def sync_outreach_shift(shift, feed):
 
 def remove_outreach_shift(shift, feed):
     """Remove a CalendarEvent for a deleted OutreachShift."""
-    from calendar_feeds.models import CalendarEvent
+    from calendar_feeds.models import CalendarEvent, EventException
 
     event = shift.event
     if (
@@ -93,11 +95,25 @@ def remove_outreach_shift(shift, feed):
     ):
         return
 
-    count, _ = CalendarEvent.objects.filter(
+    events = CalendarEvent.objects.filter(
         organization_id=feed.organization_id,
         feed=feed,
         source_id=str(shift.pk),
-    ).delete()
+    )
+    with transaction.atomic():
+        candidate_ids = list(events.select_for_update().values_list("pk", flat=True))
+        list(
+            EventException.objects.select_for_update()
+            .filter(event_id__in=candidate_ids)
+            .values_list("pk", flat=True)
+        )
+        foreign_exceptions = EventException.objects.filter(
+            event_id__in=candidate_ids
+        ).exclude(organization_id=F("event__organization_id"))
+        safe_events = CalendarEvent.objects.filter(pk__in=candidate_ids).exclude(
+            pk__in=foreign_exceptions.values("event_id")
+        )
+        count, _ = safe_events.delete()
     if count:
         logger.debug(
             "Removed %d calendar event(s) for outreach shift %s", count, shift.pk

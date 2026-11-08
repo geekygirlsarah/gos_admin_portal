@@ -45,7 +45,17 @@
                             </td>
                             <td><span class="badge bg-secondary">{{ feed.get_source_type_display }}</span></td>
                             <td><span class="badge bg-light text-dark border">{{ feed.get_visibility_display }}</span></td>
-                            <td>{{ feed.program.name|default:"(org-wide)" }}</td>
+                            <td>
+                                {% if feed.program_id %}
+                                    {% if feed.local_program_name %}
+                                    {{ feed.local_program_name }}
+                                    {% else %}
+                                    <span class="text-muted">(needs review)</span>
+                                    {% endif %}
+                                {% else %}
+                                    (org-wide)
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if feed.is_active %}
                                 <span class="badge bg-success">Active</span>
