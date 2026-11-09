@@ -417,6 +417,14 @@ class StudentDetailView(
                 )
 
             if not allowed:
+                from audit.profile_alerts import check_profile_access_anomaly
+
+                check_profile_access_anomaly(
+                    request.user,
+                    organization,
+                    request=request,
+                    reason="rate_limit",
+                )
                 return rate_limited_response(
                     request,
                     retry_after,

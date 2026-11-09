@@ -238,6 +238,29 @@ Audit records must:
 Audit logging is not a substitute for authorization checks. A valid audit event
 must never make an otherwise unauthorized action permissible.
 
+### Student Profile Access Anomaly Alerts
+
+Successful Mentor student-profile views are checked against distinct student
+records viewed in the rolling `PROFILE_ACCESS_ALERT_WINDOW_SECONDS` window. A
+`SECURITY_ALERT` is recorded when the count exceeds
+`PROFILE_ACCESS_ALERT_THRESHOLD`; authorized Mentor requests rejected by the
+profile rate limiter also generate an alert. Lead Mentors and superusers are
+excluded from anomaly alerts.
+
+Alert notifications go to configured `ADMIN_EMAILS` and active Lead Mentors in
+the owning organization. They identify the accessing user, time, distinct count,
+window, organization, and trigger, but deliberately omit student names and
+record identifiers. A shared-cache cooldown limits alerts to one per actor and
+organization per `PROFILE_ACCESS_ALERT_COOLDOWN_SECONDS`. Cache or email
+failures are logged without interrupting the profile response; an unavailable
+cache may therefore prevent an alert from being recorded or delivered.
+
+Existing `SENSITIVE_DATA_VIEW` rows do not contain tenant identifiers. The
+detector counts only records currently owned by the active organization, so
+deleted or transferred student records are not included in historical counts.
+New `SECURITY_ALERT` rows include the organization ID in their audit metadata,
+and the audit admin hides those alerts from non-superusers outside that tenant.
+
 ### Data Sanitization
 
 `sanitize_audit_data` in `audit/service.py` recursively removes sensitive values

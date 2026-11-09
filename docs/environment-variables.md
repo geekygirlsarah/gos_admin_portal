@@ -220,6 +220,17 @@ The legacy `STUDENT_PROFILE_RATE_LIMIT_*` environment variables are accepted as
 fallbacks when their corresponding `PROFILE_RATE_LIMIT_*` variables are unset.
 Student and adult profiles have separate budgets.
 
+### Student Profile Access Anomaly Alerts
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PROFILE_ACCESS_ALERT_THRESHOLD` | `20` | Number of distinct student profiles that must be exceeded before an alert is raised. |
+| `PROFILE_ACCESS_ALERT_WINDOW_SECONDS` | `1800` (30 min) | Rolling window used to count distinct student-profile views. |
+| `PROFILE_ACCESS_ALERT_COOLDOWN_SECONDS` | `21600` (6 hr) | Maximum one alert per user and organization during the cooldown. |
+
+Alert emails are sent to `ADMIN_EMAILS` and active Lead Mentors for the owning
+organization. A shared cache is required for cross-worker cooldown enforcement.
+
 ---
 
 ## 6. Feature Toggles & Development Utilities

@@ -60,6 +60,22 @@ The shared 429 page uses the current organization's configured public contact
 email or email reply-to address; it does not fall back to another organization's
 contact address.
 
+## Student Profile Access Anomaly Alerts
+
+Student views by non-Lead Mentors are monitored for more than 20 distinct
+student profiles in a rolling 30-minute window by default. A `SECURITY_ALERT`
+audit event and email notification are also generated when an authorized Mentor
+is blocked by the student-profile rate limit. Configure the threshold, rolling
+window, and per-user/per-organization cooldown with
+`PROFILE_ACCESS_ALERT_THRESHOLD`, `PROFILE_ACCESS_ALERT_WINDOW_SECONDS`, and
+`PROFILE_ACCESS_ALERT_COOLDOWN_SECONDS`.
+
+Notifications are sent to `ADMIN_EMAILS` and active Lead Mentors belonging to
+the affected organization. Use a shared cache backend across workers for
+consistent six-hour debounce; if the cache or email backend is unavailable, the
+profile response remains available and the failure is logged. Review
+`docs/security.md` for tenant attribution and alert-content limitations.
+
 ## Protected Media Files
 
 For a directory-by-directory map and a safe review process for older uploads,

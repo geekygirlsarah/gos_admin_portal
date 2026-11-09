@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
 
 ### Added
+- Added near-real-time `SECURITY_ALERT` audit events and tenant-scoped email alerts for unusual student-profile access and rate-limit breaches, with a configurable rolling threshold and six-hour per-user cooldown.
 - Renamed the shared student/adult detail throttle settings to `PROFILE_RATE_LIMIT_*` while retaining the former environment variable names as fallbacks; throttling notices now use tenant-specific configured contact details.
 - Added the same rolling rate limit for Mentor adult-profile detail requests, with a separate budget from student profiles.
 - Added a rolling rate limit for Mentor student-profile detail requests, with a 429 cooldown notice and exemptions for Lead Mentors and superusers.
