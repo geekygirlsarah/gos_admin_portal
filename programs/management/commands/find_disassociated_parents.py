@@ -25,12 +25,15 @@ per converted application:
   needs a human.
 * ``MISSING`` -- no ``Adult`` record matches; the parent never made it in.
 * ``NOT_CAPTURED`` -- the application has no usable data for that slot.
+* ``MANUAL_REVIEW`` -- ownership or related-record links are inconsistent; no
+  related identity is shown and no records are changed.
 
-Read-only by default. ``--fix`` re-links only ``DISASSOCIATED`` cases (creating
-the student<->parent relationship and filling the empty primary/secondary slot
--- it never creates a new ``Adult`` and never overrides an existing contact
-pointer). By default only applications with at least one problem are shown;
-pass ``--all`` to list every converted application.
+Read-only by default. Matching is scoped to the application's organization.
+``--fix`` re-links only ownership-consistent ``DISASSOCIATED`` cases, explicitly
+assigning that organization to new relationships. It never creates a new
+``Adult``, changes foreign rows, or overrides an existing contact pointer. By
+default only applications with at least one problem are shown; pass ``--all``
+to list every converted application.
 
 Usage::
 
@@ -41,13 +44,12 @@ Usage::
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 
 from applications.models import Application, normalize_step_keys
-from programs.models import Adult, AdultStudentRelationship
+from programs.models import Adult, AdultStudentRelationship, Program, Student
 
 
 def _email_key(value):
@@ -94,19 +96,24 @@ DISASSOCIATED = "DISASSOCIATED"
 AMBIGUOUS = "AMBIGUOUS"
 MISSING = "MISSING"
 NOT_CAPTURED = "NOT_CAPTURED"
+MANUAL_REVIEW = "MANUAL_REVIEW"
 
-_ISSUE_STATUSES = (ROLE_MISMATCH, DISASSOCIATED, AMBIGUOUS, MISSING)
+_ISSUE_STATUSES = (ROLE_MISMATCH, DISASSOCIATED, AMBIGUOUS, MISSING, MANUAL_REVIEW)
+_MANUAL_REVIEW_DETAIL = (
+    "Ownership or related-record inconsistency; manual review required. "
+    "No linked identity was displayed or changed."
+)
 
 
-def _linked_name_match(student, desc):
+def _linked_name_match(linked_adults, desc):
     target = _name_key((desc["first"], desc["last"]))
-    matches = [a for a in student.adults.all() if _name_key(a) == target]
+    matches = [adult for adult in linked_adults if _name_key(adult) == target]
     if len(matches) == 1:
         return matches[0]
     return None
 
 
-def _match_linked(student, desc):
+def _match_linked(linked_adults, desc):
     """Return the linked ``Adult`` that is the *same person* as the expected
     parent, or ``None``.
 
@@ -116,46 +123,69 @@ def _match_linked(student, desc):
     record happens to hold the shared email). When the application captured no
     usable name (email only), fall back to email identity.
     """
-    match = _linked_name_match(student, desc)
+    match = _linked_name_match(linked_adults, desc)
     if match is not None:
         return match
     if not (desc["first"] and desc["last"]) and desc["email"]:
-        for adult in student.adults.all():
+        for adult in linked_adults:
             if desc["email"] in _adult_email_keys(adult):
                 return adult
     return None
 
 
-def _adult_records_for_email(email):
-    matches = list(Adult.objects.filter(personal_email__iexact=email))
+def _adult_records_for_email(email, organization_id):
+    matches = list(
+        Adult._base_manager.filter(
+            organization_id=organization_id, personal_email__iexact=email
+        )
+    )
     if not matches:
-        matches = list(Adult.objects.filter(org_email__iexact=email))
+        matches = list(
+            Adult._base_manager.filter(
+                organization_id=organization_id, org_email__iexact=email
+            )
+        )
     return matches
 
 
-def _adult_records_for_name(desc):
+def _adult_records_for_name(desc, organization_id):
     return list(
-        Adult.objects.filter(
-            legal_first_name__iexact=desc["first"], last_name__iexact=desc["last"]
+        Adult._base_manager.filter(
+            organization_id=organization_id,
+            legal_first_name__iexact=desc["first"],
+            last_name__iexact=desc["last"],
         )
     )
+
+
+def _foreign_adult_match_exists(desc, organization_id, *, by_email=False):
+    adults = Adult._base_manager.exclude(organization_id=organization_id)
+    if by_email:
+        return adults.filter(
+            Q(personal_email__iexact=desc["email"]) | Q(org_email__iexact=desc["email"])
+        ).exists()
+    return adults.filter(
+        legal_first_name__iexact=desc["first"], last_name__iexact=desc["last"]
+    ).exists()
 
 
 def _name_label(desc):
     return f"{desc['first']} {desc['last']}".strip()
 
 
-def _find_unlinked(student, desc):
+def _find_unlinked(student, desc, organization_id, linked_adults):
     """Look for an ``Adult`` that represents the expected parent but is not
     linked to the student.
 
     Returns ``(status, extra, detail)``. ``extra`` is the matched ``Adult`` or
     ``None``; ``detail`` is the human-readable explanation.
     """
-    linked_ids = {a.id for a in student.adults.all()}
+    linked_ids = {adult.id for adult in linked_adults}
 
     if desc["first"] and desc["last"]:
-        name_matches = _adult_records_for_name(desc)
+        if _foreign_adult_match_exists(desc, organization_id):
+            return MANUAL_REVIEW, None, _MANUAL_REVIEW_DETAIL
+        name_matches = _adult_records_for_name(desc, organization_id)
         if len(name_matches) == 1:
             return (
                 DISASSOCIATED,
@@ -172,7 +202,9 @@ def _find_unlinked(student, desc):
             )
 
     if desc["email"]:
-        email_matches = _adult_records_for_email(desc["email"])
+        if _foreign_adult_match_exists(desc, organization_id, by_email=True):
+            return MANUAL_REVIEW, None, _MANUAL_REVIEW_DETAIL
+        email_matches = _adult_records_for_email(desc["email"], organization_id)
         if len(email_matches) > 1:
             return (
                 AMBIGUOUS,
@@ -210,17 +242,19 @@ def _find_unlinked(student, desc):
     return MISSING, None, "no adult record matches -- the parent never converted"
 
 
-def classify(student, slot, desc):
+def classify(student, slot, desc, organization_id, linked_adults, relationships_by_id):
     """Compare one expected parent to the student's current links.
 
     Returns ``(status, extra, detail)``. ``extra`` is the matched ``Adult`` (or
     ``None``); ``detail`` is a short human-readable rendering for ``extra``.
     """
-    expected_field = "primary_contact" if slot == "primary" else "secondary_contact"
-
-    match = _match_linked(student, desc)
+    match = _match_linked(linked_adults, desc)
     if match is not None:
-        if getattr(student, f"{expected_field}_id") == match.pk:
+        relation_id = getattr(student, f"{slot}_contact_relationship_id")
+        contact_adult_id = (
+            relationships_by_id[relation_id].adult_id if relation_id else None
+        )
+        if contact_adult_id == match.pk:
             return (
                 OK,
                 match,
@@ -228,10 +262,22 @@ def classify(student, slot, desc):
             )
         current = (
             "primary"
-            if student.primary_contact_id == match.pk
+            if (
+                student.primary_contact_relationship_id
+                and relationships_by_id[
+                    student.primary_contact_relationship_id
+                ].adult_id
+                == match.pk
+            )
             else (
                 "secondary"
-                if student.secondary_contact_id == match.pk
+                if (
+                    student.secondary_contact_relationship_id
+                    and relationships_by_id[
+                        student.secondary_contact_relationship_id
+                    ].adult_id
+                    == match.pk
+                )
                 else "a linked parent"
             )
         )
@@ -242,12 +288,90 @@ def classify(student, slot, desc):
             f"as the {slot} contact (currently {current})",
         )
 
-    return _find_unlinked(student, desc)
+    return _find_unlinked(student, desc, organization_id, linked_adults)
+
+
+def _application_scope_is_consistent(application):
+    organization_id = application.organization_id
+    student = application.converted_student
+    if organization_id is None or student is None:
+        return False
+    if student.organization_id != organization_id:
+        return False
+    return not application.program_id or (
+        application.program is not None
+        and application.program.organization_id == organization_id
+    )
+
+
+def _student_relationships(application):
+    """Return local relationships by ID, or ``None`` for unsafe references."""
+    student = application.converted_student
+    organization_id = application.organization_id
+    pointer_ids = {
+        relation_id
+        for relation_id in (
+            student.primary_contact_relationship_id,
+            student.secondary_contact_relationship_id,
+        )
+        if relation_id
+    }
+    relationships = list(
+        AdultStudentRelationship._base_manager.filter(
+            Q(student_id=student.pk) | Q(pk__in=pointer_ids)
+        ).select_related("adult", "student")
+    )
+    relationships_by_id = {
+        relationship.pk: relationship for relationship in relationships
+    }
+    for relationship in relationships:
+        if (
+            relationship.organization_id != organization_id
+            or relationship.student_id != student.pk
+            or relationship.student.organization_id != organization_id
+            or relationship.adult.organization_id != organization_id
+        ):
+            return None
+    if not pointer_ids.issubset(relationships_by_id):
+        return None
+    return relationships_by_id
 
 
 def analyze_application(application):
     """Return a list of ``(slot, status, adult, desc, step, detail)`` rows for
     one converted application."""
+    if not _application_scope_is_consistent(application):
+        return [
+            (
+                "application",
+                MANUAL_REVIEW,
+                None,
+                None,
+                None,
+                "Application, student, or program ownership is inconsistent; "
+                "manual review required. No personal details were displayed or changed.",
+            )
+        ]
+
+    relationships_by_id = _student_relationships(application)
+    if relationships_by_id is None:
+        return [
+            (
+                "application",
+                MANUAL_REVIEW,
+                None,
+                None,
+                None,
+                _MANUAL_REVIEW_DETAIL,
+            )
+        ]
+    student = application.converted_student
+    linked_adults = [
+        relationship.adult
+        for relationship in relationships_by_id.values()
+        if relationship.student_id == student.pk
+    ]
+
     data = normalize_step_keys(application.data or {})
     rows = []
     for slot, key in (
@@ -261,7 +385,14 @@ def analyze_application(application):
                 (slot, NOT_CAPTURED, None, None, step, "no parent data captured")
             )
             continue
-        status, extra, detail = classify(application.converted_student, slot, desc)
+        status, extra, detail = classify(
+            student,
+            slot,
+            desc,
+            application.organization_id,
+            linked_adults,
+            relationships_by_id,
+        )
         rows.append((slot, status, extra, desc, step, detail))
     return rows
 
@@ -269,18 +400,14 @@ def analyze_application(application):
 class Command(BaseCommand):
     help = (
         "Find converted applications whose students lost their parent links "
-        "(read-only); --fix re-links unambiguous orphan parents."
+        "(read-only); --fix re-links only ownership-consistent local matches."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--fix",
             action="store_true",
-            help=(
-                "Create the missing student<->parent relationship and fill the "
-                "empty primary/secondary slot for unambiguous (DISASSOCIATED) "
-                "findings only."
-            ),
+            help=("Re-link only local, ownership-consistent DISASSOCIATED findings."),
         )
         parser.add_argument(
             "--all",
@@ -293,7 +420,7 @@ class Command(BaseCommand):
         show_all = options["all"]
 
         applications = (
-            Application.objects.filter(
+            Application._base_manager.filter(
                 status=Application.Status.CONVERTED,
                 applicant_type__in=(
                     Application.Type.STUDENT,
@@ -302,17 +429,13 @@ class Command(BaseCommand):
             )
             .exclude(converted_student__isnull=True)
             .select_related("converted_student", "program")
-            .prefetch_related("converted_student__adults")
             .order_by("application_id")
         )
 
-        counts = defaultdict(int)
         rows_by_app = {}
         for application in applications:
             rows = analyze_application(application)
             rows_by_app[application.pk] = rows
-            for _, status, *_ in rows:
-                counts[status] += 1
 
         issue_apps = [
             application
@@ -324,7 +447,7 @@ class Command(BaseCommand):
         ]
         shown = applications if show_all else issue_apps
 
-        self._print_report(shown, rows_by_app, fix)
+        self._print_report(shown, rows_by_app)
 
         if fix:
             linked = self._link_disassociated(issue_apps, rows_by_app)
@@ -340,7 +463,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(
                 f"\n{len(issue_apps)} application(s) with issues. "
-                "Review the report above (or re-run with --fix)."
+                "Review the report above and manually investigate any unsafe links."
             )
 
     # ------------------------------------------------------------------ link
@@ -349,42 +472,33 @@ class Command(BaseCommand):
         from audit.service import log_event
 
         linked = 0
-        for application in applications:
-            student = application.converted_student
-            for slot, status, adult, desc, step, _ in rows_by_app[application.pk]:
+        for reported_application in applications:
+            for slot, status, adult, desc, step, _ in rows_by_app[
+                reported_application.pk
+            ]:
                 if status != DISASSOCIATED or adult is None:
                     continue
-                with transaction.atomic():
-                    relationship = (step or {}).get(
-                        "relationship_to_student"
-                    ) or "parent"
-                    specific = (step or {}).get("specific_relationship") or ""
-                    AdultStudentRelationship.objects.get_or_create(
-                        adult=adult,
-                        student=student,
-                        defaults={
-                            "relationship_to_student": relationship[:20],
-                            "specific_relationship": specific[:100],
-                        },
+                linked_pair = self._link_one_disassociated(
+                    reported_application.pk, slot, adult.pk
+                )
+                if linked_pair is None:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "  Skipped a changed or inconsistent record; "
+                            "manual review required."
+                        )
                     )
-                    if not adult.is_parent:
-                        Adult.objects.filter(pk=adult.pk).update(is_parent=True)
-                    fill_field = (
-                        "primary_contact" if slot == "primary" else "secondary_contact"
-                    )
-                    if getattr(student, f"{fill_field}_id") is None:
-                        if slot == "primary":
-                            student.primary_contact = adult
-                        else:
-                            student.secondary_contact = adult
-                        student.save()
+                    continue
+                application, student, adult, relationship, relationship_label = (
+                    linked_pair
+                )
                 log_event(
                     request=None,
                     event=AuditEvent.GUARDIAN_ADDED,
                     resource=student,
                     after={
                         "guardian": str(adult),
-                        "relationship": relationship,
+                        "relationship": relationship_label,
                     },
                     notes=(
                         f"Parent re-linked to student by find_disassociated_parents "
@@ -401,8 +515,100 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(message))
         return linked
 
+    def _link_one_disassociated(self, application_id, slot, expected_adult_id):
+        """Lock, recheck, and link one still-valid local parent recovery."""
+        with transaction.atomic():
+            application = (
+                Application._base_manager.select_for_update()
+                .filter(pk=application_id, status=Application.Status.CONVERTED)
+                .first()
+            )
+            if application is None or application.converted_student_id is None:
+                return None
+
+            student = (
+                Student._base_manager.select_for_update()
+                .filter(pk=application.converted_student_id)
+                .first()
+            )
+            if student is None:
+                return None
+            application.converted_student = student
+
+            if application.program_id:
+                program = (
+                    Program._base_manager.select_for_update()
+                    .filter(pk=application.program_id)
+                    .first()
+                )
+                if program is None:
+                    return None
+                application.program = program
+
+            if not _application_scope_is_consistent(application):
+                return None
+
+            adult = (
+                Adult._base_manager.select_for_update()
+                .filter(pk=expected_adult_id)
+                .first()
+            )
+            if adult is None or adult.organization_id != application.organization_id:
+                return None
+
+            pointer_ids = {
+                relation_id
+                for relation_id in (
+                    student.primary_contact_relationship_id,
+                    student.secondary_contact_relationship_id,
+                )
+                if relation_id
+            }
+            list(
+                AdultStudentRelationship._base_manager.select_for_update()
+                .filter(Q(student_id=student.pk) | Q(pk__in=pointer_ids))
+                .values_list("pk", flat=True)
+            )
+
+            matching_row = next(
+                (row for row in analyze_application(application) if row[0] == slot),
+                None,
+            )
+            if (
+                matching_row is None
+                or matching_row[1] != DISASSOCIATED
+                or matching_row[2] is None
+                or matching_row[2].pk != adult.pk
+            ):
+                return None
+
+            step = matching_row[4] or {}
+            relationship_label = (step.get("relationship_to_student") or "parent")[:20]
+            specific = (step.get("specific_relationship") or "")[:100]
+            relationship, _ = AdultStudentRelationship.objects.for_organization(
+                application.organization
+            ).get_or_create(
+                organization_id=application.organization_id,
+                adult=adult,
+                student=student,
+                defaults={
+                    "relationship_to_student": relationship_label,
+                    "specific_relationship": specific,
+                },
+            )
+
+            if not adult.is_parent:
+                adult.is_parent = True
+                adult.save(update_fields=["is_parent"])
+
+            if getattr(student, f"{slot}_contact_relationship_id") is None:
+                setattr(student, f"{slot}_contact", adult)
+                student.save()
+
+            return application, student, adult, relationship, relationship_label
+
     # ---------------------------------------------------------------- report
-    def _print_report(self, applications, rows_by_app, fix):
+    def _print_report(self, applications, rows_by_app):
         self.stdout.write(
             self.style.SUCCESS(
                 "Disassociated parents report\n============================\n"
@@ -412,21 +618,33 @@ class Command(BaseCommand):
             self.stdout.write("No converted applications to report.\n")
             return
         for application in applications:
-            student = application.converted_student
-            program = application.program.name if application.program_id else "-"
-            self.stdout.write(
-                f"Application {application.application_id} -- "
-                f"Student #{student.pk} {student.display_name} "
-                f"(program: {program})"
-            )
+            if _application_scope_is_consistent(application):
+                student = application.converted_student
+                program = application.program.name if application.program_id else "-"
+                self.stdout.write(
+                    f"Application {application.application_id} -- "
+                    f"Student #{student.pk} {student.display_name} "
+                    f"(program: {program})"
+                )
+            else:
+                self.stdout.write(
+                    f"Application {application.application_id} -- "
+                    f"organization #{application.organization_id} "
+                    "[MANUAL_REVIEW: ownership mismatch; personal details withheld]"
+                )
             for slot, status, adult, desc, step, detail in rows_by_app[application.pk]:
-                if desc is not None:
+                if status == MANUAL_REVIEW:
+                    name = "identity withheld"
+                    email = ""
+                    role = ""
+                elif desc is not None:
                     name = f"{desc['first']} {desc['last']}".strip() or "no name"
                     email = f" <{desc['email']}>" if desc["email"] else ""
+                    role = self._role_label(step)
                 else:
                     name = "no name"
                     email = ""
-                role = self._role_label(step)
+                    role = self._role_label(step)
                 self.stdout.write(
                     f'  {slot.title()}: "{name}"{email}  [{status}]{role}'
                 )

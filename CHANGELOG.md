@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-08
 
 ### Fixed
+- `find_disconnected_accounts` now treats email/name matches as suggestions and requires an explicitly selected, independently verified organization/profile/user pair plus confirmation before linking; it refuses stale, foreign-owned, already-linked, staff, and superuser selections.
+- `find_disassociated_parents` now limits recovery to ownership-consistent records in the application organization, assigns ownership to new relationships, and leaves mismatched links for generic manual review.
 - Sliding-scale tax-form access now requires a Lead Mentor in the resolved organization or a platform superuser, and parent-derived student, finance, and travel permissions reject inconsistent cross-organization relationships and enrollments.
 - Direct Django media URLs now also deny student documents, digital sign-out signatures, tax forms, and legacy mentor photos; existing files and storage paths are unchanged.
 - Application conversion now matches profiles within the application organization, explicitly owns newly created records, and stops on foreign or inconsistent linked records without repairing them.

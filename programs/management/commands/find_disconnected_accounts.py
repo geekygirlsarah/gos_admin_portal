@@ -10,15 +10,17 @@ This command finds the evidence:
 * unlinked Student/Adult profiles that had a login they no longer have, and
 * unambiguous email/name matches between the two (strongly-suspected victims).
 
-It is read-only by default. ``--fix`` fills the NULL ``user`` link only for
-unambiguous matches, and only when the link is currently empty — it never
-overwrites an existing link or re-points a user that already belongs to another
-profile.
+It is read-only by default. Email and name matches are suggestions only and do
+not verify identity. ``--fix`` links exactly one explicitly selected pair only
+after the operator independently verifies the identity and confirms the action.
+Saving the profile can create organization memberships; existing memberships
+are not reactivated.
 
 Usage::
 
     python manage.py find_disconnected_accounts          # report only
-    python manage.py find_disconnected_accounts --fix    # re-link unambiguous matches
+    python manage.py find_disconnected_accounts --fix --organization-id 2 \
+        --profile-type student --profile-id 17 --user-id 42 --confirm-link
 """
 
 from __future__ import annotations
@@ -26,8 +28,10 @@ from __future__ import annotations
 from collections import defaultdict
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 
+from organizations.models import Organization
 from programs.models import Adult, Student
 
 User = get_user_model()
@@ -91,18 +95,76 @@ def _match_one(profile, name_key, emails, by_email, by_name):
 class Command(BaseCommand):
     help = (
         "Find User accounts disconnected from their Student/Adult profiles "
-        "(read-only), and optionally re-link unambiguous matches with --fix."
+        "(read-only); email/name matches are suggestions, not identity verification."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--fix",
             action="store_true",
-            help="Re-link unambiguous matches (empty links only).",
+            help="Link one explicitly selected and independently verified pair.",
+        )
+        parser.add_argument(
+            "--organization-id",
+            type=int,
+            help="Organization that owns the selected profile (required with --fix).",
+        )
+        parser.add_argument(
+            "--profile-type",
+            choices=("student", "adult"),
+            help="Type of selected profile (required with --fix).",
+        )
+        parser.add_argument(
+            "--profile-id",
+            type=int,
+            help="ID of the selected Student or Adult profile (required with --fix).",
+        )
+        parser.add_argument(
+            "--user-id",
+            type=int,
+            help="ID of the selected floating account (required with --fix).",
+        )
+        parser.add_argument(
+            "--confirm-link",
+            action="store_true",
+            help="Confirm you independently verified this exact account/profile pair.",
         )
 
     def handle(self, *args, **options):
         fix = options["fix"]
+        selectors = (
+            options["organization_id"],
+            options["profile_type"],
+            options["profile_id"],
+            options["user_id"],
+        )
+        if not fix and (
+            any(value is not None for value in selectors) or options["confirm_link"]
+        ):
+            raise CommandError("Recovery selectors require --fix.")
+        if fix:
+            missing = [
+                name
+                for name, value in zip(
+                    (
+                        "--organization-id",
+                        "--profile-type",
+                        "--profile-id",
+                        "--user-id",
+                    ),
+                    selectors,
+                )
+                if value is None
+            ]
+            if missing:
+                raise CommandError(
+                    "--fix requires one complete pair: " + ", ".join(missing) + "."
+                )
+            if not options["confirm_link"]:
+                raise CommandError(
+                    "--fix requires --confirm-link after independent identity verification."
+                )
+
         floating, unlinked_students, unlinked_adults = self._collect()
         fixable_floating = [u for u in floating if not (u.is_staff or u.is_superuser)]
         candidates = self._candidates(unlinked_students, unlinked_adults)
@@ -114,11 +176,15 @@ class Command(BaseCommand):
             unlinked_adults,
             unambiguous,
             ambiguous,
-            fix,
         )
 
         if fix:
-            self._apply_links(unambiguous)
+            self._apply_confirmed_link(
+                options["organization_id"],
+                options["profile_type"],
+                options["profile_id"],
+                options["user_id"],
+            )
 
         if not floating and not unambiguous and not ambiguous:
             summary = self.style.SUCCESS("No disconnected accounts found.")
@@ -159,10 +225,13 @@ class Command(BaseCommand):
         unlinked_adults,
         unambiguous,
         ambiguous,
-        fix,
     ):
         self.stdout.write(
             self.style.SUCCESS("Disconnected accounts report\n===================\n")
+        )
+        self.stdout.write(
+            "Email/name matches are suggestions only; independently verify identity "
+            "before any link is confirmed."
         )
 
         self.stdout.write(f"[1] FLOATING USER ACCOUNTS ({len(floating)})\n{'-' * 60}")
@@ -198,12 +267,12 @@ class Command(BaseCommand):
 
         self.stdout.write(f"\n[3] CANDIDATE RE-LINKS\n{'-' * 60}")
         if unambiguous:
-            verb = "would link" if not fix else "linked"
             for label, profile, user, method in unambiguous:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"  {verb}: {label} #{profile.pk} ({profile.display_name}) "
-                        f"<-> # {user.pk} {user.email or user.username} via {method}"
+                        f"  SUGGESTION ONLY: {label} #{profile.pk} "
+                        f"({profile.display_name}, organization #{profile.organization_id}) "
+                        f"<-> user #{user.pk} {user.email or user.username} via {method}"
                     )
                 )
         else:
@@ -211,33 +280,75 @@ class Command(BaseCommand):
 
         if ambiguous:
             self.stdout.write(
-                "\n  AMBIGUOUS — skipped (account matches multiple profiles):"
+                "\n  AMBIGUOUS SUGGESTIONS — heuristic cannot distinguish these pairs:"
             )
             for label, profile, user, method in ambiguous:
                 self.stdout.write(
-                    f"    {label} #{profile.pk} ({profile.display_name}) "
-                    f"<-> {user.email or user.username} via {method}"
+                    f"    {label} #{profile.pk} ({profile.display_name}, "
+                    f"organization #{profile.organization_id}) "
+                    f"<-> user #{user.pk} {user.email or user.username} via {method}"
                 )
 
     # ----------------------------------------------------------------- apply
-    def _apply_links(self, unambiguous):
-        """Fill NULL links for unambiguous matches. Never overwrites or steals."""
-        linked = 0
-        for label, profile, user, method in unambiguous:
-            if (
-                Student.objects.filter(user=user).exists()
-                or Adult.objects.filter(user=user).exists()
-            ):
-                continue
+    def _apply_confirmed_link(self, organization_id, profile_type, profile_id, user_id):
+        """Link one confirmed pair after locking and rechecking its records."""
+        profile_model = {"student": Student, "adult": Adult}.get(profile_type)
+        if profile_model is None:
+            raise CommandError("Unsupported profile type.")
+
+        with transaction.atomic():
+            organization = (
+                Organization._base_manager.select_for_update()
+                .filter(pk=organization_id)
+                .first()
+            )
+            if organization is None:
+                raise CommandError("The selected organization does not exist.")
+
+            user = User._base_manager.select_for_update().filter(pk=user_id).first()
+            if user is None:
+                raise CommandError("The selected user account does not exist.")
+            if user.is_staff or user.is_superuser:
+                raise CommandError("Staff and superuser accounts cannot be linked.")
+
+            profile = (
+                profile_model._base_manager.select_for_update()
+                .filter(pk=profile_id)
+                .first()
+            )
+            if profile is None:
+                raise CommandError("The selected profile does not exist.")
+            if profile.organization_id != organization.pk:
+                raise CommandError(
+                    "The selected profile is not owned by the selected organization."
+                )
+            if profile.user_id is not None:
+                raise CommandError(
+                    "The selected profile is already linked to an account."
+                )
+
+            linked_students = list(
+                Student._base_manager.select_for_update()
+                .filter(user_id=user.pk)
+                .values_list("pk", flat=True)
+            )
+            linked_adults = list(
+                Adult._base_manager.select_for_update()
+                .filter(user_id=user.pk)
+                .values_list("pk", flat=True)
+            )
+            if linked_students or linked_adults:
+                raise CommandError(
+                    "The selected user account is already linked to a profile."
+                )
+
             profile.user = user
             profile.save(update_fields=["user"])
-            linked += 1
-        if linked:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"\nLinked {linked} profile(s). "
-                    "See audit log for PROFILE_LINK_CHANGED entries."
-                )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"\nLinked {profile_type.title()} #{profile.pk} to user #{user.pk}. "
+                "See the audit log for PROFILE_LINK_CHANGED. Saving may create "
+                "organization memberships; inactive memberships are not reactivated."
             )
-        else:
-            self.stdout.write("\nNothing to link.")
+        )

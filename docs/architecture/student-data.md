@@ -41,6 +41,15 @@ secondary contact compatibility properties return no contact for an
 inconsistent link. `School` remains a shared catalog; `Student.school` choices
 are intentionally not tenant-filtered.
 
+The `find_disassociated_parents` maintenance command scopes Adult matching to
+the converted application's organization and validates the application's
+organization, converted Student, optional Program, all relevant relationship
+rows, and primary/secondary contact pointers before recovery. Foreign lookalikes
+and inconsistent ownership links are generic manual-review outcomes; the report
+does not reveal foreign identities, and `--fix` does not repair mismatched rows
+or replace existing contacts. Safe local fixes recheck records transactionally
+and explicitly assign the application organization to each new relationship.
+
 ---
 
 ## Active vs. Inactive Students Scoping

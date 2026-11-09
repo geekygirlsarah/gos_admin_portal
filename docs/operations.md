@@ -178,11 +178,25 @@ their read-only or `--dry-run` form first whenever available.
 ### Find Disconnected Accounts
 
 ```bash
-python manage.py find_disconnected_accounts [--fix]
+python manage.py find_disconnected_accounts
+python manage.py find_disconnected_accounts --fix --organization-id <org-id> \
+  --profile-type <student|adult> --profile-id <profile-id> --user-id <user-id> \
+  --confirm-link
 ```
 
-Audits unlinked Adult and Student users and re-links unambiguous matches.
-Review all proposed changes before using `--fix`.
+The default report is read-only. Email and name matches are suggestions only;
+they do not verify identity. Before linking, independently verify that the
+specific account belongs to the specific person using trusted records. A single
+`--fix` invocation can link only the selected account/profile pair and requires
+the owning organization, profile type, both record IDs, and `--confirm-link`.
+Missing, stale, already-linked, staff/superuser, or organization-mismatched
+selections are refused; the command never applies the report's matches in bulk.
+
+Saving the profile runs the normal audit and membership signals. It can create
+organization memberships, but does not reactivate an existing inactive
+membership. Treat the report and command output as sensitive because they may
+include names and account identifiers. Do not run this command against
+production data without the required operational review and approval.
 
 ### Find Duplicate Parents
 
@@ -201,7 +215,15 @@ python manage.py find_disassociated_parents [--fix] [--all]
 ```
 
 Re-links orphaned parent records into empty contact slots on converted student
-applications. Review proposed matches before using `--fix`.
+applications. The default report is read-only and `--all` includes applications
+without reported issues. Adult matches and relationship lookups are limited to
+the application's organization. Foreign lookalikes or inconsistent application,
+student, program, relationship, or contact-pointer ownership are reported only as
+generic manual-review cases; the command does not display foreign identities,
+repair mismatched records, or replace an existing contact. `--fix` rechecks the
+records transactionally and explicitly assigns the application organization to
+new relationships. Review local matches before using `--fix`; no production
+data operation is part of this documentation or code change.
 
 ### Merge User Accounts
 
