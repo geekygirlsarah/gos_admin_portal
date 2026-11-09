@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 from datetime import timedelta
@@ -8,7 +9,13 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import FileResponse, Http404, HttpResponseRedirect, QueryDict
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    QueryDict,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -22,6 +29,7 @@ from django.views.generic import (
     View,
 )
 
+from applications.rate_limiting import rate_limited_response
 from audit.mixins import SensitiveDataViewMixin
 
 from ..constants import RELATIONSHIP_CHOICES
@@ -50,6 +58,10 @@ from ..utils.merges import (
     _transfer_student_related_records,
     _transfer_student_relationships,
     perform_student_merge,
+)
+from ..utils.profile_rate_limit import (
+    RateLimitCacheUnavailable,
+    check_profile_rate_limit,
 )
 from .mixins import (
     BackgroundChecksInlineMixin,
@@ -380,6 +392,39 @@ class StudentDetailView(
     template_name = "students/detail.html"
     context_object_name = "student"
     section = "student_info"
+
+    def get(self, request, *args, **kwargs):
+        organization = getattr(request, "organization", None)
+        if (
+            organization is not None
+            and not request.user.is_superuser
+            and get_user_role(request.user, org=organization) == "Mentor"
+        ):
+            try:
+                allowed, retry_after = check_profile_rate_limit(
+                    request.user.pk, organization.pk
+                )
+            except RateLimitCacheUnavailable:
+                logging.getLogger(__name__).exception(
+                    "Profile rate-limit cache unavailable "
+                    "(user_id=%s, organization_id=%s)",
+                    request.user.pk,
+                    organization.pk,
+                )
+                return HttpResponse(
+                    "Profile access is temporarily unavailable. Please try again shortly.",
+                    status=503,
+                )
+
+            if not allowed:
+                return rate_limited_response(
+                    request,
+                    retry_after,
+                    return_url=reverse("student_list"),
+                    return_label="Back to the student directory",
+                )
+
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         from django.db.models import Prefetch

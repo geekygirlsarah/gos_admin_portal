@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
 
 ### Added
+- Renamed the shared student/adult detail throttle settings to `PROFILE_RATE_LIMIT_*` while retaining the former environment variable names as fallbacks; throttling notices now use tenant-specific configured contact details.
+- Added the same rolling rate limit for Mentor adult-profile detail requests, with a separate budget from student profiles.
+- Added a rolling rate limit for Mentor student-profile detail requests, with a 429 cooldown notice and exemptions for Lead Mentors and superusers.
 - Added Program Mail Merge for selected students, with organization-controlled Mentor access, per-student preview/test delivery, built-in attendance and outreach fields, and request-only custom grid values.
 - Added an option to send mail-merge copies to linked parents who have enabled accounts and opted into email updates; student email and program name remain merge fields but are hidden from the data grid.
 - Added a dry-run-by-default `cleanup_email_delivery_quarantine` command; explicit `--execute` deletes only quarantine rows at least 30 days old. Scheduling remains a separately approved release prerequisite.

@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 
@@ -6,13 +7,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.http import content_disposition_header
 from django.views import View
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
+from applications.rate_limiting import rate_limited_response
 from audit.mixins import SensitiveDataViewMixin
 from organizations.models import UserOrganizationMembership
 
@@ -43,6 +45,10 @@ from ..utils.merges import (
     _transfer_parent_related_records,
     _transfer_parent_relationships,
     perform_parent_merge,
+)
+from ..utils.profile_rate_limit import (
+    RateLimitCacheUnavailable,
+    check_profile_rate_limit,
 )
 from .mixins import (
     BackgroundChecksInlineMixin,
@@ -357,6 +363,39 @@ class AdultDetailView(
     template_name = "adults/detail.html"
     context_object_name = "adult"
     section = "adult_info"
+
+    def get(self, request, *args, **kwargs):
+        organization = getattr(request, "organization", None)
+        if (
+            organization is not None
+            and not request.user.is_superuser
+            and get_user_role(request.user, org=organization) == "Mentor"
+        ):
+            try:
+                allowed, retry_after = check_profile_rate_limit(
+                    request.user.pk, organization.pk, profile_type="adult"
+                )
+            except RateLimitCacheUnavailable:
+                logging.getLogger(__name__).exception(
+                    "Profile rate-limit cache unavailable "
+                    "(user_id=%s, organization_id=%s)",
+                    request.user.pk,
+                    organization.pk,
+                )
+                return HttpResponse(
+                    "Profile access is temporarily unavailable. Please try again shortly.",
+                    status=503,
+                )
+
+            if not allowed:
+                return rate_limited_response(
+                    request,
+                    retry_after,
+                    return_url=reverse("adult_list"),
+                    return_label="Back to the adult directory",
+                )
+
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         from django.db.models import Prefetch

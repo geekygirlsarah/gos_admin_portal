@@ -39,6 +39,27 @@ jobs, or other external services. It also cannot help if the application fails
 before it can start. Confirm the deployment platform's health-check and restart
 behavior before relying on this switch during an incident.
 
+## Profile Rate Limiting
+
+Student and adult detail requests from Mentors are each limited to 10 requests
+per rolling 60-second window by default. Each profile type has a separate budget
+per user and organization; repeated requests count. Lead Mentors and platform
+superusers are exempt.
+The limit and window can be configured with
+`PROFILE_RATE_LIMIT_COUNT` and
+`PROFILE_RATE_LIMIT_WINDOW_SECONDS`. Both profile limits are controlled
+by `PROFILE_RATE_LIMIT_ENABLED` and are disabled during automated tests
+unless explicitly enabled by the test. The previous `STUDENT_PROFILE_RATE_LIMIT_*`
+environment variable names remain supported as fallbacks.
+
+The limiter uses Django's default cache and atomic cache `add` operations.
+Configure a shared cache backend, such as Redis, in multi-worker or multi-server
+deployments; `LocMemCache` only coordinates requests within one process. If the
+cache is unavailable, profile requests from Mentors fail closed with HTTP 503.
+The shared 429 page uses the current organization's configured public contact
+email or email reply-to address; it does not fall back to another organization's
+contact address.
+
 ## Protected Media Files
 
 For a directory-by-directory map and a safe review process for older uploads,

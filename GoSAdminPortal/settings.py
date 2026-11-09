@@ -523,6 +523,27 @@ APPLY_RATE_LIMIT_ENABLED = (
     not in ("0", "false", "no")
     and not TESTING
 )
+PROFILE_RATE_LIMIT_ENABLED = (
+    os.getenv(
+        "PROFILE_RATE_LIMIT_ENABLED",
+        os.getenv("STUDENT_PROFILE_RATE_LIMIT_ENABLED", ""),
+    )
+    .strip()
+    .lower()
+    not in ("0", "false", "no")
+    and not TESTING
+)
+PROFILE_RATE_LIMIT_COUNT = int(
+    os.getenv(
+        "PROFILE_RATE_LIMIT_COUNT", os.getenv("STUDENT_PROFILE_RATE_LIMIT_COUNT", "10")
+    )
+)
+PROFILE_RATE_LIMIT_WINDOW_SECONDS = int(
+    os.getenv(
+        "PROFILE_RATE_LIMIT_WINDOW_SECONDS",
+        os.getenv("STUDENT_PROFILE_RATE_LIMIT_WINDOW_SECONDS", "60"),
+    )
+)
 APPLY_IP_POST_LIMIT = int(os.getenv("APPLY_IP_POST_LIMIT", "10"))
 APPLY_IP_POST_WINDOW_SECONDS = int(os.getenv("APPLY_IP_POST_WINDOW_SECONDS", "60"))
 APPLY_OTP_SEND_LIMIT = int(os.getenv("APPLY_OTP_SEND_LIMIT", "5"))

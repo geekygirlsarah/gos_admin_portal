@@ -208,6 +208,18 @@ These settings take effect when `DEBUG=False`:
 | `APPLY_OTP_VERIFY_LIMIT` | `10` | Max verification attempts per application per window. |
 | `APPLY_OTP_WINDOW_SECONDS` | `3600` (1 hr) | Sliding window duration for OTP code generation/verification. |
 
+### Profile Detail Rate Limiting
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PROFILE_RATE_LIMIT_ENABLED` | `True` (auto-disabled during tests) | Enables the Mentor student and adult profile detail limiters. |
+| `PROFILE_RATE_LIMIT_COUNT` | `10` | Maximum requests of each profile type per user and organization in the rolling window. |
+| `PROFILE_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rolling window duration for each profile type. |
+
+The legacy `STUDENT_PROFILE_RATE_LIMIT_*` environment variables are accepted as
+fallbacks when their corresponding `PROFILE_RATE_LIMIT_*` variables are unset.
+Student and adult profiles have separate budgets.
+
 ---
 
 ## 6. Feature Toggles & Development Utilities

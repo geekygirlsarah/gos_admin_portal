@@ -22,7 +22,7 @@ from django.urls import reverse
 from applications.models import Application
 from applications.rate_limiting import rate_limit_hit, rate_limited_response
 from GoSAdminPortal.middleware import ApplyRateLimitMiddleware
-from organizations.models import Organization
+from organizations.models import Organization, OrganizationSettings
 
 LIMITS_ENABLED = {"TESTING": False, "APPLY_RATE_LIMIT_ENABLED": True}
 
@@ -88,6 +88,65 @@ class RateLimitedResponseTests(TestCase):
         response = rate_limited_response(self.request, 3540)
         self.assertEqual(response["Retry-After"], "3540")
         self.assertContains(response, "about 59 minutes", status_code=429)
+
+    def test_uses_the_current_organizations_public_contact_email(self):
+        organization = Organization.objects.create(
+            name="Tenant One",
+            slug="tenant-one",
+            settings={"contact_email": "support@tenant-one.example"},
+        )
+        self.request.organization = organization
+
+        response = rate_limited_response(self.request, 45)
+
+        self.assertContains(
+            response,
+            'href="mailto:support@tenant-one.example"',
+            status_code=429,
+        )
+        self.assertNotContains(
+            response, "leads@girlsofsteelrobotics.org", status_code=429
+        )
+
+    def test_uses_the_current_organizations_reply_to_when_contact_is_missing(self):
+        organization = Organization.objects.create(name="Tenant Two", slug="tenant-two")
+        OrganizationSettings.objects.create(
+            organization=organization,
+            data={"email_settings": {"reply_to_email": "lead@tenant-two.example"}},
+        )
+        self.request.organization = organization
+
+        response = rate_limited_response(self.request, 45)
+
+        self.assertContains(
+            response, 'href="mailto:lead@tenant-two.example"', status_code=429
+        )
+
+    def test_does_not_display_an_email_without_tenant_contact_settings(self):
+        response = rate_limited_response(self.request, 45)
+
+        self.assertNotContains(response, "mailto:", status_code=429)
+        self.assertNotContains(
+            response, "leads@girlsofsteelrobotics.org", status_code=429
+        )
+
+    def test_does_not_display_another_organizations_contact_email(self):
+        organization = Organization.objects.create(
+            name="Current Tenant", slug="current-tenant"
+        )
+        foreign_organization = Organization.objects.create(
+            name="Foreign Tenant", slug="foreign-tenant"
+        )
+        OrganizationSettings.objects.create(
+            organization=foreign_organization,
+            data={"email_settings": {"reply_to_email": "foreign@tenant.example"}},
+        )
+        self.request.organization = organization
+
+        response = rate_limited_response(self.request, 45)
+
+        self.assertNotContains(response, "mailto:", status_code=429)
+        self.assertNotContains(response, "foreign@tenant.example", status_code=429)
 
 
 @override_settings(
