@@ -688,6 +688,8 @@ class Student(models.Model):
     def email_delivery_issues(self):
         from .communication import EmailDeliveryEvent
 
+        if not self.pk or not self.organization_id:
+            return EmailDeliveryEvent.objects.none()
         if (
             hasattr(self, "_prefetched_objects_cache")
             and "email_delivery_events" in self._prefetched_objects_cache
@@ -695,14 +697,19 @@ class Student(models.Model):
             return [
                 e
                 for e in self.email_delivery_events.all()
-                if not e.resolved
+                if e.is_verified
+                and e.has_consistent_organization_links(self.organization_id)
+                and not e.resolved
                 and e.event_type
                 in (
                     EmailDeliveryEvent.EVENT_BOUNCED,
                     EmailDeliveryEvent.EVENT_COMPLAINT,
                 )
             ]
-        return self.email_delivery_events.filter(
+        return EmailDeliveryEvent.objects.verified_for_organization(
+            self.organization_id
+        ).filter(
+            student_id=self.pk,
             resolved=False,
             event_type__in=[
                 EmailDeliveryEvent.EVENT_BOUNCED,
@@ -714,18 +721,8 @@ class Student(models.Model):
     def has_email_delivery_issue(self) -> bool:
         from .communication import EmailDeliveryEvent
 
-        if (
-            hasattr(self, "_prefetched_objects_cache")
-            and "email_delivery_events" in self._prefetched_objects_cache
-        ):
-            return bool(self.email_delivery_issues)
-        return self.email_delivery_events.filter(
-            resolved=False,
-            event_type__in=[
-                EmailDeliveryEvent.EVENT_BOUNCED,
-                EmailDeliveryEvent.EVENT_COMPLAINT,
-            ],
-        ).exists()
+        issues = self.email_delivery_issues
+        return issues.exists() if hasattr(issues, "exists") else bool(issues)
 
     @property
     def grade_display(self):

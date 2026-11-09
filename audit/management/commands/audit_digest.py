@@ -209,24 +209,25 @@ class Command(BaseCommand):
         try:
             from programs.models import EmailDeliveryEvent
 
-            email_issues = EmailDeliveryEvent.objects.filter(
-                created_at__gte=since,
-            ).order_by("-created_at")
+            email_issues = (
+                EmailDeliveryEvent.objects.verified()
+                .filter(
+                    created_at__gte=since,
+                )
+                .order_by("-created_at")
+            )
             if email_issues:
                 for issue in email_issues:
                     self.stdout.write(
                         self.style.WARNING(
                             f"  {issue.created_at:%Y-%m-%d %H:%M} "
-                            f"{issue.get_event_type_display()} for {issue.recipient_email} "
-                            f"({issue.reason or 'No reason provided'})"
+                            f"Verified {issue.get_event_type_display().lower()} event"
                         )
                     )
                     all_flagged.append(
                         {
                             "category": "email_delivery_issue",
-                            "recipient": issue.recipient_email,
                             "type": issue.event_type,
-                            "reason": issue.reason,
                         }
                     )
             else:

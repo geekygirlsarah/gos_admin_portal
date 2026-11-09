@@ -1,9 +1,47 @@
-from contextlib import suppress
-
 from django.conf import settings
 from django.db import models
+from django.db.models import F, Q
+from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
+
+from .fields import EncryptedTextField
+
+
+class EmailDeliveryEventQuerySet(OrganizationQuerySet):
+    def verified(self):
+        return self.filter(
+            Q(student__isnull=True) | Q(student__organization_id=F("organization_id")),
+            Q(adult__isnull=True) | Q(adult__organization_id=F("organization_id")),
+            Q(application__isnull=True)
+            | Q(
+                application__organization_id=F("organization_id"),
+                application__program__isnull=True,
+            )
+            | Q(
+                application__organization_id=F("organization_id"),
+                application__program__organization_id=F("organization_id"),
+            ),
+            Q(student__isnull=True) | Q(adult__isnull=True),
+            Q(student__isnull=True) | Q(application__isnull=True),
+            Q(adult__isnull=True) | Q(application__isnull=True),
+            is_verified=True,
+            trusted_mapping__isnull=False,
+            trusted_mapping__is_ambiguous=False,
+            trusted_mapping__organization_id=F("organization_id"),
+            trusted_mapping__provider_message_id=F("message_id"),
+            trusted_mapping__recipient_fingerprint=F("recipient_fingerprint"),
+        ).distinct()
+
+    def verified_for_organization(self, organization):
+        if organization is None:
+            return self.none()
+        organization_id = getattr(organization, "pk", organization)
+        return (
+            self.verified()
+            .for_organization(organization_id)
+            .filter(organization_id=organization_id)
+        )
 
 
 class EmailDeliveryEvent(models.Model):
@@ -37,7 +75,18 @@ class EmailDeliveryEvent(models.Model):
     )
     reason = models.TextField(blank=True, default="")
     message_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    recipient_fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    webhook_deduplication_key = models.CharField(
+        max_length=64, unique=True, null=True, blank=True
+    )
     payload = models.JSONField(default=dict, blank=True)
+    trusted_mapping = models.ForeignKey(
+        "TrustedOutgoingEmailRecipient",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="delivery_events",
+    )
 
     student = models.ForeignKey(
         "Student",
@@ -76,8 +125,13 @@ class EmailDeliveryEvent(models.Model):
         related_name="email_delivery_events",
         help_text="Organization that owns this email delivery event (multi-tenant).",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = OrganizationManager.from_queryset(EmailDeliveryEventQuerySet)()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_verified = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True only when trusted outgoing-message ownership verified this event.",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -111,41 +165,152 @@ class EmailDeliveryEvent(models.Model):
     def is_critical(self) -> bool:
         return self.is_hard_bounce or self.event_type == self.EVENT_COMPLAINT
 
+    def has_consistent_organization_links(self, organization_id):
+        if not organization_id or self.organization_id != organization_id:
+            return False
+        if not self.trusted_mapping_id:
+            return False
+        mapping = self.trusted_mapping
+        if (
+            mapping.is_ambiguous
+            or mapping.organization_id != organization_id
+            or mapping.provider_message_id != self.message_id
+            or mapping.recipient_fingerprint != self.recipient_fingerprint
+        ):
+            return False
+        if (
+            sum(
+                bool(value)
+                for value in (self.student_id, self.adult_id, self.application_id)
+            )
+            > 1
+        ):
+            return False
+        for relation in ("student", "adult"):
+            related_id = getattr(self, f"{relation}_id")
+            if (
+                related_id
+                and getattr(getattr(self, relation), "organization_id", None)
+                != organization_id
+            ):
+                return False
+        if self.application_id:
+            application = self.application
+            if application.organization_id != organization_id:
+                return False
+            if (
+                application.program_id
+                and application.program.organization_id != organization_id
+            ):
+                return False
+        return True
+
     def resolve_entities(self):
-        """Link this delivery event to Student, Adult, or Application matching recipient_email."""
+        """Link only one unambiguous local entity for a verified delivery event."""
+        if not self.is_verified or not self.organization_id:
+            return
+
+        organization_id = self.organization_id
+        if not self.has_consistent_organization_links(organization_id):
+            return
+        if self.student_id or self.adult_id or self.application_id:
+            return
+
         email = (self.recipient_email or "").strip().lower()
         if not email:
             return
-        updated = False
-        if not self.student:
-            from .students import Student
 
-            student = Student.objects.filter(
-                models.Q(personal_email__iexact=email)
-                | models.Q(org_email__iexact=email)
-            ).first()
-            if student:
-                self.student = student
-                updated = True
-        if not self.adult:
-            from .adults import Adult
+        from applications.models import Application
 
-            adult = Adult.objects.filter(
-                models.Q(personal_email__iexact=email)
-                | models.Q(org_email__iexact=email)
-            ).first()
-            if adult:
-                self.adult = adult
-                updated = True
-        if not self.application:
-            with suppress(Exception):
-                from applications.models import Application
+        from .adults import Adult
+        from .students import Student
 
-                app = Application.objects.filter(email__iexact=email).first()
-                if not app:
-                    app = Application.objects.filter(data__icontains=email).first()
-                if app:
-                    self.application = app
-                    updated = True
-        if updated and self.pk:
-            self.save(update_fields=["student", "adult", "application"])
+        matches = []
+        student_matches = list(
+            Student.objects.for_organization(organization_id)
+            .filter(organization_id=organization_id)
+            .filter(Q(personal_email__iexact=email) | Q(org_email__iexact=email))
+            .distinct()[:2]
+        )
+        adult_matches = list(
+            Adult.objects.for_organization(organization_id)
+            .filter(organization_id=organization_id)
+            .filter(Q(personal_email__iexact=email) | Q(org_email__iexact=email))
+            .distinct()[:2]
+        )
+        application_matches = list(
+            Application.objects.for_organization(organization_id)
+            .filter(organization_id=organization_id, email__iexact=email)
+            .filter(
+                Q(program__isnull=True) | Q(program__organization_id=organization_id)
+            )
+            .distinct()[:2]
+        )
+        matches.extend(("student", item) for item in student_matches)
+        matches.extend(("adult", item) for item in adult_matches)
+        matches.extend(("application", item) for item in application_matches)
+        if len(matches) != 1:
+            return
+
+        entity_type, entity = matches[0]
+        setattr(self, entity_type, entity)
+        self.save(update_fields=["student", "adult", "application"])
+
+
+class TrustedOutgoingEmailRecipient(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="outgoing_email_delivery_mappings",
+    )
+    provider_message_id = models.CharField(max_length=255, db_index=True)
+    recipient_email = EncryptedTextField()
+    recipient_fingerprint = models.CharField(max_length=64)
+    is_ambiguous = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("organization", "provider_message_id", "recipient_fingerprint"),
+                name="unique_out_email_recipient",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("provider_message_id", "recipient_fingerprint"),
+                name="out_email_provider_rcpt_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"Outgoing email recipient mapping {self.pk}"
+
+
+class EmailDeliveryQuarantine(models.Model):
+    REASON_UNMATCHED = "unmatched"
+    REASON_AMBIGUOUS = "ambiguous"
+    REASON_MALFORMED = "malformed"
+    REASON_CHOICES = [
+        (REASON_UNMATCHED, "Unmatched ownership"),
+        (REASON_AMBIGUOUS, "Ambiguous correlation"),
+        (REASON_MALFORMED, "Malformed event"),
+    ]
+
+    deduplication_key = models.CharField(max_length=64, unique=True, editable=False)
+    reason_code = models.CharField(max_length=20, choices=REASON_CHOICES, db_index=True)
+    encrypted_diagnostic = EncryptedTextField(blank=True, default="")
+    message_id_fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    recipient_fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    received_at = models.DateTimeField(default=timezone.now, db_index=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+        verbose_name = "Quarantined Email Delivery Event"
+        verbose_name_plural = "Quarantined Email Delivery Events"
+
+    def __str__(self):
+        return f"Quarantined delivery event ({self.reason_code}) at {self.received_at:%Y-%m-%d %H:%M}"

@@ -1,8 +1,10 @@
 import datetime
+import uuid
 
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import Group, User
 from django.http import Http404
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -19,9 +21,14 @@ from programs.models import (
     Program,
     ProgramFeature,
     Student,
+    TrustedOutgoingEmailRecipient,
 )
+from programs.utils.tosend_webhooks import _email_fingerprint
+
+_FILE_ENCRYPTION_KEY = Fernet.generate_key().decode()
 
 
+@override_settings(FILE_ENCRYPTION_KEY=_FILE_ENCRYPTION_KEY)
 class DashboardOrganizationTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.get(slug="gos")
@@ -129,11 +136,24 @@ class DashboardOrganizationTests(TestCase):
             (self.org, EmailDeliveryEvent.EVENT_DELIVERED, False),
             (self.other_org, EmailDeliveryEvent.EVENT_COMPLAINT, False),
         ]:
+            recipient_email = "example@example.com"
+            message_id = f"dashboard-message-{uuid.uuid4().hex}"
+            recipient_fingerprint = _email_fingerprint(recipient_email)
+            mapping = TrustedOutgoingEmailRecipient.objects.create(
+                organization=org,
+                provider_message_id=message_id,
+                recipient_email=recipient_email,
+                recipient_fingerprint=recipient_fingerprint,
+            )
             EmailDeliveryEvent.objects.create(
                 organization=org,
-                recipient_email="example@example.com",
+                recipient_email=recipient_email,
+                recipient_fingerprint=recipient_fingerprint,
+                message_id=message_id,
+                trusted_mapping=mapping,
                 event_type=event_type,
                 resolved=resolved,
+                is_verified=True,
             )
 
         response = self.dashboard()

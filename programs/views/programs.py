@@ -1477,6 +1477,13 @@ class ProgramEmailView(LoginRequiredMixin, View):
             connection, from_email, reply_to = get_sender_connection(
                 selected, organization=prog.organization if prog else organization
             )
+            from programs.utils.notifications import _mark_delivery_tracking
+
+            delivery_organization = (
+                prog.organization
+                if prog and prog.organization_id == organization.pk
+                else organization
+            )
 
             messages_to_send = []
             for addr in to_send:
@@ -1491,30 +1498,22 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 email.attach_alternative(inlined_html_body, "text/html")
                 for inline_img in inline_images:
                     email.attach(inline_img.to_mime())
+                _mark_delivery_tracking(
+                    email, delivery_organization, enabled=not test_email
+                )
                 messages_to_send.append(email)
 
-            # Log details about the outgoing message
-            preview_recipients = to_send[:20]
             logger.info(
-                "ProgramEmail: preparing to send email | from=%s | to_count=%d | subject=%s | test=%s",
-                from_email,
+                "ProgramEmail: preparing to send email | to_count=%d | test=%s",
                 len(to_send),
-                subject,
                 bool(test_email),
-            )
-            logger.debug(
-                "ProgramEmail: recipient sample (first %d): %s",
-                len(preview_recipients),
-                preview_recipients,
             )
 
             try:
                 send_messages_in_background(messages_to_send, connection=connection)
                 logger.info(
-                    "ProgramEmail: email dispatch queued successfully | from=%s | to_count=%d | subject=%s",
-                    from_email,
+                    "ProgramEmail: email dispatch queued successfully | to_count=%d",
                     len(to_send),
-                    subject,
                 )
                 messages.success(
                     request,
@@ -1526,12 +1525,9 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 return redirect("program_messaging")
             except Exception as e:
                 logger.error(
-                    "ProgramEmail: email send FAILED | from=%s | to_count=%d | subject=%s | error=%s",
-                    from_email,
+                    "ProgramEmail: email send failed | to_count=%d | error=%s",
                     len(to_send),
-                    subject,
-                    e,
-                    exc_info=True,
+                    type(e).__name__,
                 )
                 messages.error(request, f"Failed to send email: {e}")
                 return self._render(form, prog, pk=pk)

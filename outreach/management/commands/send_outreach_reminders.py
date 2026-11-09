@@ -138,8 +138,8 @@ class Command(BaseCommand):
         for shift in shifts:
             event = shift.event
             self.stdout.write(
-                f"Processing shift for event '{event.name}' "
-                f"({shift.date} {shift.start_time}-{shift.end_time})..."
+                f"Processing outreach shift ({shift.date} "
+                f"{shift.start_time}-{shift.end_time})..."
             )
 
             # Student signups
@@ -150,37 +150,14 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
-                student_user = getattr(signup.student, "user", None)
-                username = student_user.username if student_user else "N/A"
-
                 if dry_run:
-                    self.stdout.write(
-                        f"  [DRY RUN] Would send reminder to student "
-                        f"{signup.student.display_name} <{email}> for '{event.name}' "
-                        f"({signup.get_role_display()})"
-                    )
-                    logger.info(
-                        "[DRY RUN] Would send outreach reminder to student %s (user: %s) <%s> for event '%s' (%s)",
-                        signup.student.display_name,
-                        username,
-                        email,
-                        event.name,
-                        signup.get_role_display(),
-                    )
+                    self.stdout.write("  [DRY RUN] Would send a student reminder.")
+                    logger.info("[DRY RUN] Would send an outreach student reminder.")
                 else:
                     if notify_outreach_reminder(signup):
                         total_sent += 1
-                        self.stdout.write(
-                            f"  Sent reminder to {email} for '{event.name}'"
-                        )
-                        logger.info(
-                            "Sent outreach reminder to student %s (user: %s) <%s> for event '%s' (%s)",
-                            signup.student.display_name,
-                            username,
-                            email,
-                            event.name,
-                            signup.get_role_display(),
-                        )
+                        self.stdout.write("  Sent an outreach student reminder.")
+                        logger.info("Sent an outreach student reminder.")
 
             # Mentor signups
             for mentor_signup in shift.mentor_signups.all():
@@ -190,34 +167,14 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
-                mentor_user = getattr(mentor_signup.adult, "user", None)
-                username = mentor_user.username if mentor_user else "N/A"
-
                 if dry_run:
-                    self.stdout.write(
-                        f"  [DRY RUN] Would send reminder to mentor "
-                        f"{mentor_signup.adult.display_name} <{email}> for '{event.name}'"
-                    )
-                    logger.info(
-                        "[DRY RUN] Would send outreach reminder to mentor %s (user: %s) <%s> for event '%s'",
-                        mentor_signup.adult.display_name,
-                        username,
-                        email,
-                        event.name,
-                    )
+                    self.stdout.write("  [DRY RUN] Would send a mentor reminder.")
+                    logger.info("[DRY RUN] Would send an outreach mentor reminder.")
                 else:
                     if notify_mentor_outreach_reminder(mentor_signup):
                         total_sent += 1
-                        self.stdout.write(
-                            f"  Sent reminder to mentor {email} for '{event.name}'"
-                        )
-                        logger.info(
-                            "Sent outreach reminder to mentor %s (user: %s) <%s> for event '%s'",
-                            mentor_signup.adult.display_name,
-                            username,
-                            email,
-                            event.name,
-                        )
+                        self.stdout.write("  Sent an outreach mentor reminder.")
+                        logger.info("Sent an outreach mentor reminder.")
 
         if dry_run:
             self.stdout.write(

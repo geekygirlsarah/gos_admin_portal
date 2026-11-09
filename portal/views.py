@@ -157,7 +157,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 .count()
             )
             pending_email_issues_count = (
-                EmailDeliveryEvent.objects.for_organization(org)
+                EmailDeliveryEvent.objects.verified_for_organization(org)
                 .filter(
                     resolved=False,
                     event_type__in=[

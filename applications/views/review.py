@@ -1381,6 +1381,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             connection, from_email, reply_to = get_sender_connection(
                 selected, organization=organization
             )
+            from programs.utils.notifications import _mark_delivery_tracking
 
             messages_to_send = []
             for addr in to_send:
@@ -1395,6 +1396,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
                 msg.attach_alternative(inlined_html_body, "text/html")
                 for inline_img in inline_images:
                     msg.attach(inline_img.to_mime())
+                _mark_delivery_tracking(msg, organization, enabled=not test_email)
                 messages_to_send.append(msg)
 
             try:
@@ -1405,7 +1407,10 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
                 )
                 return redirect("application_review_list")
             except Exception as e:
-                logger.exception("Failed to send bulk application email")
+                logger.error(
+                    "Bulk application email dispatch failed (%s).",
+                    type(e).__name__,
+                )
                 messages.error(request, f"Failed to send email: {e}")
 
         return self._render(form)

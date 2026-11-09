@@ -16,6 +16,51 @@ logger = logging.getLogger(__name__)
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
 
+def get_local_lead_mentor_notification_emails(organization):
+    """Return distinct, usable account addresses for active local Lead Mentors."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    from organizations.models import UserOrganizationMembership
+
+    if organization is None:
+        return []
+    organization_id = getattr(organization, "pk", organization)
+    memberships = (
+        UserOrganizationMembership.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            role="LeadMentor",
+            is_active=True,
+            user__is_active=True,
+        )
+        .order_by("user_id")
+        .values_list("user__email", flat=True)
+    )
+    addresses = []
+    seen = set()
+    for candidate in memberships:
+        address = candidate.strip() if isinstance(candidate, str) else ""
+        if not address:
+            continue
+        try:
+            validate_email(address)
+        except ValidationError:
+            continue
+        normalized = address.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        addresses.append(address)
+    return addresses
+
+
+def _mark_delivery_tracking(message, organization, enabled=True):
+    message._momentum_delivery_tracking = bool(enabled and organization is not None)
+    if organization is not None:
+        message._momentum_organization_id = getattr(organization, "pk", organization)
+
+
 def generate_otp(length=6):
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
@@ -60,6 +105,7 @@ def send_otp_email(email, otp, organization=None):
         reply_to=reply_to_list,
     )
     msg.attach_alternative(html_message, "text/html")
+    _mark_delivery_tracking(msg, organization)
     msg.send()
 
 
@@ -140,6 +186,7 @@ def send_templated_notification(
     reply_to=None,
     organization=None,
     attachments=None,
+    track_delivery=True,
 ):
     """
     Renders an HTML template and sends it as an email with a plain-text fallback
@@ -191,7 +238,7 @@ def send_templated_notification(
 
         html_message = transform(html_message)
     except Exception as exc:
-        logger.debug("Premailer inlining skipped: %s", exc)
+        logger.debug("Premailer inlining skipped (%s).", type(exc).__name__)
 
     # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
     plain_message = html.unescape(strip_tags(html_message)).strip()
@@ -207,6 +254,7 @@ def send_templated_notification(
             reply_to=reply_to_list,
         )
         msg.attach_alternative(html_message, "text/html")
+        _mark_delivery_tracking(msg, organization, enabled=track_delivery)
         if attachments:
             for attachment in attachments:
                 if isinstance(attachment, tuple):

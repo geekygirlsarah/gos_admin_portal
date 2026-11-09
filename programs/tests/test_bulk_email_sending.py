@@ -91,6 +91,10 @@ class BulkEmailSendingTests(TestCase):
             self.assertEqual(msg.bcc, [])
             self.assertEqual(msg.subject, "Important Team Notice")
             self.assertEqual(msg.reply_to, [settings.DEFAULT_REPLY_TO_EMAIL])
+            self.assertTrue(msg._momentum_delivery_tracking)
+            self.assertEqual(
+                msg._momentum_organization_id, self.program.organization_id
+            )
 
     @mock.patch("programs.views.programs.send_messages_in_background")
     def test_program_email_test_recipient_only(self, mock_send_bg):
@@ -112,6 +116,7 @@ class BulkEmailSendingTests(TestCase):
         messages_sent = mock_send_bg.call_args[0][0]
         self.assertEqual(len(messages_sent), 1)
         self.assertEqual(messages_sent[0].to, ["mentor_test@example.com"])
+        self.assertFalse(messages_sent[0]._momentum_delivery_tracking)
 
     @mock.patch("programs.views.finances.send_messages_in_background")
     def test_program_email_balances_batch_dispatch(self, mock_send_bg):
@@ -135,6 +140,13 @@ class BulkEmailSendingTests(TestCase):
         self.assertGreaterEqual(len(messages_sent), 1)
         recipient_tos = [msg.to for msg in messages_sent]
         self.assertIn(["carol@example.com"], recipient_tos)
+        self.assertTrue(all(msg._momentum_delivery_tracking for msg in messages_sent))
+        self.assertTrue(
+            all(
+                msg._momentum_organization_id == self.program.organization_id
+                for msg in messages_sent
+            )
+        )
 
     @mock.patch("applications.views.review.send_messages_in_background")
     def test_application_email_batch_dispatch(self, mock_send_bg):
@@ -176,3 +188,10 @@ class BulkEmailSendingTests(TestCase):
         recipient_tos = [msg.to for msg in messages_sent]
         self.assertIn(["applicant@example.com"], recipient_tos)
         self.assertIn(["app_parent@example.com"], recipient_tos)
+        self.assertTrue(all(msg._momentum_delivery_tracking for msg in messages_sent))
+        self.assertTrue(
+            all(
+                msg._momentum_organization_id == self.program.organization_id
+                for msg in messages_sent
+            )
+        )

@@ -1510,6 +1510,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
             email.attach_alternative(inlined_html, "text/html")
             for inline_img in message_images:
                 email.attach(inline_img.to_mime())
+            from programs.utils.notifications import _mark_delivery_tracking
+
+            _mark_delivery_tracking(email, org, enabled=not test_email)
             messages_to_send.append(email)
 
         try:

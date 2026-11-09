@@ -1210,7 +1210,9 @@ class SendWeeklyDigestCommandTests(TestCase):
         logs = "\n".join(cm.output)
         self.assertIn("Dry run complete", output)
         self.assertIn("[DRY RUN]", logs)
-        self.assertIn("student@example.com", logs)
+        self.assertIn("Would send student weekly digest.", logs)
+        self.assertNotIn("student@example.com", logs)
+        self.assertNotIn("student@example.com", output)
 
     def test_command_sends_emails_to_active_users(self):
         mail.outbox.clear()
@@ -1224,9 +1226,14 @@ class SendWeeklyDigestCommandTests(TestCase):
         self.assertIn("student@example.com", recipients)
         self.assertIn("parent@example.com", recipients)
         logs = "\n".join(cm.output)
-        self.assertIn("student@example.com", logs)
-        self.assertIn("student_user", logs)
-        self.assertIn("parent@example.com", logs)
+        output = self.out.getvalue()
+        self.assertIn("Sent student weekly digest.", logs)
+        self.assertIn("Sent parent weekly digest.", logs)
+        self.assertNotIn("student@example.com", logs)
+        self.assertNotIn("student_user", logs)
+        self.assertNotIn("parent@example.com", logs)
+        self.assertNotIn("student@example.com", output)
+        self.assertNotIn("parent@example.com", output)
 
     def test_command_filter_by_role(self):
         mail.outbox.clear()

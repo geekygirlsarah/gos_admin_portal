@@ -609,3 +609,32 @@ class EmailDeliveryEventAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("student", "adult", "resolved_by")
     readonly_fields = ("created_at",)
+
+    def _platform_superuser_request(self, request):
+        if not (
+            request.user.is_authenticated
+            and request.user.is_active
+            and request.user.is_superuser
+        ):
+            return False
+        from organizations.platform_views import SuperuserRequiredMixin
+
+        return not SuperuserRequiredMixin.is_tenant_request(request)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).verified()
+
+    def has_module_permission(self, request):
+        return self._platform_superuser_request(request)
+
+    def has_view_permission(self, request, obj=None):
+        return self._platform_superuser_request(request)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

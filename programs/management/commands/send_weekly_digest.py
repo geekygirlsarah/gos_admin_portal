@@ -150,16 +150,9 @@ class Command(BaseCommand):
         for r in to_send:
             recip_role = r["role"]
             recip_email = r["email"]
-            recip_user = r.get("user")
             recip_obj = r.get("recipient_obj")
             data = r["data"]
-
-            username = recip_user.username if recip_user else "N/A"
-            display_name = (
-                getattr(recip_obj, "display_name", str(recip_obj))
-                if recip_obj
-                else "N/A"
-            )
+            organization = getattr(recip_obj, "organization", None)
 
             ref_date = data.get("reference_date") or target_date or timezone.localdate()
             date_str = _format_ordinal_date(ref_date)
@@ -175,17 +168,8 @@ class Command(BaseCommand):
                 template_name = "programs/emails/weekly_digest_mentor.html"
 
             if dry_run:
-                self.stdout.write(
-                    f"  [DRY RUN] Would send {recip_role} digest to {recip_email} (subject: '{subject}')"
-                )
-                logger.info(
-                    "[DRY RUN] Would send %s weekly digest to %s (user: %s) <%s> (subject: '%s')",
-                    recip_role,
-                    display_name,
-                    username,
-                    recip_email,
-                    subject,
-                )
+                self.stdout.write(f"  [DRY RUN] Would send {recip_role} digest.")
+                logger.info("[DRY RUN] Would send %s weekly digest.", recip_role)
             else:
                 try:
                     send_templated_notification(
@@ -193,21 +177,13 @@ class Command(BaseCommand):
                         template_name=template_name,
                         context=data,
                         recipient_list=[recip_email],
+                        organization=organization,
                     )
                     total_sent += 1
-                    logger.info(
-                        "Sent %s weekly digest to %s (user: %s) <%s>",
-                        recip_role,
-                        display_name,
-                        username,
-                        recip_email,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to send weekly digest email for %s (user: %s) to %s",
-                        display_name,
-                        username,
-                        recip_email,
+                    logger.info("Sent %s weekly digest.", recip_role)
+                except Exception as exc:
+                    logger.error(
+                        "Weekly digest dispatch failed (%s).", type(exc).__name__
                     )
 
         if dry_run:

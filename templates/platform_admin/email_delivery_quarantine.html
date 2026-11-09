@@ -1,0 +1,36 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block title %}Email Delivery Quarantine | Platform Admin{% endblock %}
+
+{% block admin_content %}
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-header bg-white border-bottom py-3">
+        <h1 class="h5 mb-1">Unattributed Email Delivery Events</h1>
+        <p class="text-muted small mb-0">These signed provider events have no verified organization mapping. They are hidden from tenant surfaces.</p>
+    </div>
+    <div class="card-body">
+        {% for event in quarantine_events %}
+            <section class="border rounded-2 p-3 mb-3" aria-label="Quarantined event">
+                <div class="d-flex justify-content-between gap-3 mb-2">
+                    <strong>{{ event.get_reason_code_display }}</strong>
+                    <time class="text-muted small">{{ event.received_at }}</time>
+                </div>
+                <pre class="small mb-0 text-break">{{ event.encrypted_diagnostic }}</pre>
+            </section>
+        {% empty %}
+            <p class="text-muted mb-0">There are no quarantined delivery events.</p>
+        {% endfor %}
+    </div>
+    {% if is_paginated %}
+        <div class="card-footer bg-white">
+            {% if page_obj.has_previous %}
+                <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            {% endif %}
+            <span class="mx-2">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.next_page_number }}">Next</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

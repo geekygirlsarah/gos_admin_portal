@@ -19,6 +19,7 @@ from programs.models import EmailDeliveryEvent
 from programs.permission_views import LeadMentorRequiredMixin
 from programs.utils.tosend_webhooks import (
     process_tosend_event,
+    quarantine_malformed_tosend_payload,
     verify_tosend_signature,
 )
 from programs.utils.urls import get_safe_url
@@ -42,9 +43,10 @@ def tosend_webhook_view(request: HttpRequest) -> HttpResponse:
 
     try:
         data = json.loads(request.body.decode("utf-8"))
-    except Exception as exc:
-        logger.warning("Malformed JSON in toSend webhook request: %s", exc)
-        return JsonResponse({"error": "Malformed JSON payload"}, status=400)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        quarantine_malformed_tosend_payload(request.body)
+        logger.warning("Malformed JSON in signed toSend webhook request.")
+        return JsonResponse({"status": "quarantined", "processed": 1}, status=200)
 
     events_to_process = []
     if isinstance(data, list):
@@ -56,13 +58,14 @@ def tosend_webhook_view(request: HttpRequest) -> HttpResponse:
             events_to_process = data["data"]
         else:
             events_to_process = [data]
+    else:
+        events_to_process = [data]
 
     processed_count = 0
     for item in events_to_process:
-        if isinstance(item, dict):
-            event = process_tosend_event(item)
-            if event:
-                processed_count += 1
+        quarantine_record = process_tosend_event(item)
+        if quarantine_record:
+            processed_count += 1
 
     return JsonResponse({"status": "ok", "processed": processed_count})
 
@@ -76,9 +79,12 @@ class EmailDeliveryIssueListView(LeadMentorRequiredMixin, ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        qs = EmailDeliveryEvent.objects.select_related(
-            "student", "adult", "application", "resolved_by"
-        ).all()
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return EmailDeliveryEvent.objects.none()
+        qs = EmailDeliveryEvent.objects.verified_for_organization(
+            organization
+        ).select_related("student", "adult", "application", "resolved_by")
 
         status_filter = self.request.GET.get("status", "unresolved")
         if status_filter == "unresolved":
@@ -111,9 +117,12 @@ class EmailDeliveryIssueListView(LeadMentorRequiredMixin, ListView):
         context["status_filter"] = self.request.GET.get("status", "unresolved")
         context["type_filter"] = self.request.GET.get("type", "all")
         context["search_query"] = self.request.GET.get("q", "")
-        context["unresolved_count"] = EmailDeliveryEvent.objects.filter(
-            resolved=False
-        ).count()
+        organization = getattr(self.request, "organization", None)
+        context["unresolved_count"] = (
+            EmailDeliveryEvent.objects.verified_for_organization(organization)
+            .filter(resolved=False)
+            .count()
+        )
         return context
 
 
@@ -121,7 +130,10 @@ class EmailDeliveryIssueResolveView(LeadMentorRequiredMixin, View):
     """POST endpoint for Lead Mentors to mark an email delivery issue as resolved."""
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
-        event = get_object_or_404(EmailDeliveryEvent, pk=pk)
+        organization = getattr(request, "organization", None)
+        event = get_object_or_404(
+            EmailDeliveryEvent.objects.verified_for_organization(organization), pk=pk
+        )
         event.resolved = True
         event.resolved_at = timezone.now()
         event.resolved_by = request.user if request.user.is_authenticated else None

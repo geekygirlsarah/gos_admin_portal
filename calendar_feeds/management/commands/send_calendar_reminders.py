@@ -100,18 +100,10 @@ class Command(BaseCommand):
                 recipient_list=[user.email],
                 organization=organization,
             )
-            logger.info(
-                "Sent calendar reminder to user %s <%s>",
-                user.username,
-                user.email,
-            )
+            logger.info("Sent calendar reminder.")
             return True
-        except Exception:
-            logger.exception(
-                "Failed to send calendar reminder to user %s <%s>",
-                user.username,
-                user.email,
-            )
+        except Exception as exc:
+            logger.error("Calendar reminder dispatch failed (%s).", type(exc).__name__)
             return False
 
     def handle(self, *args, **options):
@@ -171,12 +163,8 @@ class Command(BaseCommand):
             body = self._build_body(feed_events, days_ahead)
 
             if dry_run:
-                self.stdout.write(f"  Would send to {user.email}:\n{body}\n")
-                logger.info(
-                    "[DRY RUN] Would send calendar reminder to user %s <%s>",
-                    user.username,
-                    user.email,
-                )
+                self.stdout.write("  [DRY RUN] Would send a calendar reminder.\n")
+                logger.info("[DRY RUN] Would send a calendar reminder.")
             elif self._send(user, organization, feed_events, days_ahead):
                 total_sent += 1
 

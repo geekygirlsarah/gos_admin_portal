@@ -40,7 +40,15 @@ Monthly balance emails are sent separately for each eligible program, with filte
 
 Weekly student and parent digests select recipients and children only through ownership-consistent active enrollments and parent relationships. Outreach signups, shifts, events, travel signups, and required-document submissions are included only when their related ownership chain is local; open outreach capacity counts only valid local signups. The digest uses the tenant-safe balance calculator, and an inconsistent statement is shown as unavailable rather than as a zero or partial balance.
 
-The separate fee-added and payment-recorded email templates still contain GoS/CMU payment instructions and are not covered by this balance-statement isolation work.
+Fee-added and payment-recorded notices keep valid local parent delivery and
+ownership checks, but use only the owning organization's validated payment
+instructions and optional HTTP(S) destination; blank instructions use the
+neutral contact-the-lead-mentors message. Their branding uses saved local
+settings or a neutral Momentum fallback. Sliding-scale reviewer emails are
+sent only to active local Lead Mentors with usable account email addresses and
+contain a generic review notice, not student identity or household financial
+details. Parent submission and decision notices retain their local content
+and tenant branding.
 
 Program Messaging offers the deployment-configured default sender and named identities saved by the current organization, not the legacy global named-account fallback. An organization's notification-from override replaces the default; otherwise `NOTIFICATION_FROM_EMAIL` or `DEFAULT_FROM_EMAIL` supplies it. Email Settings shows the saved override separately from the effective address and does not pin the fallback when saving other settings. Existing saved overrides are not changed automatically.
 
@@ -81,9 +89,17 @@ Pasted images are converted to `data:` URLs by `@tiptap/extension-image` and pro
 
 ## Email Delivery Tracking (`EmailDeliveryEvent`)
 
-The application processes bounce and complaint webhooks from toSend:
-- **Webhook Endpoint**: `/api/webhooks/tosend/` and `/programs/webhooks/tosend/`.
-- **Model**: `EmailDeliveryEvent` logs `bounced`, `complaint`, and `unsubscribed` statuses, diagnostic error codes, and message IDs.
-- **Entity Resolution**: Automatically links matching `Student`, `Adult`, and `Application` records by email address.
-- **Lead Mentor Alerts**: Hard bounces and spam complaints trigger immediate notification emails to Lead Mentors.
-- **UI Indicators**: Delivery issue badges and warning banners are displayed on student/adult directory views, profiles, and the Lead Mentor Command Center.
+Tenant delivery issues are visible only after a provider event is correlated with a trusted outgoing-message mapping. The organization identity is carried as an internal attribute on tenant-aware Django email messages; it is not read from a client header, hostname, subject, or recipient address. The `ToSendEmailBackend` records a mapping only after a provider-confirmed successful response and stores the recipient address encrypted with a keyed fingerprint for comparison.
+
+The provider contract was checked against the official [send API](https://tosend.com/docs/api/introduction), [batch API](https://tosend.com/docs/api/batch-emails), and [webhook guide](https://tosend.com/docs/guide/webhooks):
+
+- A successful single send returns a `message_id`, which the webhook repeats as `data.message_id`; bounce/complaint payloads include the actual bare recipient in `data.email`.
+- A batch `207` response returns per-email results in request order, so only individual `status: success` items with distinct `message_id` values can be mapped. A multi-email `200` response does not document result ordering; those messages are deliberately left unattributed. A one-item batch has no ordering ambiguity.
+- ToSend supports up to 50 `to`/`cc`/`bcc` recipients per message, but its send response does not document per-recipient acceptance. Multi-recipient messages therefore remain unmapped. A send with no provider ID, redirected recipient, or missing internal organization metadata is also untracked.
+- Webhooks use `X-ToSend-Signature: sha256=<HMAC-SHA256 of the raw body>`. Provider events can be duplicated and are deduplicated by message ID, event type, and recipient. ToSend documents that failed/slow webhook deliveries are not retried; valid signed events are acknowledged after verification or secure quarantine. ToSend supports `Idempotency-Key` for batch requests only, but the backend does not automatically retry sends; network-ambiguous sends remain unattributable instead of guessing.
+
+After signature verification, the handler matches both provider message ID and exact recipient fingerprint against one unambiguous mapping. Only then is an `EmailDeliveryEvent` stored as verified with that mapping. A message accepted by the provider but whose webhook arrives before the send mapping commits is first quarantined and reconciled after the mapping is persisted. Replays produce one verified event. A later-discovered provider-ID collision makes the mapping ambiguous and hides its events from tenant queries without deleting their history.
+
+Profile and application resolution is limited to unique, ownership-consistent records in the verified organization; shared email addresses do not select a first match. Verified critical alerts go only to active local Lead Mentors with valid account email addresses and contain a generic notice, not recipient, profile, or provider diagnostic data. Audit records likewise omit addresses, payloads, and raw provider reasons.
+
+Existing delivery events default to unverified and remain unchanged; they are hidden from tenant issue lists, profile badges, counts, resolution actions, and audit summaries until separately reviewed. New unmatched, ambiguous, malformed, or early events are retained in an encrypted quarantine available only to platform superusers on the root domain. Review is read-only. `cleanup_email_delivery_quarantine` is dry-run by default; `--execute` deletes only records received at least 30 days earlier. A separately approved scheduled execution is a release prerequisite; this implementation does not configure a scheduler, and retention is not operationally guaranteed until one is configured.

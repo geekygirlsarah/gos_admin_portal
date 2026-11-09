@@ -170,6 +170,31 @@ Scheduled commands must be safe against accidental duplicate execution where
 practicable. Changes to recipient selection, message templates, scheduling, or
 delivery behavior require regression tests.
 
+## Email Delivery Quarantine
+
+Signed provider events without a unique trusted outgoing-message mapping are
+retained in encrypted quarantine and are reviewable only by active platform
+superusers on the root platform domain. Historical delivery events are not
+backfilled, reassigned, or deleted by the schema migrations; because they
+default to unverified, they remain hidden from tenant lists, badges, counts,
+resolution actions, and audit summaries pending a separate review.
+
+The retention command is dry-run by default:
+
+```bash
+python manage.py cleanup_email_delivery_quarantine
+python manage.py cleanup_email_delivery_quarantine --execute
+```
+
+It reports only a count. `--execute` deletes only quarantine rows whose
+`received_at` is at least 30 days old; it does not touch verified delivery
+events or historical `EmailDeliveryEvent` rows. Do not execute it against
+production or shared data without separate operational approval. A daily
+scheduled `--execute` run is a release prerequisite to enforce retention, but
+no scheduler or deployment change is included here. Until an operator separately
+approves and configures that schedule, the 30-day retention deadline is not
+operationally guaranteed.
+
 ## Data Management and Reconciliation Commands
 
 These commands may inspect, alter, merge, or anonymize application data. Run

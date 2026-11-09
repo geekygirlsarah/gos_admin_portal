@@ -1071,6 +1071,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
                     subject="[Test] Admin Portal Email Settings Verification",
                     recipient_list=[test_recipient],
                     organization=org,
+                    track_delivery=False,
                 )
                 if sent:
                     messages.success(

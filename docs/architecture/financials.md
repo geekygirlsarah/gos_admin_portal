@@ -64,8 +64,15 @@ Balance emails use saved organization branding or a Momentum fallback. The share
 
 Program fee management, balance sheets, and dues lists must resolve programs and students within the request organization. Fee assignment choices require a same-organization active enrollment, and fee assignment changes do not mutate inconsistent foreign-owned rows. Balance views use the tenant-validated calculator; inconsistent financial ownership makes the affected balance unavailable, and dues totals are withheld when an enrollment or displayed balance cannot be verified safely. Sliding-scale tax-form reads and deletions require the tax form, sliding-scale record, and student to belong to the current organization. Missing tenant context fails closed.
 
-Fee-added and payment-recorded notifications omit financial details when fee,
-program, student, or enrollment ownership is inconsistent. Their templates may
-still contain GoS/CMU payment destinations; those notification workflows are
-separate from the tenant-configurable parent Payments page and need their own
-review before use by other organizations.
+Fee-added and payment-recorded notifications are sent only when the fee,
+program, student, and active enrollment ownership is consistent. They use only
+the owning organization's validated payment guidance and optional HTTP(S)
+destination from `OrganizationSettings`; when instructions are blank, the
+email asks the parent to contact the lead mentors. These notices use saved
+organization branding or a neutral Momentum fallback, and do not inherit
+another organization's payment details. Sliding-scale reviewer notices go
+only to active Lead Mentors with usable account email addresses in the scale's
+organization; they contain a generic review notice and no student or household
+financial details. There is no global reviewer-email fallback. Parent
+submission and decision notices retain their useful local content and use the
+owning organization's branding.
