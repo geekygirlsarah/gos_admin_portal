@@ -3,7 +3,7 @@
 
 Django==6.1.2
 dnspython==2.9.1
-django-allauth==65.21.0
+django-allauth==65.21.1
 django-formtools==2.7
 django-pghistory==3.9.2
 django-pgtrigger==4.17.0
