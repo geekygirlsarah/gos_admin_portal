@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
 - Fee-added and payment-recorded notices now use the owning organization's validated payment guidance and neutral fallback, with tenant-safe email branding instead of hard-coded GoS/CMU destinations.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
+- Program Mail Merge choices now include program years, default to active/upcoming programs, and let Lead Mentors opt into past or archived programs.
 
 ### Added
 - Added near-real-time `SECURITY_ALERT` audit events and tenant-scoped email alerts for unusual student-profile access and rate-limit breaches, with a configurable rolling threshold and six-hour per-user cooldown.

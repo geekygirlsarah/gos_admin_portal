@@ -48,10 +48,36 @@
               <label for="merge-program" class="form-label">Program</label>
               <select id="merge-program" name="program" class="form-select" required>
                 <option value="">Select a program</option>
-                {% for option in programs %}
-                  <option value="{{ option.pk }}" {% if program and option.pk == program.pk %}selected{% endif %}>{{ option.name }}</option>
-                {% endfor %}
+                {% if program_groups.active %}
+                  <optgroup label="Active Programs">
+                    {% for option in program_groups.active %}
+                      <option value="{{ option.pk }}" {% if program and option.pk == program.pk %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
+                {% if program_groups.upcoming %}
+                  <optgroup label="Upcoming Programs">
+                    {% for option in program_groups.upcoming %}
+                      <option value="{{ option.pk }}" {% if program and option.pk == program.pk %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
+                {% if program_groups.past %}
+                  <optgroup label="Past / Archived Programs">
+                    {% for option in program_groups.past %}
+                      <option value="{{ option.pk }}" {% if program and option.pk == program.pk %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
               </select>
+              {% if program_groups.past %}
+                <div class="form-check form-switch mt-1 js-past-programs-toggle-container">
+                  <input class="form-check-input js-toggle-past-programs" type="checkbox" id="togglePastPrograms_merge-program" data-program-select="merge-program">
+                  <label class="form-check-label small text-muted" for="togglePastPrograms_merge-program">
+                    <i class="bi bi-archive me-1"></i>Show past &amp; archived programs
+                  </label>
+                </div>
+              {% endif %}
             </div>
             <div class="col-lg-3">
               <label for="merge-teams" class="form-label">Team filter</label>

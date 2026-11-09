@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -316,6 +316,94 @@ class ProgramMailMergeViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["program"], self.program)
+
+    def test_lead_program_selector_groups_labeled_programs_and_defaults_to_current(
+        self,
+    ):
+        today = timezone.localdate()
+        upcoming_program = Program.objects.create(
+            organization=self.organization,
+            name="A Upcoming Program",
+            active=True,
+            start_date=today + timedelta(days=30),
+            end_date=today + timedelta(days=60),
+        )
+        same_year_past_program = Program.objects.create(
+            organization=self.organization,
+            name="Duplicate Program",
+            active=False,
+            start_date=date(today.year - 2, 1, 1),
+            end_date=date(today.year - 2, 12, 31),
+        )
+        multi_year_past_program = Program.objects.create(
+            organization=self.organization,
+            name="Duplicate Program",
+            active=True,
+            start_date=date(today.year - 2, 9, 1),
+            end_date=date(today.year - 1, 5, 31),
+        )
+        lead = User.objects.create_user(username="mail_merge_selector_lead")
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(lead)
+
+        response = self.client.get(reverse("program_mail_merge"), HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["program"], self.program)
+        self.assertContains(response, 'optgroup label="Active Programs"')
+        self.assertContains(response, 'optgroup label="Upcoming Programs"')
+        self.assertContains(response, 'optgroup label="Past / Archived Programs"')
+        self.assertContains(
+            response, f"{self.program.name} ({self.program.year_display})"
+        )
+        self.assertContains(
+            response, f"{upcoming_program.name} ({upcoming_program.year_display})"
+        )
+        self.assertContains(
+            response,
+            f"{same_year_past_program.name} ({same_year_past_program.year_display})",
+        )
+        self.assertContains(
+            response,
+            f"{multi_year_past_program.name} ({multi_year_past_program.year_display})",
+        )
+        self.assertContains(response, "Show past &amp; archived programs")
+        self.assertContains(response, "js-toggle-past-programs")
+
+        response = self.client.get(
+            reverse("program_mail_merge"),
+            {"program": multi_year_past_program.pk},
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["program"], multi_year_past_program)
+        self.assertContains(response, f'value="{multi_year_past_program.pk}" selected')
+
+    def test_lead_does_not_default_to_a_past_program_when_no_current_programs_exist(
+        self,
+    ):
+        Program.objects.filter(pk=self.program.pk).update(
+            end_date=timezone.localdate() - timedelta(days=1)
+        )
+        lead = User.objects.create_user(username="mail_merge_past_only_lead")
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(lead)
+
+        response = self.client.get(reverse("program_mail_merge"), HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["program"])
 
     def test_mentor_cannot_mail_merge_a_program_they_cannot_view(self):
         self.allow_mail_merge()
