@@ -83,7 +83,6 @@ class PrivateAdultPhotoTests(TestCase):
                     )
                 else:
                     self.assertNotIn(b"legacy adult photo bytes", response.content)
-                response.close()
 
     def test_adult_photo_endpoint_allows_active_local_members_only(self):
         member = self.create_member("adult-photo-local-member", self.organization)
@@ -102,19 +101,16 @@ class PrivateAdultPhotoTests(TestCase):
         allowed = self.client.get(url, HTTP_HOST=self.host)
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(b"".join(allowed.streaming_content), b"adult photo bytes")
-        allowed.close()
 
         self.client.force_login(foreign_member)
         foreign = self.client.get(url, HTTP_HOST=self.host)
         self.assertNotEqual(foreign.status_code, 200)
         self.assertNotIn(b"adult photo bytes", foreign.content)
-        foreign.close()
 
         self.client.force_login(inactive_member)
         inactive = self.client.get(url, HTTP_HOST=self.host)
         self.assertNotEqual(inactive.status_code, 200)
         self.assertNotIn(b"adult photo bytes", inactive.content)
-        inactive.close()
 
     def test_platform_superuser_can_view_local_adult_photo(self):
         admin = get_user_model().objects.create_superuser(
@@ -130,7 +126,6 @@ class PrivateAdultPhotoTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), b"adult photo bytes")
-        response.close()
 
     def test_adult_photo_endpoint_requires_organization_context(self):
         from programs.views.adults import AdultPhotoView

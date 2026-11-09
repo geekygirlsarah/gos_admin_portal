@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.signals import request_finished
 from django.db.models.signals import post_init
 from django.http import Http404
 from django.test import RequestFactory, TestCase, override_settings
@@ -33,6 +34,7 @@ class GuestFormTenantMediaIsolationTests(TestCase):
     tenant_models = (GuestForm, GuestFormSubmission)
 
     def setUp(self):
+        self.addCleanup(install_default_test_org_hook)
         for model in self.tenant_models:
             post_init.disconnect(
                 receiver=_assign_default_test_org,
@@ -56,9 +58,6 @@ class GuestFormTenantMediaIsolationTests(TestCase):
             is_active=True,
         )
         self.client.force_login(self.lead)
-
-    def tearDown(self):
-        install_default_test_org_hook()
 
     def _pdf(self, name="signed.pdf"):
         return SimpleUploadedFile(name, b"%PDF-1.4 signed guest form")
@@ -238,10 +237,19 @@ class GuestFormTenantMediaIsolationTests(TestCase):
             )
             file_path.parent.mkdir(parents=True)
             file_path.write_bytes(b"private signed guest form")
-            with override_settings(MEDIA_ROOT=media_root):
-                response = self.client.get(
-                    "/media/guest_form_submissions/photo-release/signed.pdf"
-                )
-                response.close()
+            finished_requests = []
+
+            def record_request_finished(**kwargs):
+                finished_requests.append(True)
+
+            request_finished.connect(record_request_finished, weak=False)
+            try:
+                with override_settings(MEDIA_ROOT=media_root):
+                    response = self.client.get(
+                        "/media/guest_form_submissions/photo-release/signed.pdf"
+                    )
+            finally:
+                request_finished.disconnect(record_request_finished)
 
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(finished_requests), 1)

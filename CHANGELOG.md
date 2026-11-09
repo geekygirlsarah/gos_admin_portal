@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Application conversion now matches profiles within the application organization, explicitly owns newly created records, and stops on foreign or inconsistent linked records without repairing them.
 - Parent sliding-scale apply/withdraw, finance notifications, and review queues now fail closed on mismatched owners; local tax forms still clean up while foreign-linked forms are preserved for review.
 - Weekly mentor digests and outreach reminders omit cross-organization records, and program-document deletion and duplicate-parent fixes refuse unsafe cross-tenant cascades or merges.
+- `merge_user_accounts --execute` now refuses to transfer different organization memberships; matching memberships are consolidated without creating duplicate membership rows.
 
 ## 2026-11-07
 

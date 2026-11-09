@@ -237,7 +237,11 @@ account to the target account.
 
 Before using `--execute`, confirm both account identities, organization
 memberships, permissions, and linked records. Treat account merges as
-potentially irreversible.
+potentially irreversible. The command reports and refuses to execute if the
+accounts have different organization membership sets (organization, role, or
+active state). When the sets match, duplicate source membership rows are
+discarded while the target's memberships remain. Reconcile mismatches separately;
+this command will not transfer an additional tenant role to the target.
 
 ### Anonymize Emails
 

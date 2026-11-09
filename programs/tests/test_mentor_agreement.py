@@ -1187,7 +1187,6 @@ class MentorAgreementUploadViewTests(TestCase):
                         f"/media/{prefix}/{self.adult.pk}/signed.pdf"
                     )
                     denied_paths.append(response.status_code)
-                    response.close()
 
         self.assertEqual(denied_paths, [404, 404])
 

@@ -16,9 +16,11 @@ from allauth.account.models import EmailAddress
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 
 from badges.models import Badge, StudentBadge
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Student
 
 User = get_user_model()
@@ -122,6 +124,113 @@ class MergeUserAccountsTests(TestCase):
         award.refresh_from_db()
         self.assertEqual(award.awarded_by_id, andrew.pk)
 
+    def test_merge_refuses_different_organization_memberships(self):
+        personal, andrew = self._users()
+        alpha = Organization.objects.create(
+            name="Merge Membership Alpha",
+            slug="merge-membership-alpha",
+            subdomain="merge-membership-alpha",
+        )
+        beta = Organization.objects.create(
+            name="Merge Membership Beta",
+            slug="merge-membership-beta",
+            subdomain="merge-membership-beta",
+        )
+        source_membership = UserOrganizationMembership.objects.create(
+            user=personal,
+            organization=beta,
+            role="LeadMentor",
+            is_active=True,
+        )
+        target_membership = UserOrganizationMembership.objects.create(
+            user=andrew,
+            organization=alpha,
+            role="Parent",
+            is_active=True,
+        )
+
+        output = self._run(personal, andrew)
+        self.assertIn("organization membership sets differ", output.lower())
+
+        with self.assertRaisesRegex(CommandError, "different organization memberships"):
+            self._run(personal, andrew, execute=True)
+
+        self.assertTrue(User.objects.filter(pk=personal.pk).exists())
+        self.assertTrue(User.objects.filter(pk=andrew.pk).exists())
+        self.assertTrue(
+            EmailAddress.objects.filter(user=personal, email=personal.email).exists()
+        )
+        source_membership.refresh_from_db()
+        target_membership.refresh_from_db()
+        self.assertEqual(source_membership.user_id, personal.pk)
+        self.assertEqual(source_membership.organization_id, beta.pk)
+        self.assertEqual(source_membership.role, "LeadMentor")
+        self.assertEqual(target_membership.user_id, andrew.pk)
+        self.assertEqual(target_membership.organization_id, alpha.pk)
+        self.assertEqual(target_membership.role, "Parent")
+
+    def test_merge_keeps_one_copy_of_identical_organization_memberships(self):
+        personal, andrew = self._users()
+        organization = Organization.objects.create(
+            name="Merge Membership Shared",
+            slug="merge-membership-shared",
+            subdomain="merge-membership-shared",
+        )
+        UserOrganizationMembership.objects.create(
+            user=personal,
+            organization=organization,
+            role="Parent",
+            is_active=False,
+        )
+        UserOrganizationMembership.objects.create(
+            user=andrew,
+            organization=organization,
+            role="Parent",
+            is_active=False,
+        )
+
+        self._run(personal, andrew, execute=True)
+
+        self.assertFalse(User.objects.filter(pk=personal.pk).exists())
+        self.assertEqual(
+            list(
+                UserOrganizationMembership.objects.filter(user=andrew).values_list(
+                    "organization_id", "role", "is_active"
+                )
+            ),
+            [(organization.pk, "Parent", False)],
+        )
+
+    def test_merge_refuses_memberships_with_different_active_states(self):
+        personal, andrew = self._users()
+        organization = Organization.objects.create(
+            name="Merge Membership Active State",
+            slug="merge-membership-active-state",
+            subdomain="merge-membership-active-state",
+        )
+        source_membership = UserOrganizationMembership.objects.create(
+            user=personal,
+            organization=organization,
+            role="Mentor",
+            is_active=True,
+        )
+        target_membership = UserOrganizationMembership.objects.create(
+            user=andrew,
+            organization=organization,
+            role="Mentor",
+            is_active=False,
+        )
+
+        output = self._run(personal, andrew)
+        self.assertIn("organization membership sets differ", output.lower())
+        with self.assertRaisesRegex(CommandError, "different organization memberships"):
+            self._run(personal, andrew, execute=True)
+
+        source_membership.refresh_from_db()
+        target_membership.refresh_from_db()
+        self.assertTrue(source_membership.is_active)
+        self.assertFalse(target_membership.is_active)
+
     # ── scalar fields filled from source when target is empty ────────────
 
     def test_missing_name_fields_filled_from_source(self):
@@ -156,6 +265,13 @@ class MergeUserAccountsTests(TestCase):
             user=andrew,
         )
         self.assertEqual(student.user_id, andrew.pk)
+        for membership in UserOrganizationMembership.objects.filter(user=andrew):
+            UserOrganizationMembership.objects.create(
+                user=personal,
+                organization=membership.organization,
+                role=membership.role,
+                is_active=membership.is_active,
+            )
 
         self._run(personal, andrew, execute=True)
 
