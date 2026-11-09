@@ -34,8 +34,6 @@ _WEBHOOK_SECRET = "tracking-webhook-test-secret"  # nosec B105
     TOSEND_WEBHOOK_SECRET=_WEBHOOK_SECRET,
 )
 class EmailDeliveryTrackingTests(TransactionTestCase):
-    reset_sequences = True
-
     def setUp(self):
         mail.outbox = []
         self.alpha = Organization.objects.create(
