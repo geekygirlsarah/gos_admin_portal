@@ -36,6 +36,7 @@ class RolePermission(models.Model):
         ("sliding_scale", "Payments - Sliding Scale"),
         ("fees", "Programs - Fees"),
         ("programs", "Programs - General"),
+        ("mail_merge", "Messaging - Mail Merge"),
         ("team_assignments", "Programs - Team Assignments"),
         ("badge_award", "Badges - Award"),
         ("badge_manage", "Badges - Create / Manage"),

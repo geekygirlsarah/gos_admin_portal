@@ -269,6 +269,59 @@ def get_student_outreach_stats(student, program):
     return compute_outreach_stats(signups)
 
 
+def get_outreach_stats_by_student(student_ids, program, organization):
+    """Return scoped career-to-date outreach statistics for selected students."""
+    student_ids = list(dict.fromkeys(student_ids))
+    if not student_ids:
+        return {}
+
+    results = {
+        student_id: {
+            "championed_count": 0,
+            "total_outreach_hours": 0.0,
+            "pending_outreach_hours": 0.0,
+            "unconfirmed_count": 0,
+            "shifts_attended": 0,
+            "shifts_signed_up": 0,
+        }
+        for student_id in student_ids
+    }
+    if (
+        organization is None
+        or program is None
+        or program.organization_id != getattr(organization, "pk", organization)
+    ):
+        return results
+
+    signups_by_student = defaultdict(list)
+    signups = (
+        OutreachSignup.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            student_id__in=student_ids,
+            student__organization=organization,
+            shift__organization=organization,
+            shift__event__organization=organization,
+            shift__event__program=program,
+            shift__event__program__organization=organization,
+        )
+        .select_related("shift", "shift__event")
+    )
+    for signup in signups:
+        signups_by_student[signup.student_id].append(signup)
+
+    for student_id, student_signups in signups_by_student.items():
+        stats = compute_outreach_stats(student_signups)
+        results[student_id] = {
+            **stats,
+            "shifts_attended": sum(
+                1 for signup in student_signups if signup.is_finalized
+            ),
+            "shifts_signed_up": len(student_signups),
+        }
+    return results
+
+
 def can_view_checkin(user, shift, organization=None):
     """Who may open (even read-only) the check-in page for ``shift``.
 

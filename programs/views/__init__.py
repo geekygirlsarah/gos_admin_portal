@@ -46,6 +46,7 @@ from .imports import (
     SchoolImportView,
     StudentImportView,
 )
+from .mail_merge import ProgramMailMergeView
 from .mentor_agreement import mentor_agreement_view
 from .mixins import (
     DynamicPermissionMixin,
@@ -179,6 +180,7 @@ __all__ = [
     "ProgramFeeSelectView",
     "ProgramFeeUpdateView",
     "ProgramListView",
+    "ProgramMailMergeView",
     "ProgramMedicalInfoView",
     "ProgramPaymentCreateView",
     "ProgramPaymentDeleteView",

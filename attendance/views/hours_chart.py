@@ -5,12 +5,12 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Max, Sum
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from attendance.stats import get_attendance_stats_by_student
 from outreach.utils import get_attendance_overlap_hours_by_student
 from programs.models import Program, Student
 from programs.permission_views import can_user_read
@@ -367,51 +367,13 @@ def attendance_hours_chart_view(request):
         weeks_elapsed = 1
 
     # --- Aggregate per student ---
-    student_stats = (
-        sessions.values(
-            "student__id",
-            "student__preferred_first_name",
-            "student__legal_first_name",
-            "student__last_name",
-        )
-        .annotate(
-            total_minutes=Sum("duration_minutes"),
-            session_count=Count("id"),
-            days_attended=Count("check_in__date", distinct=True),
-            last_attended=Max("check_in"),
-        )
-        .order_by("-total_minutes")
-    )
-
-    chart_labels = []
-    chart_data = []
-    student_list = []
-    total_hours_all = 0.0
-
-    for stat in student_stats:
-        display_first = (
-            stat["student__preferred_first_name"] or stat["student__legal_first_name"]
-        )
-        name = f"{display_first} {stat['student__last_name']}"
-        hours = round((stat["total_minutes"] or 0) / 60.0, 1)
-        total_hours_all += hours
-        chart_labels.append(name)
-        chart_data.append(hours)
-        student_weeks = max(weeks_elapsed, 1)
-        student_list.append(
-            {
-                "id": stat["student__id"],
-                "name": name,
-                "total_hours": hours,
-                "avg_per_week": round(hours / student_weeks, 1),
-                "session_count": stat["session_count"],
-                "days": stat["days_attended"],
-                "last_attended": stat["last_attended"],
-            }
-        )
+    student_list = get_attendance_stats_by_student(sessions, weeks_elapsed)
+    chart_labels = [stat["name"] for stat in student_list]
+    chart_data = [stat["total_hours"] for stat in student_list]
+    total_hours_all = sum(chart_data)
 
     if include_unlogged:
-        logged_student_ids = {stat["student__id"] for stat in student_stats}
+        logged_student_ids = {stat["id"] for stat in student_list}
         students_scope = (
             active_students_in_program(selected_program, organization=org)
             if selected_program

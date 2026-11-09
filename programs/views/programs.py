@@ -35,6 +35,7 @@ from ..models import (
 from ..permission_views import (
     MentorOrLeadMentorRequiredMixin,
     TeamAssignmentPermissionMixin,
+    can_user_mail_merge,
     can_user_read,
     can_user_write,
     get_user_role,
@@ -1588,6 +1589,10 @@ class ProgramEmailView(LoginRequiredMixin, View):
             "crews": crews,
             "subteams": subteams,
             "is_program_scoped": bool(pk),
+            "can_mail_merge": bool(
+                program
+                and can_user_mail_merge(self.request.user, program, org=organization)
+            ),
         }
         return render(self.request, self.template_name, ctx)
 

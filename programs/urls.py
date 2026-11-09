@@ -57,6 +57,7 @@ from .views import (
     ProgramFeeSelectView,
     ProgramFeeUpdateView,
     ProgramListView,
+    ProgramMailMergeView,
     ProgramMedicalInfoView,
     ProgramPaymentCreateView,
     ProgramPaymentDeleteView,
@@ -130,6 +131,11 @@ urlpatterns = [
         "<int:pk>/edit/",
         ProgramUpdateView.as_view(),
         name="program_edit",
+    ),
+    path(
+        "messaging/mail-merge/",
+        login_required(ProgramMailMergeView.as_view()),
+        name="program_mail_merge",
     ),
     path(
         "messaging/",

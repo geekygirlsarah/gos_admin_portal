@@ -112,6 +112,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_read": orders_ok,
                         "can_write": orders_ok,
                     }
+                elif section_code == "mail_merge":
+                    defaults = {"can_read": False, "can_write": False}
                 RolePermission.objects.get_or_create(
                     organization=org,
                     role=role_code,
@@ -125,20 +127,33 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         grouped_permissions = []
         for section_code, section_name in sections:
             active_column = ORDERS_SECTIONS.get(section_code)
-            uses_read = active_column is None or active_column == "view"
-            uses_write = active_column is None or active_column != "view"
+            is_mail_merge = section_code == "mail_merge"
+            uses_read = (
+                is_mail_merge or active_column is None or active_column == "view"
+            )
+            uses_write = not is_mail_merge and (
+                active_column is None or active_column != "view"
+            )
             grouped_permissions.append(
                 {
                     "name": section_name,
                     "mentor": permissions.filter(
                         section=section_code, role="Mentor"
                     ).first(),
-                    "parent": permissions.filter(
-                        section=section_code, role="Parent"
-                    ).first(),
-                    "student": permissions.filter(
-                        section=section_code, role="Student"
-                    ).first(),
+                    "parent": (
+                        None
+                        if is_mail_merge
+                        else permissions.filter(
+                            section=section_code, role="Parent"
+                        ).first()
+                    ),
+                    "student": (
+                        None
+                        if is_mail_merge
+                        else permissions.filter(
+                            section=section_code, role="Student"
+                        ).first()
+                    ),
                     "orders_section": section_code in ORDERS_SECTIONS,
                     "uses_read": uses_read,
                     "uses_write": uses_write,
@@ -362,6 +377,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 write_key = f"write_{perm.id}"
                 perm.can_read = read_key in request.POST
                 perm.can_write = write_key in request.POST
+            if perm.section == "mail_merge":
+                perm.can_write = False
             if org and perm.organization is None:
                 perm.organization = org
             perm.save()

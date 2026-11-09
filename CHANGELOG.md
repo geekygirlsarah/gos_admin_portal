@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
 
 ### Added
+- Added Program Mail Merge for selected students, with organization-controlled Mentor access, per-student preview/test delivery, built-in attendance and outreach fields, and request-only custom grid values.
+- Added an option to send mail-merge copies to linked parents who have enabled accounts and opted into email updates; student email and program name remain merge fields but are hidden from the data grid.
 - Added a dry-run-by-default `cleanup_email_delivery_quarantine` command; explicit `--execute` deletes only quarantine rows at least 30 days old. Scheduling remains a separately approved release prerequisite.
 
 ## 2026-11-08

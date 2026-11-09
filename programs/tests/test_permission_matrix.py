@@ -74,15 +74,22 @@ class PermissionMatrixTests(TestCase):
 
         # Sections with special restrictions
         cls.finance_sections = {"payments", "sliding_scale", "fees"}
-        cls.mentor_only_sections = {"team_assignments", "badge_award", "badge_manage"}
+        cls.mentor_only_sections = {
+            "mail_merge",
+            "team_assignments",
+            "badge_award",
+            "badge_manage",
+        }
         cls.mentor_default_no_read = {
             "attendance",
+            "mail_merge",
             "team_assignments",
             "badge_award",
             "badge_manage",
         }
         cls.no_write_except_lead = {
             "background_checks",
+            "mail_merge",
             "payments",
             "sliding_scale",
             "fees",
