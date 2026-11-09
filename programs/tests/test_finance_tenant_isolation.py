@@ -21,7 +21,11 @@ from programs.models import (
     Student,
     TaxForm,
 )
-from programs.views.finances import ProgramDuesOwedView
+from programs.views.finances import (
+    ProgramDuesOwedView,
+    SlidingScaleTaxFormDeleteView,
+    SlidingScaleTaxFormViewView,
+)
 
 
 @override_settings(
@@ -44,6 +48,7 @@ class FinanceTenantIsolationTests(TestCase):
             name="Finance Beta", slug="finance-beta", subdomain="finance-beta"
         )
         self.alpha_host = "finance-alpha.localhost"
+        self.beta_host = "finance-beta.localhost"
 
         self.user = User.objects.create_user(username="finance-lead")
         UserOrganizationMembership.objects.create(
@@ -318,6 +323,73 @@ class FinanceTenantIsolationTests(TestCase):
             self.beta_tax_form.file.storage.exists(self.beta_tax_form.file.name)
         )
         self.assertNotEqual(response.status_code, 200)
+
+    def test_global_permission_does_not_authorize_foreign_tax_form_view(self):
+        self._grant_beta_student_role_and_sliding_scale_permission()
+
+        response = self.client.get(
+            reverse(
+                "sliding_scale_tax_form_view",
+                args=[self.beta_scale.pk, self.beta_tax_form.pk],
+            ),
+            HTTP_HOST=self.beta_host,
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_global_permission_does_not_authorize_foreign_tax_form_deletion(self):
+        self._grant_beta_student_role_and_sliding_scale_permission()
+
+        response = self.client.post(
+            reverse(
+                "sliding_scale_delete_tax_form",
+                args=[self.beta_scale.pk, self.beta_tax_form.pk],
+            ),
+            HTTP_HOST=self.beta_host,
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+        self.assertTrue(TaxForm.objects.filter(pk=self.beta_tax_form.pk).exists())
+        self.assertTrue(
+            self.beta_tax_form.file.storage.exists(self.beta_tax_form.file.name)
+        )
+
+    def _grant_beta_student_role_and_sliding_scale_permission(self):
+        UserOrganizationMembership.objects.create(
+            organization=self.beta,
+            user=self.user,
+            role="Student",
+            is_active=True,
+        )
+        permission = Permission.objects.get(
+            content_type__app_label="programs",
+            codename="change_slidingscale",
+        )
+        self.user.user_permissions.add(permission)
+
+    def test_tax_form_permissions_fail_closed_without_organization(self):
+        request = RequestFactory().get("/")
+        request.user = User.objects.create_superuser(username="tax-form-admin")
+        request.organization = None
+
+        for view_class in (
+            SlidingScaleTaxFormViewView,
+            SlidingScaleTaxFormDeleteView,
+        ):
+            with self.subTest(view=view_class.__name__):
+                view = view_class()
+                view.request = request
+                self.assertFalse(view.test_func())
+
+        request.organization = self.alpha
+        for view_class in (
+            SlidingScaleTaxFormViewView,
+            SlidingScaleTaxFormDeleteView,
+        ):
+            with self.subTest(view=view_class.__name__, organization="alpha"):
+                view = view_class()
+                view.request = request
+                self.assertTrue(view.test_func())
 
     def test_tax_form_with_foreign_sliding_scale_is_not_accessible(self):
         mismatched_form = self._create_tax_form(

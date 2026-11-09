@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
@@ -7,7 +7,16 @@ from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
-from programs.models import Adult, Enrollment, Program, RolePermission, Student
+from outreach.models import OutreachSignup
+from outreach.tests.factories import create_outreach_event
+from programs.models import (
+    Adult,
+    Enrollment,
+    Program,
+    ProgramFeature,
+    RolePermission,
+    Student,
+)
 
 from .base import (
     make_lead_mentor_user,
@@ -632,6 +641,64 @@ class AttendanceHoursChartViewTests(TestCase):
         response = self.client.get(self.program_url)
         content = response.content.decode()
         self.assertIn(">Days<", content)
+
+    def test_outreach_overlap_column_is_career_to_date_and_permission_gated(self):
+        outreach_feature, _ = ProgramFeature.objects.get_or_create(
+            key="outreach", defaults={"name": "Outreach"}
+        )
+        self.program.features.add(outreach_feature)
+        event_date = timezone.localdate() - timedelta(days=1)
+        event = create_outreach_event(
+            program=self.program,
+            organization=self.program.organization,
+            name="Outreach Event",
+            location_name="Loc O",
+            location_address="Addr O",
+            start_date=event_date,
+            start_time=time(10),
+            end_time=time(12),
+        )
+        check_in = timezone.make_aware(datetime.combine(event_date, time(10)))
+        OutreachSignup.objects.create(
+            organization=self.program.organization,
+            student=self.student1,
+            shift=event.shifts.first(),
+            role=OutreachSignup.HELPER,
+            checked_in_at=check_in,
+            checked_out_at=check_in + timedelta(hours=2),
+        )
+        AttendanceSession.objects.create(
+            program=self.program,
+            student=self.student1,
+            organization=self.program.organization,
+            check_in=check_in + timedelta(minutes=30),
+            check_out=check_in + timedelta(minutes=90),
+            duration_minutes=60,
+        )
+
+        filtered_response = self.client.get(
+            f"{self.program_url}&date_from={timezone.localdate().isoformat()}"
+        )
+        entry = next(
+            student
+            for student in filtered_response.context["student_list"]
+            if student["id"] == self.student1.pk
+        )
+        self.assertEqual(entry["overlap_hours"], 1.0)
+        self.assertContains(filtered_response, "Outreach Overlap")
+        self.assertContains(filtered_response, "career-to-date")
+
+        make_mentor_user()
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="outreach",
+            defaults={"can_read": False, "can_write": False},
+        )
+        self.client.login(username="mentor", password="password123")  # nosec B106
+        denied_response = self.client.get(self.program_url)
+        self.assertEqual(denied_response.status_code, 200)
+        self.assertFalse(denied_response.context["show_outreach_overlap"])
+        self.assertNotContains(denied_response, "Outreach Overlap")
 
     def test_vertical_chart_adaptive_with_expand_button(self):
         """Wide (vertical-bar) layout fits the container by default and offers

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -10,7 +11,13 @@ from django.views.decorators.cache import never_cache
 from guest_forms.forms import GuestFormSubmissionForm
 from guest_forms.models import GuestForm
 from guest_forms.services import send_submission_confirmation_email
-from organizations.models import OrganizationManager, OrganizationQuerySet
+
+
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -20,7 +27,7 @@ class GuestFormIndexView(View):
     template_name = "guest_forms/index.html"
 
     def get(self, request):
-        org = getattr(request, "organization", None)
+        org = _request_organization(request)
         forms = (
             GuestForm.objects.for_organization(org)
             .filter(is_active=True)
@@ -37,7 +44,7 @@ class GuestFormDetailView(View):
     template_name = "guest_forms/detail.html"
 
     def get(self, request, slug):
-        org = getattr(request, "organization", None)
+        org = _request_organization(request)
         guest_form = get_object_or_404(
             GuestForm.objects.for_organization(org), slug=slug, is_active=True
         )
@@ -50,7 +57,7 @@ class GuestFormDetailView(View):
         return render(request, self.template_name, ctx)
 
     def post(self, request, slug):
-        org = getattr(request, "organization", None)
+        org = _request_organization(request)
         guest_form = get_object_or_404(
             GuestForm.objects.for_organization(org), slug=slug, is_active=True
         )
@@ -60,6 +67,7 @@ class GuestFormDetailView(View):
 
         if form.is_valid():
             submission = form.save(commit=False)
+            submission.organization = org
             submission.guest_form = guest_form
             # Get client IP
             x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -87,7 +95,7 @@ class GuestFormSubmittedView(View):
     template_name = "guest_forms/submitted.html"
 
     def get(self, request, slug):
-        org = getattr(request, "organization", None)
+        org = _request_organization(request)
         guest_form = get_object_or_404(
             GuestForm.objects.for_organization(org), slug=slug, is_active=True
         )

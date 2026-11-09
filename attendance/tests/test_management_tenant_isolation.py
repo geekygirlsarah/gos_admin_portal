@@ -6,7 +6,7 @@ from django.utils import timezone
 from attendance.models import AttendanceSession, RFIDCard
 from organizations.models import Organization, UserOrganizationMembership
 from organizations.utils import get_default_organization
-from programs.models import Program, Student
+from programs.models import Adult, Program, Student
 
 
 class AttendanceManagementTenantIsolationTests(TestCase):
@@ -166,3 +166,59 @@ class AttendanceManagementTenantIsolationTests(TestCase):
                 organization=self.organization, uid=card.uid
             ).exists()
         )
+
+    def test_rfid_management_hides_local_cards_with_foreign_owners(self):
+        foreign_adult = Adult.objects.create(
+            organization=self.foreign_organization,
+            legal_first_name="ForeignPrivate",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        student_card = RFIDCard.objects.create(
+            organization=self.organization,
+            uid="LOCAL-FOREIGN-STUDENT",
+            student=self.foreign_student,
+        )
+        adult_card = RFIDCard.objects.create(
+            organization=self.organization,
+            uid="LOCAL-FOREIGN-ADULT",
+            adult=foreign_adult,
+        )
+
+        response = self.client.get(reverse("rfid_management"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, student_card.uid)
+        self.assertNotContains(response, adult_card.uid)
+        self.assertNotContains(response, "ForeignPrivate")
+
+    def test_rfid_assignment_refuses_local_card_with_foreign_owner(self):
+        existing_local_card = RFIDCard.objects.create(
+            organization=self.organization,
+            uid="LOCAL-OLD-CARD",
+            student=self.local_student,
+        )
+        mismatched_card = RFIDCard.objects.create(
+            organization=self.organization,
+            uid="LOCAL-FOREIGN-OWNER",
+            student=self.foreign_student,
+        )
+
+        response = self.client.post(
+            reverse("rfid_management"),
+            {
+                "action": "assign",
+                "person_type": "student",
+                "person_id": self.local_student.pk,
+                "uid": mismatched_card.uid,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        existing_local_card.refresh_from_db()
+        mismatched_card.refresh_from_db()
+        self.assertTrue(existing_local_card.is_active)
+        self.assertEqual(mismatched_card.student, self.foreign_student)
+        self.assertNotContains(response, "ForeignPrivate")
+        self.assertNotContains(response, mismatched_card.uid)

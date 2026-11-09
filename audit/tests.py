@@ -814,7 +814,7 @@ class ApplicationDeleteAuditTests(TestCase):
         self.user = User.objects.create_user(
             username="app_admin", password="password123"  # nosec B106
         )
-        _add_membership(self.user, "Staff")
+        _add_membership(self.user, "LeadMentor")
         ct, _ = ContentType.objects.get_or_create(
             app_label="applications", model="application"
         )

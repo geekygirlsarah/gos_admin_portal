@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import AnonymousUser, User
 from django.http import Http404
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from audit.events import AuditEvent
@@ -728,6 +729,37 @@ class CalendarFeedTenantIsolationTests(TestCase):
         )
         self.assertFalse(bound_form.is_valid())
         self.assertIn("program", bound_form.errors)
+
+    def test_feed_list_hides_foreign_program_name_for_mismatched_feed(self):
+        gos_program = Program.objects.create(
+            organization=self.gos, name="GoS Local Calendar Program"
+        )
+        other_program = Program.objects.create(
+            organization=self.other, name="Other Private Calendar Program"
+        )
+        CalendarFeed.objects.create(
+            organization=self.gos,
+            name="Mismatched Feed",
+            slug="mismatched-program-feed",
+            program=other_program,
+        )
+        CalendarFeed.objects.create(
+            organization=self.gos,
+            name="Local Feed",
+            slug="local-program-feed",
+            program=gos_program,
+        )
+        user = self.make_member("calendar-feed-lead", self.gos, "LeadMentor")
+        self.client.force_login(user)
+
+        response = self.client.get(
+            reverse("calendar_feeds:feed_list"), HTTP_HOST="gos.localhost"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "GoS Local Calendar Program")
+        self.assertContains(response, "(needs review)")
+        self.assertNotContains(response, "Other Private Calendar Program")
 
     def test_ics_endpoints_reject_missing_organization_context(self):
         public_request = RequestFactory().get("/calendar/feed.ics")

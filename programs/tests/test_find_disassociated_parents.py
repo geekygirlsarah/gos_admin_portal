@@ -16,18 +16,53 @@ report (by default only applications with at least one issue are shown).
 from io import StringIO
 
 from django.core.management import call_command
+from django.db.models.signals import post_init
 from django.test import TestCase
 from django.utils import timezone
 
 from applications.models import Application
 from audit.events import AuditEvent
 from audit.models import AuditLog
+from GoSAdminPortal.test_runner import _assign_default_test_org
+from organizations.models import Organization
 from programs.models import Adult, AdultStudentRelationship, Program, Student
 
 
 class FindDisassociatedParentsTests(TestCase):
+    tenant_models = (Adult, AdultStudentRelationship, Application, Program, Student)
+
+    def setUp(self):
+        self.disconnected_models = []
+        for model in self.tenant_models:
+            if post_init.disconnect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            ):
+                self.disconnected_models.append(model)
+        self.addCleanup(self._restore_default_organization_hook)
+        self.alpha = Organization.objects.create(
+            name="Recovery Alpha",
+            slug="parent-recovery-alpha",
+            subdomain="parent-recovery-alpha",
+        )
+        self.beta = Organization.objects.create(
+            name="Recovery Beta",
+            slug="parent-recovery-beta",
+            subdomain="parent-recovery-beta",
+        )
+
+    def _restore_default_organization_hook(self):
+        for model in self.disconnected_models:
+            post_init.connect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            )
+
     def _student(self, first="Jordan", last="Smith"):
         return Student.objects.create(
+            organization=self.alpha,
             legal_first_name=first,
             last_name=last,
             graduation_year=2027,
@@ -36,7 +71,9 @@ class FindDisassociatedParentsTests(TestCase):
     def _adult(self, first="Jane", last="Doe", email="jane@example.com", **kwargs):
         defaults = {"is_parent": True, "login_enabled": True}
         defaults.update(kwargs)
+        organization = defaults.pop("organization", self.alpha)
         return Adult.objects.create(
+            organization=organization,
             legal_first_name=first,
             last_name=last,
             personal_email=email,
@@ -44,8 +81,11 @@ class FindDisassociatedParentsTests(TestCase):
         )
 
     def _app(self, student, step5=None, step7=None, step8=None, **kwargs):
+        organization = kwargs.pop("organization", student.organization)
         program = kwargs.pop("program", None) or Program.objects.create(
-            name="Summer Program", start_date=timezone.localdate()
+            organization=organization,
+            name="Summer Program",
+            start_date=timezone.localdate(),
         )
         data = {}
         if step5 is not None:
@@ -55,6 +95,7 @@ class FindDisassociatedParentsTests(TestCase):
         if step8 is not None:
             data["step8-secondaryparent"] = step8
         return Application.objects.create(
+            organization=organization,
             applicant_type=Application.Type.STUDENT,
             program=program,
             status=Application.Status.CONVERTED,
@@ -64,8 +105,12 @@ class FindDisassociatedParentsTests(TestCase):
             **kwargs,
         )
 
-    def _link(self, adult, student):
-        return AdultStudentRelationship.objects.create(adult=adult, student=student)
+    def _link(self, adult, student, organization=None):
+        return AdultStudentRelationship.objects.create(
+            organization=organization or student.organization,
+            adult=adult,
+            student=student,
+        )
 
     def _run(self, fix=False, all_=False):
         out = StringIO()
@@ -314,8 +359,13 @@ class FindDisassociatedParentsTests(TestCase):
     def test_legacy_step_keys_are_normalized(self):
         student = self._student()
         orphan = self._adult("Jane", "Smith", email="jane@example.com")
-        program = Program.objects.create(name="Legacy", start_date=timezone.localdate())
+        program = Program.objects.create(
+            organization=self.alpha,
+            name="Legacy",
+            start_date=timezone.localdate(),
+        )
         app = Application.objects.create(
+            organization=self.alpha,
             applicant_type=Application.Type.STUDENT,
             program=program,
             status=Application.Status.CONVERTED,
@@ -391,6 +441,10 @@ class FindDisassociatedParentsTests(TestCase):
         student.refresh_from_db()
         self.assertTrue(orphan in student.adults.all())
         self.assertEqual(student.primary_contact_id, orphan.pk)
+        relationship = AdultStudentRelationship.objects.get(
+            adult=orphan, student=student
+        )
+        self.assertEqual(relationship.organization_id, self.alpha.pk)
 
     def test_fix_holds_relationship_details_from_application(self):
         student = self._student()
@@ -520,3 +574,159 @@ class FindDisassociatedParentsTests(TestCase):
         ).first()
         self.assertIsNotNone(audit)
         self.assertIn(str(orphan.pk), audit.notes)
+
+    def test_foreign_lookalike_is_manual_review_without_foreign_identity(self):
+        student = self._student()
+        foreign_adult = self._adult(
+            "Foreign Parent",
+            "Beta",
+            email="foreign-parent@example.test",
+            organization=self.beta,
+        )
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Foreign Parent",
+                "last_name": "Beta",
+                "email": "foreign-parent@example.test",
+            },
+        )
+
+        output = self._run(fix=True)
+
+        self.assertIn("MANUAL_REVIEW", output)
+        self.assertNotIn("Foreign Parent", output)
+        self.assertNotIn("foreign-parent@example.test", output)
+        self.assertNotIn(f"Adult #{foreign_adult.pk}", output)
+        self.assertFalse(
+            AdultStudentRelationship.objects.filter(
+                adult=foreign_adult, student=student
+            ).exists()
+        )
+        student.refresh_from_db()
+        self.assertIsNone(student.primary_contact_relationship_id)
+
+    def test_foreign_converted_student_is_manual_review_and_not_changed(self):
+        foreign_student = Student.objects.create(
+            organization=self.beta,
+            legal_first_name="Foreign Student",
+            last_name="Beta",
+            graduation_year=2027,
+        )
+        orphan = self._adult("Local Parent", "Alpha", email="local@example.test")
+        self._app(
+            foreign_student,
+            organization=self.alpha,
+            step7={
+                "legal_first_name": "Local Parent",
+                "last_name": "Alpha",
+                "email": "local@example.test",
+            },
+        )
+
+        output = self._run(fix=True)
+
+        self.assertIn("MANUAL_REVIEW", output)
+        self.assertNotIn("Foreign Student", output)
+        self.assertNotIn("Local Parent", output)
+        self.assertFalse(
+            AdultStudentRelationship.objects.filter(
+                adult=orphan, student=foreign_student
+            ).exists()
+        )
+
+    def test_foreign_program_is_manual_review_without_program_name(self):
+        student = self._student()
+        orphan = self._adult("Local Parent", "Alpha", email="local@example.test")
+        foreign_program = Program.objects.create(
+            organization=self.beta,
+            name="Foreign Confidential Program",
+            start_date=timezone.localdate(),
+        )
+        self._app(
+            student,
+            program=foreign_program,
+            step7={
+                "legal_first_name": "Local Parent",
+                "last_name": "Alpha",
+                "email": "local@example.test",
+            },
+        )
+
+        output = self._run(fix=True)
+
+        self.assertIn("MANUAL_REVIEW", output)
+        self.assertNotIn("Foreign Confidential Program", output)
+        self.assertNotIn("Local Parent", output)
+        self.assertFalse(
+            AdultStudentRelationship.objects.filter(
+                adult=orphan, student=student
+            ).exists()
+        )
+
+    def test_mismatched_existing_relationship_is_not_reused_or_changed(self):
+        student = self._student()
+        adult = self._adult("Local Parent", "Alpha", email="local@example.test")
+        mismatched = self._link(adult, student, organization=self.beta)
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Local Parent",
+                "last_name": "Alpha",
+                "email": "local@example.test",
+            },
+        )
+
+        output = self._run(fix=True)
+
+        self.assertIn("MANUAL_REVIEW", output)
+        self.assertNotIn("Local Parent", output)
+        self.assertNotIn("local@example.test", output)
+        self.assertNotIn(f"Adult #{adult.pk}", output)
+        mismatched.refresh_from_db()
+        self.assertEqual(mismatched.organization_id, self.beta.pk)
+        self.assertFalse(
+            AdultStudentRelationship.objects.filter(
+                organization=self.alpha, adult=adult, student=student
+            ).exists()
+        )
+        student.refresh_from_db()
+        self.assertIsNone(student.primary_contact_relationship_id)
+
+    def test_concealed_mismatched_contact_pointers_are_not_empty_slots(self):
+        for slot in ("primary", "secondary"):
+            with self.subTest(slot=slot):
+                first = f"Foreign {slot.title()}"
+                email = f"foreign-{slot}@example.test"
+                student = self._student(first=f"Student {slot}")
+                foreign_adult = self._adult(
+                    first,
+                    "Beta",
+                    email=email,
+                    organization=self.beta,
+                )
+                mismatched = self._link(foreign_adult, student, organization=self.beta)
+                pointer_field = f"{slot}_contact_relationship_id"
+                setattr(student, pointer_field, mismatched.pk)
+                student.save(update_fields=[pointer_field])
+                step = {
+                    "legal_first_name": first,
+                    "last_name": "Beta",
+                    "email": email,
+                }
+                self._app(
+                    student,
+                    step7=step if slot == "primary" else None,
+                    step8=step if slot == "secondary" else None,
+                )
+
+                output = self._run(fix=True)
+
+                self.assertIn("MANUAL_REVIEW", output)
+                self.assertNotIn(first, output)
+                self.assertNotIn(email, output)
+                self.assertNotIn(f"Adult #{foreign_adult.pk}", output)
+                student.refresh_from_db()
+                self.assertEqual(getattr(student, pointer_field), mismatched.pk)
+                mismatched.refresh_from_db()
+                self.assertEqual(mismatched.organization_id, self.beta.pk)

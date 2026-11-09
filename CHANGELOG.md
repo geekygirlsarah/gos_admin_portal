@@ -2,12 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-08
+
+### Fixed
+- `find_disconnected_accounts` now treats email/name matches as suggestions and requires an explicitly selected, independently verified organization/profile/user pair plus confirmation before linking; it refuses stale, foreign-owned, already-linked, staff, and superuser selections.
+- `find_disassociated_parents` now limits recovery to ownership-consistent records in the application organization, assigns ownership to new relationships, and leaves mismatched links for generic manual review.
+- Sliding-scale tax-form access now requires a Lead Mentor in the resolved organization or a platform superuser, and parent-derived student, finance, and travel permissions reject inconsistent cross-organization relationships and enrollments.
+- Direct Django media URLs now also deny student documents, digital sign-out signatures, tax forms, and legacy mentor photos; existing files and storage paths are unchanged.
+- Application conversion now matches profiles within the application organization, explicitly owns newly created records, and stops on foreign or inconsistent linked records without repairing them.
+- Parent sliding-scale apply/withdraw, finance notifications, and review queues now fail closed on mismatched owners; local tax forms still clean up while foreign-linked forms are preserved for review.
+- Weekly mentor digests and outreach reminders omit cross-organization records, and program-document deletion and duplicate-parent fixes refuse unsafe cross-tenant cascades or merges.
+- `merge_user_accounts --execute` now refuses to transfer different organization memberships; matching memberships are consolidated without creating duplicate membership rows.
+
 ## 2026-11-07
 
 ### Fixed
+- Attendance kiosk student lookup now requires an exact case-insensitive first and last name, ambiguous member matches ask for mentor help, and visitor sign-in requires at least two name parts.
+- Attendance kiosk member name misses now explain the exact first-and-last-name requirement, and expired unlock cookies return mentors to unlock without being reported as a service outage.
 - Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
 - The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
 - Travel trip creation and inline departures/costs now inherit the program organization, travel mentor and parent signups persist their organization, and the dashboard displays the travel event's actual location.
+- Application and guest-form review now requires a Lead Mentor in the current organization or a platform superuser; global reviewer permissions no longer cross tenant role boundaries.
+- Signed mentor-agreement uploads are no longer served from public media URLs and can be downloaded only by the owner, a same-organization Lead Mentor, or a platform superuser through an audited private route.
+- Badge prerequisite choices and displayed links now exclude foreign-organization badges, and program alumni pages no longer reveal a foreign program name.
+- Outreach inline shifts and signup collisions, plus travel departures, costs, and adult signup links, are now organization-scoped; mismatched records are left unchanged and are not exposed or notified.
+- Guest-form review and counts now require same-organization form/submission links; deletion is blocked before audit or cascade when foreign submissions exist. Parent/emergency-contact directories and mentor relationship edits now ignore inconsistent foreign links, while school choices remain shared.
+- Tenant administrative views no longer accept a global Django permission as a grant in another organization; program, student/adult, relationship, and attendance imports scope existing records and explicitly assign new ownership while the shared school catalog remains global.
+- Sliding-scale review and student selections are organization-scoped, and payment notifications with inconsistent cross-organization fee data are withheld rather than including foreign financial details.
+- Guest forms and submissions now persist their organization without relying on the test-only default hook; signed submissions require an audited tenant-review download, and direct media URLs are blocked.
+- Adult photos are served only through a protected endpoint for active members of the photo owner's organization or platform superusers; direct media URLs are blocked.
+- Outreach and travel event deletion now refuses foreign-owned cascades; calendar source cleanup preserves rows with foreign exceptions. RFID management hides inconsistent foreign owners and refuses reassignment, outreach overlap validation ignores inconsistent foreign signups, and calendar feed management no longer displays foreign program names.
 
 ## 2026-11-06
 

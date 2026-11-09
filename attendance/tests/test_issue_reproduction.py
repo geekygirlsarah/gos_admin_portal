@@ -66,9 +66,9 @@ class KioskProgramBoundingReproductionTests(TestCase):
         )
 
     def test_kiosk_lookup_by_name_only_returns_students_in_program(self):
-        """Looking up 'Zoey' at current program's kiosk should ONLY return current_zoey, not past_zoey."""
+        """A full-name lookup should return only current_zoey, not past_zoey."""
         url = reverse("api_kiosk_lookup", args=[self.kiosk.pk])
-        response = self.client.get(url, {"name": "Zoey"})
+        response = self.client.get(url, {"name": "Zoey Newstudent"})
         self.assertEqual(response.status_code, 200)
         data = response.json()
         student_ids = [s["id"] for s in data["students"]]

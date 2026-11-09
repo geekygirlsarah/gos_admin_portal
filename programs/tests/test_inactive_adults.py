@@ -195,6 +195,12 @@ class InactiveAdultTest(TestCase):
         # Create a fee to trigger notification
         program = Program.objects.create(name="Test Program", active=True)
         fee = Fee.objects.create(program=program, name="Test Fee", amount=100)
+        Enrollment.objects.create(
+            organization=program.organization,
+            student=self.student,
+            program=program,
+            active=True,
+        )
 
         # Clear any existing mail
         mail.outbox = []

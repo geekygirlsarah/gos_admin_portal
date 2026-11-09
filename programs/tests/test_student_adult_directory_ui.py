@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from organizations.models import UserOrganizationMembership
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -200,6 +200,29 @@ class StudentAdultDirectoryUITests(TestCase):
         self.assertIn("Sarah Alum", a_content)
         self.assertIn("MIT", a_content)
         self.assertIn("Robotics Corp", a_content)
+
+    def test_program_alumni_page_hides_foreign_program_name(self):
+        foreign_organization = Organization.objects.create(
+            name="Alumni Beta", slug="alumni-beta", subdomain="alumni-beta"
+        )
+        foreign_program = Program.objects.create(
+            organization=foreign_organization,
+            name="Beta Confidential Alumni Program",
+            active=True,
+        )
+        self.client.force_login(self.lead_user)
+
+        local_response = self.client.get(
+            reverse("program_alumni_list", args=[self.program.pk])
+        )
+        foreign_response = self.client.get(
+            reverse("program_alumni_list", args=[foreign_program.pk])
+        )
+
+        self.assertEqual(local_response.status_code, 200)
+        self.assertContains(local_response, self.program.name)
+        self.assertNotEqual(foreign_response.status_code, 200)
+        self.assertNotIn(b"Beta Confidential Alumni Program", foreign_response.content)
 
     def test_student_sub_views(self):
         self.client.force_login(self.lead_user)

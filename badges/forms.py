@@ -4,6 +4,15 @@ from .models import Badge
 
 
 class BadgeForm(forms.ModelForm):
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if organization is None:
+            self.fields["prerequisites"].queryset = Badge.objects.none()
+        else:
+            self.fields["prerequisites"].queryset = Badge.objects.for_organization(
+                organization
+            )
+
     class Meta:
         model = Badge
         fields = [

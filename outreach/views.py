@@ -1,4 +1,3 @@
-from collections import defaultdict
 from datetime import date, time
 
 from django.contrib import messages
@@ -13,7 +12,6 @@ from django.utils import timezone
 from django.utils.formats import localize
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
-from attendance.models import AttendanceSession
 from audit.mixins import AuditedDeleteMixin
 from audit.service import log_deletion
 from outreach.forms import (
@@ -34,8 +32,8 @@ from outreach.models import (
 from outreach.utils import (
     can_operate_checkin,
     can_view_checkin,
-    compute_attendance_overlap_hours,
     compute_outreach_stats,
+    get_attendance_overlap_hours_by_student,
 )
 from programs.models import Program
 from programs.permission_views import (
@@ -428,15 +426,29 @@ class OutreachShiftFormSetMixin:
     Requires at least one valid shift to save the event.
     """
 
+    def get_shift_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None or self.object is None:
+            return OutreachShift.objects.none()
+        return OutreachShift.objects.for_organization(organization).filter(
+            event=self.object,
+            event__organization=organization,
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.request.method == "POST":
             context["shift_formset"] = OutreachShiftFormSet(
-                self.request.POST, instance=self.object, prefix="shifts"
+                self.request.POST,
+                instance=self.object,
+                prefix="shifts",
+                queryset=self.get_shift_queryset(),
             )
         else:
             context["shift_formset"] = OutreachShiftFormSet(
-                instance=self.object, prefix="shifts"
+                instance=self.object,
+                prefix="shifts",
+                queryset=self.get_shift_queryset(),
             )
         return context
 
@@ -547,6 +559,37 @@ class OutreachEventDeleteView(
 
     def audit_snapshot(self, obj):
         return {"name": obj.name, "program_id": obj.program_id}
+
+    def post(self, request, *args, **kwargs):
+        with transaction.atomic():
+            event = get_object_or_404(
+                self.get_queryset().select_for_update(), pk=kwargs.get("pk")
+            )
+            shifts = list(OutreachShift.objects.select_for_update().filter(event=event))
+            shift_ids = [shift.pk for shift in shifts]
+            signups = list(
+                OutreachSignup.objects.select_for_update().filter(
+                    shift_id__in=shift_ids
+                )
+            )
+            mentor_signups = list(
+                OutreachMentorSignup.objects.select_for_update().filter(
+                    shift_id__in=shift_ids
+                )
+            )
+            has_foreign_records = any(
+                row.organization_id != event.organization_id
+                for row in [*shifts, *signups, *mentor_signups]
+            )
+            if has_foreign_records:
+                messages.error(
+                    request,
+                    "This event cannot be deleted because related records need review.",
+                )
+                return redirect("outreach:event_list", program_id=self.program.id)
+
+            self.object = event
+            return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         from outreach.services import notify_outreach_event_deleted
@@ -881,19 +924,16 @@ class OutreachStudentStatsView(
         )
 
         students = list(students)
-        attendance_by_student = defaultdict(list)
         student_ids = [student.pk for student in students]
-        if student_ids:
-            attendance_sessions = AttendanceSession.objects.for_organization(
-                organization
-            ).filter(
-                student_id__in=student_ids,
-                program__organization=organization,
-            )
-            for session in attendance_sessions:
-                attendance_by_student[session.student_id].append(session)
-
-        now = timezone.now()
+        signups_by_student = {
+            student.pk: student.program_signups for student in students
+        }
+        overlap_hours_by_student = get_attendance_overlap_hours_by_student(
+            student_ids,
+            self.program,
+            organization,
+            signups_by_student=signups_by_student,
+        )
         student_stats = []
         for student in students:
             signups = student.program_signups
@@ -905,11 +945,7 @@ class OutreachStudentStatsView(
                     "hours": stats["total_outreach_hours"],
                     "pending_hours": stats["pending_outreach_hours"],
                     "unconfirmed_count": stats["unconfirmed_count"],
-                    "overlap_hours": compute_attendance_overlap_hours(
-                        signups,
-                        attendance_by_student[student.pk],
-                        now=now,
-                    ),
+                    "overlap_hours": overlap_hours_by_student.get(student.pk, 0.0),
                 }
             )
 

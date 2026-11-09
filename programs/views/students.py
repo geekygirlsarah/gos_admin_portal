@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import Value
+from django.db.models import Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse, Http404, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
@@ -187,10 +187,24 @@ class StudentEmergencyContactsView(
     default_sort_field = "name"
 
     def get_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return Student.objects.none()
+        relationships = (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                adult__organization=organization,
+                student__organization=organization,
+            )
+            .select_related("adult", "student")
+        )
+        parents = Adult.objects.for_organization(organization).filter(
+            pk__in=relationships.values("adult_id")
+        )
         qs = (
             super()
             .get_queryset()
-            .for_organization(getattr(self.request, "organization", None))
+            .for_organization(organization)
             .filter(graduated=False)
         )
 
@@ -202,7 +216,10 @@ class StudentEmergencyContactsView(
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
             )
-            .prefetch_related("adults", "adultstudentrelationship_set")
+            .prefetch_related(
+                Prefetch("adults", queryset=parents),
+                Prefetch("adultstudentrelationship_set", queryset=relationships),
+            )
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -374,10 +391,13 @@ class StudentDetailView(
                     "adultstudentrelationship_set",
                     queryset=AdultStudentRelationship.objects.for_organization(
                         organization
-                    ).filter(
+                    )
+                    .filter(
                         adult__organization=organization,
                         student__organization=organization,
-                    ),
+                    )
+                    .select_related("adult", "student"),
+                    to_attr="tenant_contact_relationships",
                 ),
                 Prefetch(
                     "background_checks",

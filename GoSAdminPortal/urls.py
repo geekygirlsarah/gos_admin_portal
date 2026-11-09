@@ -22,7 +22,10 @@ from django.views.generic import TemplateView
 from GoSAdminPortal import views as portal_views
 from GoSAdminPortal.media import serve_public_media
 from programs.views.email_issues import tosend_webhook_view
-from programs.views.mentor_agreement import mentor_agreement_view
+from programs.views.mentor_agreement import (
+    MentorAgreementSubmissionDownloadView,
+    mentor_agreement_view,
+)
 
 handler404 = "GoSAdminPortal.views.handler404"
 handler403 = "GoSAdminPortal.views.handler403"
@@ -43,6 +46,11 @@ urlpatterns = [
     path("api/webhooks/tosend/", tosend_webhook_view, name="api_tosend_webhook"),
     path("profile/", include("portal.urls")),
     path("mentor-agreement/", mentor_agreement_view, name="mentor_agreement"),
+    path(
+        "mentor-agreement/submissions/<int:pk>/",
+        MentorAgreementSubmissionDownloadView.as_view(),
+        name="mentor_agreement_submission_download",
+    ),
     # Public application flow (new wizard lives in the `applications` app)
     path("apply/", include("applications.urls")),
     # Public kiosk attendance sign-in pages (no login required)

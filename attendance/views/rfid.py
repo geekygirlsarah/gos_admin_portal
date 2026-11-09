@@ -13,7 +13,6 @@ from programs.models import Adult, Student
 from programs.permission_views import can_user_delete, can_user_write
 
 from ..models import RFIDCard
-from ..services import find_card_by_uid
 
 
 @login_required
@@ -86,11 +85,12 @@ def rfid_management_view(request):
                 }
             )
     else:
-        assigned_cards = (
-            RFIDCard.objects.for_organization(org)
-            .filter(is_active=True)
-            .select_related("student", "adult")
-        )
+        assigned_cards = RFIDCard.objects.for_organization(org).filter(is_active=True)
+        if org is not None:
+            assigned_cards = assigned_cards.filter(
+                Q(student__organization=org) | Q(adult__organization=org)
+            )
+        assigned_cards = assigned_cards.select_related("student", "adult")
     # Sort assigned cards by preferred name then last name
     assigned_cards_list = list(assigned_cards)
     assigned_cards_list.sort(
@@ -131,10 +131,33 @@ def rfid_management_view(request):
                                 pk=person_id,
                             )
 
-                        # Find if this UID is already in the system
-                        existing_card = find_card_by_uid(
-                            uid, organization=org or person.organization
-                        )
+                        # Find a tenant-owned card even if its owner link is
+                        # inconsistent, so it cannot be overwritten implicitly.
+                        tenant_cards = RFIDCard.objects.for_organization(
+                            org or person.organization
+                        ).select_related("student", "adult")
+                        existing_card = tenant_cards.filter(uid=uid).first()
+                        if existing_card is None:
+                            stripped_uid = uid.lstrip("0")
+                            if stripped_uid and stripped_uid != uid:
+                                existing_card = tenant_cards.filter(
+                                    uid=stripped_uid
+                                ).first()
+
+                        if existing_card:
+                            old_owner = existing_card.student or existing_card.adult
+                            if (
+                                org is not None
+                                and old_owner
+                                and old_owner.organization_id != org.pk
+                            ):
+                                messages.error(
+                                    request,
+                                    "This card has an inconsistent assignment and cannot be changed here.",
+                                )
+                                return redirect(
+                                    f"{reverse('rfid_management')}?{urlencode({'q': search_query})}"
+                                )
 
                         # Deactivate other active cards for this person
                         person_cards = person.rfid_cards.filter(is_active=True)
@@ -146,7 +169,6 @@ def rfid_management_view(request):
 
                         if existing_card:
                             # Reassign existing card
-                            old_owner = existing_card.student or existing_card.adult
                             existing_card.student = (
                                 person if person_type == "student" else None
                             )

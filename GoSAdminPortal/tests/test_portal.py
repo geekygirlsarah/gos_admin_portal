@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import tempfile
 from contextlib import contextmanager
 from unittest import mock
 
@@ -635,22 +636,22 @@ class MediaRequestDbFreeTests(TestCase):
     MEDIA_REL = os.path.join("public", "_db_free_probe.jpg")
 
     def setUp(self):
-        full_path = os.path.join(settings.MEDIA_ROOT, self.MEDIA_REL)
+        self.media_root = tempfile.TemporaryDirectory()
+        self.media_settings = override_settings(MEDIA_ROOT=self.media_root.name)
+        self.media_settings.enable()
+        self.addCleanup(self.media_root.cleanup)
+        self.addCleanup(self.media_settings.disable)
+
+        full_path = os.path.join(self.media_root.name, self.MEDIA_REL)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "wb") as probe:
             probe.write(b"\xff\xd8\xff\xe0db-free-probe")
-        self.addCleanup(self._remove_probe, full_path)
 
         user = User.objects.create_user(username="media_user")
         self.client.force_login(user)
         # Prime OrganizationMiddleware's process-wide cache so its one-time
         # org lookup happens outside the assertNumQueries() block below.
         self.client.get("/health/")
-
-    @staticmethod
-    def _remove_probe(path):
-        if os.path.exists(path):
-            os.remove(path)
 
     def test_media_get_performs_zero_queries(self):
         url = settings.MEDIA_URL + self.MEDIA_REL.replace(os.sep, "/")
@@ -662,13 +663,26 @@ class MediaRequestDbFreeTests(TestCase):
             b"".join(response.streaming_content)
 
     def test_sensitive_media_is_blocked_without_database_queries(self):
-        for path in (
-            "/media/photos/students/_db_free_probe.jpg",
-            "/media/application_documents/_db_free_probe.pdf",
-            "/media/private/_db_free_probe.jpg",
-        ):
-            with self.subTest(path=path), self.assertNumQueries(0):
-                self.assertEqual(self.client.get(path).status_code, 404)
+        sensitive_paths = (
+            "photos/students/_db_free_probe.jpg",
+            "application_documents/_db_free_probe.pdf",
+            "private/_db_free_probe.jpg",
+            "student_documents/_db_free_probe.pdf",
+            "digital_signouts/_db_free_probe.png",
+            "tax_forms/_db_free_probe.pdf",
+            "photos/mentors/_db_free_probe.jpg",
+        )
+        for sensitive_path in sensitive_paths:
+            full_path = os.path.join(self.media_root.name, *sensitive_path.split("/"))
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "wb") as probe:
+                probe.write(b"sensitive-media-probe")
+            url = f"/media/{sensitive_path}"
+            with self.subTest(path=url), self.assertNumQueries(0):
+                response = self.client.get(url)
+                if response.streaming:
+                    b"".join(response.streaming_content)
+                self.assertEqual(response.status_code, 404)
 
 
 class Handler500RenderTests(TestCase):

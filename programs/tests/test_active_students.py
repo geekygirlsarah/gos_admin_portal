@@ -96,7 +96,9 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn(self.unenrolled, qs)
 
     def test_sliding_scale_form_with_program_only_lists_active_enrolled(self):
-        form = SlidingScaleForm(program=self.program)
+        form = SlidingScaleForm(
+            program=self.program, organization=self.program.organization
+        )
         qs = list(form.fields["student"].queryset)
         self.assertIn(self.active, qs)
         self.assertNotIn(self.dropped, qs)
@@ -105,7 +107,7 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn(self.unenrolled, qs)
 
     def test_sliding_scale_form_without_program_excludes_graduated(self):
-        form = SlidingScaleForm()
+        form = SlidingScaleForm(organization=self.program.organization)
         qs = list(form.fields["student"].queryset)
         self.assertIn(self.active, qs)
         self.assertIn(self.dropped, qs)

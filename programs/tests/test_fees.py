@@ -283,6 +283,7 @@ class FormBehaviorTests(TestCase):
     def test_sliding_scale_form_percent_validation_and_queryset(self):
         form = SlidingScaleForm(
             program=self.program,
+            organization=self.program.organization,
             data={
                 "student": self.enrolled_student.pk,
                 "percent": "150",
@@ -291,6 +292,7 @@ class FormBehaviorTests(TestCase):
         self.assertFalse(form.is_valid())
         form2 = SlidingScaleForm(
             program=self.program,
+            organization=self.program.organization,
             data={
                 "student": self.enrolled_student.pk,
                 "percent": "100",

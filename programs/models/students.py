@@ -265,7 +265,15 @@ class Student(models.Model):
     def primary_contact(self):
         """Backwards-compatible accessor: the primary-contact Adult."""
         rel = self.primary_contact_relationship
-        return rel.adult if rel is not None else None
+        if (
+            rel is None
+            or self.organization_id is None
+            or rel.student_id != self.pk
+            or rel.organization_id != self.organization_id
+        ):
+            return None
+        adult = rel.adult
+        return adult if adult.organization_id == self.organization_id else None
 
     @primary_contact.setter
     def primary_contact(self, adult):
@@ -273,8 +281,8 @@ class Student(models.Model):
 
     @property
     def primary_contact_id(self):
-        rel = self.primary_contact_relationship
-        return rel.adult_id if rel is not None else None
+        adult = self.primary_contact
+        return adult.pk if adult is not None else None
 
     @primary_contact_id.setter
     def primary_contact_id(self, value):
@@ -289,7 +297,15 @@ class Student(models.Model):
     def secondary_contact(self):
         """Backwards-compatible accessor: the secondary-contact Adult."""
         rel = self.secondary_contact_relationship
-        return rel.adult if rel is not None else None
+        if (
+            rel is None
+            or self.organization_id is None
+            or rel.student_id != self.pk
+            or rel.organization_id != self.organization_id
+        ):
+            return None
+        adult = rel.adult
+        return adult if adult.organization_id == self.organization_id else None
 
     @secondary_contact.setter
     def secondary_contact(self, adult):
@@ -297,8 +313,8 @@ class Student(models.Model):
 
     @property
     def secondary_contact_id(self):
-        rel = self.secondary_contact_relationship
-        return rel.adult_id if rel is not None else None
+        adult = self.secondary_contact
+        return adult.pk if adult is not None else None
 
     @secondary_contact_id.setter
     def secondary_contact_id(self, value):
@@ -311,28 +327,63 @@ class Student(models.Model):
 
     def _set_contact(self, slot, adult):
         """Assign a primary/secondary contact, creating the through row."""
+        from django.core.exceptions import ValidationError
+
         from .adults import Adult, AdultStudentRelationship
 
         if adult is None:
             setattr(self, f"{slot}_contact_relationship", None)
             self.__dict__.pop(f"_pending_{slot}_contact", None)
             return
+        if (
+            self.organization_id is not None
+            and adult.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                "A student contact must belong to the same organization."
+            )
         if self.pk is None:
             # Unsaved Student: defer creating the through row until save() so
             # there's a student PK to reference.
             self.__dict__[f"_pending_{slot}_contact"] = adult
             setattr(self, f"{slot}_contact_relationship", None)
             return
-        rel, _ = AdultStudentRelationship.objects.get_or_create(
-            adult=adult, student=self
+        rel, _ = AdultStudentRelationship.objects.for_organization(
+            self.organization_id
+        ).get_or_create(
+            organization_id=self.organization_id,
+            adult=adult,
+            student=self,
         )
         setattr(self, f"{slot}_contact_relationship", rel)
         self.__dict__.pop(f"_pending_{slot}_contact", None)
         if not adult.is_parent:
-            Adult.objects.filter(pk=adult.pk).update(is_parent=True)
+            Adult.objects.filter(
+                pk=adult.pk, organization_id=self.organization_id
+            ).update(is_parent=True)
+
+    def _same_organization_relationships(self):
+        from .adults import AdultStudentRelationship
+
+        if self.pk is None or self.organization_id is None:
+            return AdultStudentRelationship.objects.none()
+        prefetched_relationships = getattr(self, "tenant_contact_relationships", None)
+        if prefetched_relationships is not None:
+            return prefetched_relationships
+        return (
+            AdultStudentRelationship.objects.for_organization(self.organization)
+            .filter(
+                student=self,
+                adult__organization=self.organization,
+                student__organization=self.organization,
+            )
+            .select_related("adult", "student")
+        )
 
     def _resolve_deferred_contacts(self):
         """Create through rows for contacts assigned before the first save."""
+        from django.core.exceptions import ValidationError
+
         from .adults import Adult, AdultStudentRelationship
 
         changed = False
@@ -340,12 +391,25 @@ class Student(models.Model):
             pending = self.__dict__.pop(f"_pending_{slot}_contact", None)
             if pending is None:
                 continue
-            rel, _ = AdultStudentRelationship.objects.get_or_create(
-                adult=pending, student=self
+            if (
+                self.organization_id is None
+                or pending.organization_id != self.organization_id
+            ):
+                raise ValidationError(
+                    "A student contact must belong to the same organization."
+                )
+            rel, _ = AdultStudentRelationship.objects.for_organization(
+                self.organization_id
+            ).get_or_create(
+                organization_id=self.organization_id,
+                adult=pending,
+                student=self,
             )
             setattr(self, f"{slot}_contact_relationship", rel)
             if not pending.is_parent:
-                Adult.objects.filter(pk=pending.pk).update(is_parent=True)
+                Adult.objects.filter(
+                    pk=pending.pk, organization_id=self.organization_id
+                ).update(is_parent=True)
             changed = True
         if changed:
             super().save(
@@ -360,7 +424,14 @@ class Student(models.Model):
         """Backwards-compatible alias for the M2M 'adults' relation.
         Allows templates to use student.parents.all just like older schema.
         """
-        return self.adults
+        from .adults import Adult
+
+        relationships = self._same_organization_relationships()
+        if self.organization_id is None:
+            return Adult.objects.none()
+        return Adult.objects.for_organization(self.organization).filter(
+            pk__in=relationships.values("adult_id")
+        )
 
     @property
     def all_parents(self):
@@ -375,15 +446,12 @@ class Student(models.Model):
         result = []
 
         # Helper to get relationship data from the through model
-        rels = {}
-        if self.pk:
-            rels = {
-                r.adult_id: (
-                    r.relationship_to_student,
-                    r.specific_relationship or "",
-                )
-                for r in self.adultstudentrelationship_set.all()
-            }
+        relationships = list(self._same_organization_relationships())
+        rels = {
+            r.adult_id: (r.relationship_to_student, r.specific_relationship or "")
+            for r in relationships
+        }
+        relationships_by_pk = {r.pk: r for r in relationships}
 
         def add_adult(adult):
             if adult and adult.id not in seen_ids:
@@ -393,12 +461,16 @@ class Student(models.Model):
                 result.append(adult)
                 seen_ids.add(adult.id)
 
-        add_adult(self.primary_contact)
-        add_adult(self.secondary_contact)
+        for relation_id in (
+            self.primary_contact_relationship_id,
+            self.secondary_contact_relationship_id,
+        ):
+            relationship = relationships_by_pk.get(relation_id)
+            if relationship is not None:
+                add_adult(relationship.adult)
 
-        if self.pk:
-            for p in self.adults.all():
-                add_adult(p)
+        for relationship in relationships:
+            add_adult(relationship.adult)
 
         return result
 

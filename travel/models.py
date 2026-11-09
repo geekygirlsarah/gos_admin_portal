@@ -488,10 +488,29 @@ class TravelParentChaperoneSignup(models.Model):
         one active student in the program."""
         from programs.utils import active_students_in_program
 
+        organization = program.organization
+        if organization is None:
+            return Adult.objects.none()
+
+        from programs.models import AdultStudentRelationship
+
+        eligible_adult_ids = (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                adult__organization=organization,
+                student__organization=organization,
+                student__in=active_students_in_program(
+                    program, organization=organization
+                ),
+            )
+            .values("adult_id")
+        )
         return (
-            Adult.objects.filter(
+            Adult.objects.for_organization(organization)
+            .filter(
                 is_parent=True,
-                students__in=active_students_in_program(program),
+                pk__in=eligible_adult_ids,
             )
             .distinct()
             .order_by(

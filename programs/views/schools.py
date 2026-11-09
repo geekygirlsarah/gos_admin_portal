@@ -14,8 +14,8 @@ from ..models import School, SchoolDistrict
 from ..utils import get_safe_url
 from .mixins import (
     LogFormSaveMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     SortableListViewMixin,
-    TenantLeadMentorPermissionRequiredMixin,
 )
 
 
@@ -72,7 +72,7 @@ class SchoolCreateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    TenantLeadMentorPermissionRequiredMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     CreateView,
 ):
     model = School
@@ -95,7 +95,7 @@ class SchoolUpdateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    TenantLeadMentorPermissionRequiredMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     UpdateView,
 ):
     model = School
@@ -121,7 +121,7 @@ class SchoolUpdateView(
 class SchoolMergeView(
     OrganizationScopeMixin,
     LoginRequiredMixin,
-    TenantLeadMentorPermissionRequiredMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     FormView,
 ):
     """Merge one school into another, reassigning students and preserving
@@ -252,7 +252,7 @@ class DistrictCreateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    TenantLeadMentorPermissionRequiredMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     CreateView,
 ):
     model = SchoolDistrict
@@ -273,7 +273,7 @@ class DistrictCreateView(
 class DistrictUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    TenantLeadMentorPermissionRequiredMixin,
+    SharedSchoolCatalogPermissionRequiredMixin,
     UpdateView,
 ):
     model = SchoolDistrict
@@ -293,7 +293,7 @@ class DistrictUpdateView(
 
 
 class DistrictDeleteView(
-    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+    LoginRequiredMixin, SharedSchoolCatalogPermissionRequiredMixin, View
 ):
     """Delete a district. Schools linked to it are detached (district set
     to null) but never deleted.

@@ -2,30 +2,37 @@
 
 from __future__ import annotations
 
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Count, Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
+from django.utils.http import content_disposition_header
 from django.views import View
+from django.views.decorators.cache import never_cache
 
 from audit.events import AuditEvent
 from audit.service import log_event
 from guest_forms.forms import GuestFormForm
 from guest_forms.models import GuestForm, GuestFormSubmission
-from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.permission_views import user_is_lead_mentor
 
 
 class GuestFormReviewRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
-    """Require reviewer delegation or Lead Mentor membership in this tenant."""
+    """Require a Lead Mentor in the request organization or a superuser."""
 
-    permission_required = "guest_forms.review_guestform"
     raise_exception = False
 
     def has_permission(self):
-        return super().has_permission() or user_is_lead_mentor(
-            self.request.user,
-            org=getattr(self.request, "organization", None),
+        user = self.request.user
+        organization = getattr(self.request, "organization", None)
+        return user.is_superuser or (
+            organization is not None and user_is_lead_mentor(user, org=organization)
         )
 
 
@@ -41,6 +48,8 @@ class GuestFormReviewListView(GuestFormReviewRequiredMixin, View):
             .select_related("guest_form")
             .all()
         )
+        if org is not None:
+            qs = qs.filter(guest_form__organization=org)
 
         # Filters
         form_type = (request.GET.get("type") or "").strip()
@@ -103,10 +112,13 @@ class GuestFormReviewDetailView(GuestFormReviewRequiredMixin, View):
 
     def get(self, request, submission_id):
         org = getattr(request, "organization", None)
+        submissions = GuestFormSubmission.objects.for_organization(org).select_related(
+            "guest_form"
+        )
+        if org is not None:
+            submissions = submissions.filter(guest_form__organization=org)
         submission = get_object_or_404(
-            GuestFormSubmission.objects.for_organization(org).select_related(
-                "guest_form"
-            ),
+            submissions,
             pk=submission_id,
         )
         ctx = {"submission": submission}
@@ -120,9 +132,20 @@ class GuestFormManageListView(GuestFormReviewRequiredMixin, View):
 
     def get(self, request):
         org = getattr(request, "organization", None)
-        forms = GuestForm.objects.for_organization(org).order_by(
-            "display_order", "name"
-        )
+        forms = GuestForm.objects.for_organization(org)
+        if org is None:
+            forms = forms.annotate(tenant_submission_count=Count("submissions"))
+        else:
+            forms = forms.annotate(
+                tenant_submission_count=Count(
+                    "submissions",
+                    filter=Q(
+                        submissions__organization=org,
+                        submissions__guest_form__organization=org,
+                    ),
+                )
+            )
+        forms = forms.order_by("display_order", "name")
         ctx = {"forms": forms}
         return render(request, self.template_name, ctx)
 
@@ -133,18 +156,61 @@ class GuestFormCreateView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/manage/form.html"
 
     def get(self, request):
+        if getattr(request, "organization", None) is None:
+            raise Http404
         form = GuestFormForm()
         ctx = {"form": form, "is_create": True}
         return render(request, self.template_name, ctx)
 
     def post(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         form = GuestFormForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
+            guest_form = form.save(commit=False)
+            guest_form.organization = organization
+            guest_form.save()
             messages.success(request, "Guest form created.")
             return redirect("guest_form_manage_list")
         ctx = {"form": form, "is_create": True}
         return render(request, self.template_name, ctx)
+
+
+@method_decorator(never_cache, name="dispatch")
+class GuestFormSubmissionDownloadView(GuestFormReviewRequiredMixin, View):
+    """Serve a signed guest form only to an authorized organization reviewer."""
+
+    def get(self, request, submission_id):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        submission = get_object_or_404(
+            GuestFormSubmission.objects.for_organization(organization)
+            .select_related("guest_form")
+            .filter(guest_form__organization=organization),
+            pk=submission_id,
+        )
+        if not submission.file:
+            raise Http404
+
+        log_event(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            resource=submission,
+            request=request,
+            notes="Signed guest form submission downloaded",
+        )
+        filename = os.path.basename(submission.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(
+            submission.file.open("rb"),
+            content_type=content_type or "application/octet-stream",
+        )
+        response["Content-Disposition"] = content_disposition_header(True, filename)
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class GuestFormUpdateView(GuestFormReviewRequiredMixin, View):
@@ -182,23 +248,65 @@ class GuestFormDeleteView(GuestFormReviewRequiredMixin, View):
 
     def get(self, request, form_id):
         org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
         guest_form = get_object_or_404(
             GuestForm.objects.for_organization(org), pk=form_id
         )
-        ctx = {"guest_form": guest_form}
+        submission_count = (
+            GuestFormSubmission.objects.for_organization(org)
+            .filter(
+                guest_form=guest_form,
+                guest_form__organization=org,
+            )
+            .count()
+        )
+        has_foreign_submissions = (
+            GuestFormSubmission.objects.filter(guest_form=guest_form)
+            .exclude(organization=org)
+            .exists()
+        )
+        ctx = {
+            "guest_form": guest_form,
+            "submission_count": submission_count,
+            "deletion_blocked": has_foreign_submissions,
+        }
         return render(request, self.template_name, ctx)
 
+    @transaction.atomic
     def post(self, request, form_id):
         org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
         guest_form = get_object_or_404(
-            GuestForm.objects.for_organization(org), pk=form_id
+            GuestForm.objects.for_organization(org).select_for_update(), pk=form_id
         )
+        foreign_submissions = (
+            GuestFormSubmission.objects.select_for_update()
+            .filter(guest_form=guest_form)
+            .exclude(organization=org)
+        )
+        if foreign_submissions.exists():
+            messages.error(
+                request,
+                "This form has inconsistent submissions and cannot be deleted until reviewed.",
+            )
+            return redirect("guest_form_manage_list")
+
         name = guest_form.name
+        submission_count = (
+            GuestFormSubmission.objects.for_organization(org)
+            .filter(
+                guest_form=guest_form,
+                guest_form__organization=org,
+            )
+            .count()
+        )
         log_event(
             event=AuditEvent.RECORD_DELETED,
             resource=guest_form,
             request=request,
-            before={"name": name, "submission_count": guest_form.submissions.count()},
+            before={"name": name, "submission_count": submission_count},
             notes=f"Guest form '{name}' deleted.",
         )
         guest_form.delete()

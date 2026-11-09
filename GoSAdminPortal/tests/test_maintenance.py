@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.signals import request_finished
 from django.db import OperationalError
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.test import RequestFactory, TestCase, override_settings
@@ -101,17 +102,26 @@ class MaintenanceModeTests(TestCase):
                     "https://testserver/static/maintenance-probe.css",
                 )
 
-                response = self.client.get(
-                    "/static/maintenance-probe.css",
-                    secure=True,
-                    HTTP_HOST="testserver",
-                )
-                response_content = b"".join(response.streaming_content)
-                response.close()
+                finished_requests = []
+
+                def record_request_finished(**kwargs):
+                    finished_requests.append(True)
+
+                request_finished.connect(record_request_finished, weak=False)
+                try:
+                    response = self.client.get(
+                        "/static/maintenance-probe.css",
+                        secure=True,
+                        HTTP_HOST="testserver",
+                    )
+                    response_content = b"".join(response.streaming_content)
+                finally:
+                    request_finished.disconnect(record_request_finished)
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/css", response.headers.get("Content-Type", ""))
         self.assertIn(b"color: black", response_content)
+        self.assertEqual(len(finished_requests), 1)
 
     @override_settings(MAINTENANCE_MODE=False)
     def test_disabled_mode_restores_normal_application_and_health_endpoints(self):

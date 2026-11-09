@@ -12,9 +12,12 @@ Covers:
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
+from audit.events import AuditEvent
+from audit.models import AuditLog
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
@@ -22,6 +25,7 @@ from programs.models import (
     MentorAgreementAcceptance,
     MentorAgreementSubmission,
 )
+from programs.views.mentor_agreement import MentorAgreementSubmissionDownloadView
 
 
 def _grant_memberships(user, *roles):
@@ -945,7 +949,9 @@ class MentorAgreementSubmissionTests(TestCase):
 )
 class MentorAgreementUploadViewTests(TestCase):
     def setUp(self):
+        self.organization = Organization.objects.get(slug="gos")
         self.pdf_agreement = MentorAgreement.objects.create(
+            organization=self.organization,
             slug="data-access-policy",
             version=1,
             title="Data Access Policy v1",
@@ -955,6 +961,7 @@ class MentorAgreementUploadViewTests(TestCase):
             is_active=True,
         )
         self.markdown_agreement = MentorAgreement.objects.create(
+            organization=self.organization,
             slug="code-of-conduct",
             version=1,
             title="Code of Conduct",
@@ -966,6 +973,7 @@ class MentorAgreementUploadViewTests(TestCase):
             username="mentor", password="password123"  # nosec B106
         )
         self.adult = Adult.objects.create(
+            organization=self.organization,
             user=self.mentor,
             legal_first_name="Mentor",
             last_name="User",
@@ -978,6 +986,209 @@ class MentorAgreementUploadViewTests(TestCase):
         response = self.client.get(reverse("mentor_agreement"))
         self.assertContains(response, "Upload Signed Copy")
         self.assertContains(response, "Not yet uploaded")
+
+    def test_owner_can_download_submission_through_private_route(self):
+        self.pdf_agreement.document = "agreements/policy.pdf"
+        self.pdf_agreement.save()
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=self.adult,
+            agreement=self.pdf_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"signed agreement bytes"),
+        )
+        self.client.force_login(self.mentor)
+
+        page = self.client.get(reverse("mentor_agreement"), HTTP_HOST="gos.localhost")
+        download_url = reverse(
+            "mentor_agreement_submission_download", args=[submission.pk]
+        )
+        self.assertContains(page, download_url)
+
+        response = self.client.get(download_url, HTTP_HOST="gos.localhost")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            b"".join(response.streaming_content), b"signed agreement bytes"
+        )
+        self.assertTrue(response["Content-Disposition"].startswith("attachment;"))
+        self.assertEqual(
+            AuditLog.objects.filter(
+                actor=self.mentor,
+                event=AuditEvent.SENSITIVE_DATA_VIEW,
+                resource_id=str(submission.pk),
+            ).count(),
+            1,
+        )
+
+    def test_same_organization_lead_can_download_submission(self):
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=self.adult,
+            agreement=self.pdf_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"signed agreement bytes"),
+        )
+        lead = User.objects.create_user(
+            username="agreement-lead", password="password"
+        )  # nosec B106
+        _grant_memberships(lead, "LeadMentor")
+        self.client.force_login(lead)
+
+        response = self.client.get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk]),
+            HTTP_HOST="gos.localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_platform_superuser_can_download_tenant_submission(self):
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=self.adult,
+            agreement=self.pdf_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"signed agreement bytes"),
+        )
+        admin = User.objects.create_superuser(
+            username="agreement-platform-admin", email="admin@example.test"
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk]),
+            HTTP_HOST="gos.localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_other_mentor_cannot_download_submission(self):
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=self.adult,
+            agreement=self.pdf_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"signed agreement bytes"),
+        )
+        other_mentor = User.objects.create_user(
+            username="other-agreement-mentor", password="password"
+        )  # nosec B106
+        _grant_memberships(other_mentor, "Mentor")
+        request = RequestFactory().get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk])
+        )
+        request.user = other_mentor
+        request.organization = self.organization
+
+        with self.assertRaises(Http404):
+            MentorAgreementSubmissionDownloadView.as_view()(request, pk=submission.pk)
+
+    def test_foreign_organization_submission_is_not_downloadable(self):
+        foreign_organization = Organization.objects.create(
+            name="Agreement Beta",
+            slug="agreement-beta",
+            subdomain="agreement-beta",
+        )
+        foreign_adult = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Beta",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        foreign_agreement = MentorAgreement.objects.create(
+            organization=foreign_organization,
+            slug="beta-policy",
+            version=1,
+            title="Beta Policy",
+            effective_date="2025-01-01",
+            is_active=True,
+        )
+        submission = MentorAgreementSubmission.objects.create(
+            organization=foreign_organization,
+            adult=foreign_adult,
+            agreement=foreign_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"foreign signed agreement bytes"),
+        )
+        request = RequestFactory().get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk])
+        )
+        request.user = self.mentor
+        request.organization = self.organization
+
+        with self.assertRaises(Http404):
+            MentorAgreementSubmissionDownloadView.as_view()(request, pk=submission.pk)
+
+    def test_submission_with_foreign_adult_is_not_downloadable(self):
+        foreign_organization = Organization.objects.create(
+            name="Agreement Adult Beta",
+            slug="agreement-adult-beta",
+            subdomain="agreement-adult-beta",
+        )
+        foreign_adult = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=foreign_adult,
+            agreement=self.pdf_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"foreign adult signed agreement"),
+        )
+        request = RequestFactory().get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk])
+        )
+        request.user = self.mentor
+        request.organization = self.organization
+
+        with self.assertRaises(Http404):
+            MentorAgreementSubmissionDownloadView.as_view()(request, pk=submission.pk)
+
+    def test_submission_with_foreign_agreement_is_not_downloadable(self):
+        foreign_organization = Organization.objects.create(
+            name="Agreement Owner Beta",
+            slug="agreement-owner-beta",
+            subdomain="agreement-owner-beta",
+        )
+        foreign_agreement = MentorAgreement.objects.create(
+            organization=foreign_organization,
+            slug="foreign-submission-policy",
+            version=1,
+            title="Foreign Submission Policy",
+            effective_date="2025-01-01",
+            is_active=True,
+        )
+        submission = MentorAgreementSubmission.objects.create(
+            organization=self.organization,
+            adult=self.adult,
+            agreement=foreign_agreement,
+            file=SimpleUploadedFile("signed.pdf", b"foreign agreement signed copy"),
+        )
+        request = RequestFactory().get(
+            reverse("mentor_agreement_submission_download", args=[submission.pk])
+        )
+        request.user = self.mentor
+        request.organization = self.organization
+
+        with self.assertRaises(Http404):
+            MentorAgreementSubmissionDownloadView.as_view()(request, pk=submission.pk)
+
+    def test_signed_agreement_media_url_is_not_public(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as media_root:
+            denied_paths = []
+            with override_settings(MEDIA_ROOT=media_root):
+                for prefix in ("agreement_submissions", "signed"):
+                    file_path = (
+                        Path(media_root) / prefix / str(self.adult.pk) / "signed.pdf"
+                    )
+                    file_path.parent.mkdir(parents=True)
+                    file_path.write_bytes(b"private signed agreement bytes")
+                    response = self.client.get(
+                        f"/media/{prefix}/{self.adult.pk}/signed.pdf"
+                    )
+                    denied_paths.append(response.status_code)
+
+        self.assertEqual(denied_paths, [404, 404])
 
     def test_get_shows_markdown_checkbox_not_upload(self):
         self.client.force_login(self.mentor)

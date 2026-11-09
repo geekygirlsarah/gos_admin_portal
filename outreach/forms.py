@@ -197,6 +197,21 @@ class OutreachManageSignupsForm(forms.Form):
                     f"Students cannot be both champions and helpers: {names}"
                 )
 
+        selected_student_ids = [student.pk for student in (champions or [])] + [
+            student.pk for student in (helpers or [])
+        ]
+        if (
+            selected_student_ids
+            and OutreachSignup.objects.filter(
+                shift=self.shift, student_id__in=selected_student_ids
+            )
+            .exclude(organization=self.shift.organization)
+            .exists()
+        ):
+            raise forms.ValidationError(
+                "A selected signup has inconsistent organization ownership and needs review."
+            )
+
         # Check limits
         if champions and champions.count() > self.shift.max_champions:
             raise forms.ValidationError(
@@ -232,11 +247,11 @@ class OutreachManageSignupsForm(forms.Form):
         # Update or create champions
         for student in champions:
             signup, created = OutreachSignup.objects.update_or_create(
+                organization=self.shift.organization,
                 shift=self.shift,
                 student=student,
                 defaults={
                     "role": OutreachSignup.CHAMPION,
-                    "organization": self.shift.organization,
                 },
             )
             if created or existing_signups.get(student.id) != OutreachSignup.CHAMPION:
@@ -245,11 +260,11 @@ class OutreachManageSignupsForm(forms.Form):
         # Update or create helpers
         for student in helpers:
             signup, created = OutreachSignup.objects.update_or_create(
+                organization=self.shift.organization,
                 shift=self.shift,
                 student=student,
                 defaults={
                     "role": OutreachSignup.HELPER,
-                    "organization": self.shift.organization,
                 },
             )
             if created or existing_signups.get(student.id) != OutreachSignup.HELPER:
@@ -281,6 +296,22 @@ class OutreachManageMentorSignupsForm(forms.Form):
             .filter(shift=self.shift)
             .values_list("adult_id", flat=True)
         )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        adult_ids = [adult.pk for adult in cleaned_data.get("mentors", [])]
+        if (
+            adult_ids
+            and OutreachMentorSignup.objects.filter(
+                shift=self.shift, adult_id__in=adult_ids
+            )
+            .exclude(organization=self.shift.organization)
+            .exists()
+        ):
+            raise forms.ValidationError(
+                "A selected mentor signup has inconsistent organization ownership and needs review."
+            )
+        return cleaned_data
 
     def _mentor_queryset(self):
         # All active mentors plus anyone already signed up (so previously
@@ -321,9 +352,9 @@ class OutreachManageMentorSignupsForm(forms.Form):
 
         for adult in mentors:
             signup, created = OutreachMentorSignup.objects.get_or_create(
+                organization=self.shift.organization,
                 shift=self.shift,
                 adult=adult,
-                defaults={"organization": self.shift.organization},
             )
             if created or adult.id not in existing_adult_ids:
                 notify_mentor_outreach_signup(signup)

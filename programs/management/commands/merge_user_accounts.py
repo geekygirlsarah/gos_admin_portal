@@ -25,6 +25,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from organizations.models import UserOrganizationMembership
+
 User = get_user_model()
 
 _SPECIAL = {EmailAddress._meta.label_lower}
@@ -47,6 +49,13 @@ def _user_fk_fields():
                 and not getattr(field, "many_to_many", False)
             ):
                 yield model, field
+
+
+def _organization_memberships(user, *, lock=False):
+    memberships = UserOrganizationMembership.objects.filter(user_id=user.pk)
+    if lock:
+        memberships = memberships.select_for_update()
+    return set(memberships.values_list("organization_id", "role", "is_active"))
 
 
 class Command(BaseCommand):
@@ -89,6 +98,14 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
+            source = User.objects.select_for_update().get(pk=source.pk)
+            target = User.objects.select_for_update().get(pk=target.pk)
+            if _organization_memberships(
+                source, lock=True
+            ) != _organization_memberships(target, lock=True):
+                raise CommandError(
+                    "Cannot merge accounts with different organization memberships."
+                )
             self._apply(source, target, plan)
         self.stdout.write(
             self.style.SUCCESS(f"\nMerged #{options['source']} into #{target.pk}.")
@@ -96,7 +113,14 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ plan
     def _build_plan(self, source, target):
-        plan = {"emails": [], "m2m": [], "fk": [], "fields": []}
+        plan = {
+            "emails": [],
+            "m2m": [],
+            "fk": [],
+            "fields": [],
+            "organization_memberships_match": _organization_memberships(source)
+            == _organization_memberships(target),
+        }
 
         for ea in EmailAddress.objects.filter(user=source):
             plan["emails"].append((ea.email, ea.primary, ea.verified))
@@ -147,6 +171,12 @@ class Command(BaseCommand):
             self.stdout.write("\nFields to backfill on target:")
             for name, value in plan["fields"]:
                 self.stdout.write(f"  - {name}: {value!r}")
+        if not plan["organization_memberships_match"]:
+            self.stdout.write(
+                self.style.WARNING(
+                    "\nOrganization membership sets differ; merge execution is blocked."
+                )
+            )
         if not (plan["emails"] or m2m or plan["fk"] or plan["fields"]):
             self.stdout.write("\nNothing to merge.")
 
@@ -192,6 +222,9 @@ class Command(BaseCommand):
         # 3. All FK/OneToOne references.
         for label, name, _count in plan["fk"]:
             model = apps.get_model(label)
+            if model is UserOrganizationMembership and name == "user":
+                model.objects.filter(user=source).delete()
+                continue
             model.objects.filter(**{name: source}).update(**{name: target})
 
         # 4. Backfill empty name fields on target.

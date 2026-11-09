@@ -36,6 +36,11 @@ review_urlpatterns = [
         views.GuestFormReviewDetailView.as_view(),
         name="guest_form_review_detail",
     ),
+    path(
+        "review/<int:submission_id>/download/",
+        views.GuestFormSubmissionDownloadView.as_view(),
+        name="guest_form_submission_download",
+    ),
     # Management
     path(
         "manage/",

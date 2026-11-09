@@ -3,6 +3,7 @@ import io
 from datetime import timezone as dt_timezone
 
 from django.contrib import messages
+from django.http import Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import is_naive, make_aware
@@ -17,7 +18,10 @@ from ..models import AttendanceEvent, AttendanceSession
 
 class AttendanceImportView(View):
     def post(self, request):
-        if not can_user_write(request.user, "attendance"):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        if not can_user_write(request.user, "attendance", org=organization):
             messages.error(request, "You do not have permission to import attendance.")
             return redirect_back(request, "import_dashboard")
         file = request.FILES.get("file")
@@ -26,7 +30,9 @@ class AttendanceImportView(View):
         if not program_id:
             messages.error(request, "Please select a program for this import.")
             return redirect_back(request, "import_dashboard")
-        program = Program.objects.filter(id=program_id).first()
+        program = (
+            Program.objects.for_organization(organization).filter(id=program_id).first()
+        )
         if not program:
             messages.error(request, "Selected program was not found.")
             return redirect_back(request, "import_dashboard")
@@ -94,19 +100,20 @@ class AttendanceImportView(View):
             if rfid:
                 from attendance.services import resolve_card_by_uid
 
-                card = resolve_card_by_uid(str(rfid).strip())
+                card = resolve_card_by_uid(str(rfid).strip(), organization=organization)
                 if card and card.student:
                     return card.student
             # Next: name match (case-insensitive)
             fn = (first_name or "").strip()
             ln = (last_name or "").strip()
             if fn and ln:
-                student = Student.objects.filter(
+                students = Student.objects.for_organization(organization)
+                student = students.filter(
                     preferred_first_name__iexact=fn, last_name__iexact=ln
                 ).first()
                 if student:
                     return student
-                student = Student.objects.filter(
+                student = students.filter(
                     legal_first_name__iexact=fn, last_name__iexact=ln
                 ).first()
                 if student:
@@ -161,16 +168,22 @@ class AttendanceImportView(View):
 
                 # Idempotency: try to find existing session with same keys
                 if student:
-                    existing = AttendanceSession.objects.filter(
-                        program=program, student=student, check_in=check_in
-                    ).first()
+                    existing = (
+                        AttendanceSession.objects.for_organization(organization)
+                        .filter(program=program, student=student, check_in=check_in)
+                        .first()
+                    )
                 else:
-                    existing = AttendanceSession.objects.filter(
-                        program=program,
-                        student__isnull=True,
-                        visitor_name=visitor_name,
-                        check_in=check_in,
-                    ).first()
+                    existing = (
+                        AttendanceSession.objects.for_organization(organization)
+                        .filter(
+                            program=program,
+                            student__isnull=True,
+                            visitor_name=visitor_name,
+                            check_in=check_in,
+                        )
+                        .first()
+                    )
 
                 if existing:
                     # Update checkout if new info is provided
@@ -208,6 +221,7 @@ class AttendanceImportView(View):
 
                 # Create linked events (optional)
                 open_event = AttendanceEvent.objects.create(
+                    organization=organization,
                     program=program,
                     student=student,
                     visitor_name=visitor_name if not student else "",
@@ -222,6 +236,7 @@ class AttendanceImportView(View):
                 close_event = None
                 if check_out:
                     close_event = AttendanceEvent.objects.create(
+                        organization=organization,
                         program=program,
                         student=student,
                         visitor_name=visitor_name if not student else "",
@@ -237,6 +252,7 @@ class AttendanceImportView(View):
                     )
 
                 session = AttendanceSession(
+                    organization=organization,
                     program=program,
                     student=student,
                     visitor_name=visitor_name if not student else "",

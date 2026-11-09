@@ -19,6 +19,13 @@ Attendance data is tracked via two primary models in `attendance/models.py`:
 ### Visitor Management (`VisitorManagementView`)
 Visitor names are denormalized on attendance records. Lead Mentors can merge and standardize misspelled visitor names via the Visitor Management tool (`/attendance/visitors/`), ensuring consistent hour tracking and reporting.
 
+### RFID Card Management (`/attendance/rfid/`)
+Assigned cards are listed only when the linked student or adult belongs to the
+card's organization. A card owned locally but linked to a foreign person is
+hidden; assignment by that card's UID is refused before existing local cards
+are deactivated or the inconsistent link is changed. Leave such records intact
+for separate review.
+
 ---
 
 ## Reporting & Visualizations
@@ -28,6 +35,7 @@ Visualizes attended hours per student in a program using Chart.js:
 - **Axis Layout**: Defaults to horizontal bars (`indexAxis: 'y'`) so 50+ student rosters remain readable. Supports dynamic vertical orientation via `axis=horizontal|vertical` query parameters (preserved in sort links).
 - **Expand Layout**: In vertical mode, an expand button (`#expandChartBtn`) applies a per-student `min-width` (`chart_min_width_px`) inside an `overflow-x: auto` wrapper (`#chartScrollWrap`).
 - **Attended Days Count**: Calculates distinct attended days via `Count("check_in__date", distinct=True)`, matching active date-range and day-of-week filters (0 for unlogged students).
+- **Outreach Overlap**: When the viewer can read outreach, the student table includes the career-to-date overlap of finalized outreach check-ins and attendance sessions, independent of the chart's date/day filters. The shared calculation is organization-scoped and caches closed-session results by interval fingerprint; open-session results are recalculated.
 - **Average Lines & Tooltips**: Dynamically aligns annotation reference lines and tooltip parsing based on active orientation (`xMin`/`xMax` vs `yMin`/`yMax`).
 - **Legacy URL**: `/attendance/program-hours/<id>/` permanently redirects to `attendance_hours_chart_view` with `program_id` pre-selected.
 

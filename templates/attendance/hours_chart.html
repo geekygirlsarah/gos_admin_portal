@@ -201,7 +201,12 @@
 
   {# ── Student hours table ── #}
   <div class="card">
-    <div class="card-header">Student Hours</div>
+    <div class="card-header">
+      <div>Student Hours</div>
+      {% if show_outreach_overlap %}
+      <small class="text-muted">Outreach overlap is career-to-date and independent of the attendance filters.</small>
+      {% endif %}
+    </div>
     <div class="table-responsive">
       <table class="table table-striped mb-0">
         <thead>
@@ -211,6 +216,7 @@
             <th class="text-end">Sessions</th>
             <th class="text-end">Total Hours</th>
             <th class="text-end">Avg Hrs/Wk</th>
+            {% if show_outreach_overlap %}<th class="text-end">Outreach Overlap</th>{% endif %}
             <th>Last Attended</th>
             <th></th>
           </tr>
@@ -223,6 +229,7 @@
             <td class="text-end">{{ s.session_count }}</td>
             <td class="text-end">{{ s.total_hours }}</td>
             <td class="text-end">{{ s.avg_per_week }}</td>
+            {% if show_outreach_overlap %}<td class="text-end">{{ s.overlap_hours|floatformat:1 }}</td>{% endif %}
             <td>{% if s.last_attended %}{{ s.last_attended|date:"N j, Y" }}{% else %}—{% endif %}</td>
             <td>
               <a href="{% url 'student_hours' s.id %}" class="btn btn-sm btn-outline-primary">

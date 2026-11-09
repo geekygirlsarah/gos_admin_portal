@@ -8,7 +8,8 @@ to CalendarEvent records when a CalendarFeed with source_type=TRAVEL exists.
 import logging
 from datetime import datetime, time
 
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import F, Q
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,7 @@ def sync_travel_event(travel_event, feed):
 
 def remove_travel_event(travel_event, feed=None):
     """Remove CalendarEvent(s) for a deleted TravelEvent."""
-    from calendar_feeds.models import CalendarEvent
+    from calendar_feeds.models import CalendarEvent, EventException
 
     if not travel_event.organization_id or (
         travel_event.program_id
@@ -129,7 +130,20 @@ def remove_travel_event(travel_event, feed=None):
             return
         events = events.filter(feed=feed)
 
-    count, _ = events.delete()
+    with transaction.atomic():
+        candidate_ids = list(events.select_for_update().values_list("pk", flat=True))
+        list(
+            EventException.objects.select_for_update()
+            .filter(event_id__in=candidate_ids)
+            .values_list("pk", flat=True)
+        )
+        foreign_exceptions = EventException.objects.filter(
+            event_id__in=candidate_ids
+        ).exclude(organization_id=F("event__organization_id"))
+        safe_events = CalendarEvent.objects.filter(pk__in=candidate_ids).exclude(
+            pk__in=foreign_exceptions.values("event_id")
+        )
+        count, _ = safe_events.delete()
     if count:
         logger.debug(
             "Removed %d calendar event(s) for travel event %s", count, travel_event.pk

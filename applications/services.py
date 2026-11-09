@@ -745,7 +745,7 @@ class ApplicationConversionError(Exception):
     """Raised when an application cannot be converted to a Student."""
 
 
-def _adult_from_data(parent_data: dict, is_parent: bool = True):
+def _adult_from_data(parent_data: dict, organization, is_parent: bool = True):
     """Find or create an Adult from a step7-primaryparent/step8-secondaryparent
     (or mentor_info) data dict.
 
@@ -756,6 +756,11 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
     """
     from programs.models import Adult
 
+    organization_id = getattr(organization, "pk", None)
+    if organization_id is None:
+        raise ApplicationConversionError(
+            "Application has no organization; cannot convert."
+        )
     if not parent_data or not isinstance(parent_data, dict):
         return None
     email = (parent_data.get("email") or "").strip()
@@ -786,7 +791,10 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
 
     adult = None
     if email:
-        qs = Adult.objects.filter(personal_email__iexact=email)
+        qs = Adult.objects.for_organization(organization).filter(
+            organization_id=organization_id,
+            personal_email__iexact=email,
+        )
         if legal_first and last_name:
             # Prefer an exact name+email match so that two people sharing
             # the same email (e.g. a mother and father) get separate records.
@@ -797,10 +805,15 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
         else:
             adult = qs.first()
     if adult is None and org_email:
-        adult = Adult.objects.filter(org_email__iexact=org_email).first()
+        adult = (
+            Adult.objects.for_organization(organization)
+            .filter(organization_id=organization_id, org_email__iexact=org_email)
+            .first()
+        )
 
     if adult is None:
         adult = Adult(
+            organization=organization,
             legal_first_name=legal_first or "(unknown)",
             last_name=last_name or "(unknown)",
             personal_email=email or None,
@@ -855,6 +868,13 @@ def _student_from_application(application: Application):
     """
     from programs.models import School, Student
 
+    organization = application.organization
+    organization_id = application.organization_id
+    if organization_id is None:
+        raise ApplicationConversionError(
+            "Application has no organization; cannot convert."
+        )
+
     # Surface legacy step keys (e.g. ``step5`` → ``step5-student``) so legacy
     # applications convert; callers that care about the persist side-effect
     # run ``normalize_step_data(save=True)`` first.
@@ -869,6 +889,14 @@ def _student_from_application(application: Application):
     student = None
     if existing_id:
         student = Student.objects.filter(pk=existing_id).first()
+        if student and student.organization_id != organization_id:
+            raise ApplicationConversionError(
+                "The selected student does not belong to this organization."
+            )
+
+    students = Student.objects.for_organization(organization).filter(
+        organization_id=organization_id
+    )
 
     candidate_emails = [
         (application.email or "").strip(),
@@ -879,7 +907,7 @@ def _student_from_application(application: Application):
         q = Q()
         for e in candidate_emails:
             q |= Q(personal_email__iexact=e) | Q(org_email__iexact=e)
-        student = Student.objects.filter(q).first()
+        student = students.filter(q).first()
 
     if student is None:
         legal_first = (step5.get("legal_first_name") or "").strip()
@@ -898,7 +926,7 @@ def _student_from_application(application: Application):
         # Try a case-insensitive name + DOB match before creating a new record.
         # This prevents duplicates when the same student re-applies with a
         # differently-cased name (e.g. "SMITH" vs "Smith") or a different email.
-        student = Student.objects.filter(
+        student = students.filter(
             legal_first_name__iexact=legal_first,
             last_name__iexact=last_name,
             date_of_birth=dob,
@@ -909,6 +937,7 @@ def _student_from_application(application: Application):
         last_name = (step5.get("last_name") or "").strip()
         dob = step5.get("date_of_birth")
         student = Student(
+            organization=organization,
             legal_first_name=legal_first,
             last_name=last_name,
             date_of_birth=dob,
@@ -974,6 +1003,10 @@ def _student_from_application(application: Application):
         school, _ = School.objects.get_or_create(name=school_name)
         student.school = school
 
+    if student.organization_id != organization_id:
+        raise ApplicationConversionError(
+            "The selected student does not belong to this organization."
+        )
     student.save()
 
     # M2M Race ethnicities (only if student didn't already have some on file)
@@ -1000,7 +1033,25 @@ def convert_application_to_student(application: Application, request=None):
 
     from programs.models import Enrollment
 
+    organization_id = application.organization_id
+    if organization_id is None:
+        raise ApplicationConversionError(
+            "Application has no organization; cannot convert."
+        )
+    organization = application.organization
+    if (
+        application.program_id
+        and application.program.organization_id != organization_id
+    ):
+        raise ApplicationConversionError(
+            "Application program does not belong to this organization."
+        )
+
     if application.converted_student_id:
+        if application.converted_student.organization_id != organization_id:
+            raise ApplicationConversionError(
+                "Converted student does not belong to this organization."
+            )
         return application.converted_student
 
     # Persist any legacy step-key migration (``step5`` → ``step5-student``,
@@ -1050,6 +1101,21 @@ def convert_application_to_student(application: Application, request=None):
             "Application has no program selected; cannot enroll."
         )
 
+    document_submissions = []
+    if application.applicant_type != Application.Type.MENTOR:
+        document_submissions = list(
+            application.document_submissions.select_related("document__program")
+        )
+        for submission in document_submissions:
+            if (
+                submission.organization_id != organization_id
+                or submission.document.program.organization_id != organization_id
+                or submission.document.program_id != application.program_id
+            ):
+                raise ApplicationConversionError(
+                    "Application documents must belong to this organization and program."
+                )
+
     data = application.data or {}
     with transaction.atomic():
         if application.applicant_type == Application.Type.MENTOR:
@@ -1059,17 +1125,14 @@ def convert_application_to_student(application: Application, request=None):
                 mentor_data["email"] = application.email
 
             # If the verified email is an organization/Andrew email, also use it as org_email fallback
-            from organizations.utils import get_default_organization
-
-            org = (
-                getattr(application, "organization", None) or get_default_organization()
-            )
-            if (
-                org and org.is_org_email(application.email)
+            if organization.is_org_email(
+                application.email
             ) or application.email.lower().endswith("@andrew.cmu.edu"):
                 mentor_data["org_email_fallback"] = application.email
 
-            adult = _adult_from_data(mentor_data, is_parent=False)
+            adult = _adult_from_data(
+                mentor_data, organization=organization, is_parent=False
+            )
             adult.is_mentor = True
             adult.save()
 
@@ -1085,10 +1148,25 @@ def convert_application_to_student(application: Application, request=None):
             )
             return adult
 
-        primary = _adult_from_data(data.get("step7-primaryparent") or {})
-        secondary = _adult_from_data(data.get("step8-secondaryparent") or {})
+        primary = _adult_from_data(
+            data.get("step7-primaryparent") or {}, organization=organization
+        )
+        secondary = _adult_from_data(
+            data.get("step8-secondaryparent") or {}, organization=organization
+        )
 
         student = _student_from_application(application)
+
+        for contact_id in (student.primary_contact_id, student.secondary_contact_id):
+            if (
+                contact_id
+                and not Adult.objects.filter(
+                    pk=contact_id, organization_id=organization_id
+                ).exists()
+            ):
+                raise ApplicationConversionError(
+                    "Student contacts must belong to this organization."
+                )
 
         # Link contacts if not already set on the student.
         changed = False
@@ -1104,10 +1182,22 @@ def convert_application_to_student(application: Application, request=None):
         # Ensure bi-directional M2M relationship is also established with correct relationship type.
         from programs.models import AdultStudentRelationship
 
-        if primary:
-            rel_data = data.get("step7-primaryparent") or {}
-            _, created = AdultStudentRelationship.objects.update_or_create(
-                adult=primary,
+        def link_guardian(adult, rel_data):
+            if adult.organization_id != organization_id:
+                raise ApplicationConversionError(
+                    "Student contacts must belong to this organization."
+                )
+            if (
+                AdultStudentRelationship.objects.filter(adult=adult, student=student)
+                .exclude(organization_id=organization_id)
+                .exists()
+            ):
+                raise ApplicationConversionError(
+                    "Existing student contact relationship requires review."
+                )
+            return AdultStudentRelationship.objects.update_or_create(
+                organization_id=organization_id,
+                adult=adult,
                 student=student,
                 defaults={
                     "relationship_to_student": (
@@ -1118,6 +1208,10 @@ def convert_application_to_student(application: Application, request=None):
                     )[:100],
                 },
             )
+
+        if primary:
+            rel_data = data.get("step7-primaryparent") or {}
+            _, created = link_guardian(primary, rel_data)
             if created:
                 log_event(
                     request=request,
@@ -1132,18 +1226,7 @@ def convert_application_to_student(application: Application, request=None):
 
         if secondary:
             rel_data = data.get("step8-secondaryparent") or {}
-            _, created = AdultStudentRelationship.objects.update_or_create(
-                adult=secondary,
-                student=student,
-                defaults={
-                    "relationship_to_student": (
-                        rel_data.get("relationship_to_student") or "parent"
-                    )[:20],
-                    "specific_relationship": (
-                        rel_data.get("specific_relationship") or ""
-                    )[:100],
-                },
-            )
+            _, created = link_guardian(secondary, rel_data)
             if created:
                 log_event(
                     request=request,
@@ -1156,7 +1239,19 @@ def convert_application_to_student(application: Application, request=None):
                     notes="Secondary guardian added via application conversion.",
                 )
 
-        Enrollment.objects.get_or_create(student=student, program=application.program)
+        if (
+            Enrollment.objects.filter(student=student, program=application.program)
+            .exclude(organization_id=organization_id)
+            .exists()
+        ):
+            raise ApplicationConversionError(
+                "Existing enrollment requires organization review."
+            )
+        Enrollment.objects.get_or_create(
+            organization_id=organization_id,
+            student=student,
+            program=application.program,
+        )
 
         # Carry over signed documents to the student profile
         import os
@@ -1165,7 +1260,7 @@ def convert_application_to_student(application: Application, request=None):
 
         from programs.models import StudentDocument
 
-        for submission in application.document_submissions.all():
+        for submission in document_submissions:
             if submission.file:
                 student_doc, _ = StudentDocument.objects.get_or_create(
                     student=student, program_document=submission.document

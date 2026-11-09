@@ -34,6 +34,22 @@ Student-Adult relationships are stored in the through-model `AdultStudentRelatio
 
 Student and adult detail/edit views must scope the profile lookup, relationship choices, and related enrollments, documents, and background checks to the request organization. Relationship writes must validate that both endpoints and the relationship row belong to that organization; inconsistent foreign-owned rows are not exposed or modified. A missing organization fails closed.
 
+Parent directories, emergency-contact lists, and mentor relationship controls
+apply the same rule to every `AdultStudentRelationship`: the relationship, the
+adult, and the student must belong to the request organization. Primary and
+secondary contact compatibility properties return no contact for an
+inconsistent link. `School` remains a shared catalog; `Student.school` choices
+are intentionally not tenant-filtered.
+
+The `find_disassociated_parents` maintenance command scopes Adult matching to
+the converted application's organization and validates the application's
+organization, converted Student, optional Program, all relevant relationship
+rows, and primary/secondary contact pointers before recovery. Foreign lookalikes
+and inconsistent ownership links are generic manual-review outcomes; the report
+does not reveal foreign identities, and `--fix` does not repair mismatched rows
+or replace existing contacts. Safe local fixes recheck records transactionally
+and explicitly assign the application organization to each new relationship.
+
 ---
 
 ## Active vs. Inactive Students Scoping
@@ -58,6 +74,16 @@ On program detail rosters, student membership is toggled rather than deleted:
 Merging helpers in `programs/utils/merges.py` handle deduplication atomically while preserving historical links and audit trails.
 
 Merge forms and their displayed relationship data are scoped to the current request organization. The merge helpers independently require saved keep/source records from the same organization and validate the ownership chain for related records before transferring or deleting anything. If a relationship, financial, attendance, travel, document, or other merge-related row is inconsistently owned, the operation is rejected without partial changes. A missing organization provides no merge choices and cannot be used to perform a merge.
+
+The `find_duplicate_parents --fix` maintenance command groups candidates only
+within one organization and uses the same ownership-validated parent merge
+helper. Cross-organization lookalikes are never combined; inconsistent related
+records cause the entire duplicate group to be skipped for manual review.
+
+Deleting a `ProgramDocument` is also blocked before audit logging when its
+student or application submissions include foreign-owned records, avoiding a
+cascade into another organization. A document with only local submissions keeps
+the existing deletion workflow.
 
 Alumni matching and conversion use the student's organization: only adults in that organization can be matched, and a newly created alumni adult is explicitly owned by it. A foreign-owned adult already linked to the student, or a matching adult linked to a different student, blocks conversion rather than being relinked across organizations.
 

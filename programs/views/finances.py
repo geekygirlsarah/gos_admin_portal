@@ -7,6 +7,7 @@ from decimal import ROUND_HALF_DOWN, Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.db.models import F, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse, Http404
@@ -603,6 +604,11 @@ class SlidingScaleCreateView(
     template_name = "programs/sliding_scale_form.html"
     section = "sliding_scale"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
@@ -612,6 +618,10 @@ class SlidingScaleCreateView(
         # The sliding scale is no longer tied to a single program — it applies
         # across all of the student's programs — so we simply create the record.
         obj = form.save(commit=False)
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
+        obj.organization = organization
         if (
             not obj.reviewed_by
             and getattr(self.request, "user", None)
@@ -651,7 +661,20 @@ class SlidingScaleUpdateView(
     section = "sliding_scale"
 
     def get_object(self, queryset=None):
-        return get_object_or_404(SlidingScale, pk=self.kwargs["sliding_id"])
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
+        return get_object_or_404(
+            SlidingScale.objects.for_organization(organization).filter(
+                student__organization=organization
+            ),
+            pk=self.kwargs["sliding_id"],
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -698,16 +721,11 @@ class SlidingScaleUpdateView(
         return redirect("sliding_scale_review_list")
 
 
-class SlidingScaleTaxFormDeleteView(
-    LoginRequiredMixin, DynamicWritePermissionMixin, View
-):
-    section = "sliding_scale"
-    permission_required = "programs.change_slidingscale"
+class SlidingScaleTaxFormDeleteView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
     def test_func(self):
-        # Allow users with change_slidingscale permission in addition to LeadMentors
-        if self.request.user.has_perm("programs.change_slidingscale"):
-            return True
+        if getattr(self.request, "organization", None) is None:
+            return False
         return super().test_func()
 
     def post(self, request, sliding_id, form_id):
@@ -741,9 +759,8 @@ class SlidingScaleTaxFormViewView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     or download it, without ever exposing the encrypted bytes on disk."""
 
     def test_func(self):
-        # Allow users with change_slidingscale permission in addition to LeadMentors
-        if self.request.user.has_perm("programs.change_slidingscale"):
-            return True
+        if getattr(self.request, "organization", None) is None:
+            return False
         return super().test_func()
 
     def get(self, request, sliding_id, form_id):
@@ -776,11 +793,16 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
     context_object_name = "applications"
 
     def get_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return SlidingScale.objects.none()
         return (
-            SlidingScale.objects.for_organization(
-                getattr(self.request, "organization", None)
+            SlidingScale.objects.for_organization(organization)
+            .filter(
+                organization_id=organization.pk,
+                student__organization_id=organization.pk,
+                status=SlidingScale.STATUS_PENDING,
             )
-            .filter(status=SlidingScale.STATUS_PENDING)
             .select_related("student", "applied_by")
             .order_by("created_at")
         )
@@ -788,18 +810,24 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         today = timezone.localdate()
+        organization = getattr(self.request, "organization", None)
 
-        decided_qs = (
-            SlidingScale.objects.for_organization(
-                getattr(self.request, "organization", None)
+        if organization is None:
+            decided_qs = SlidingScale.objects.none()
+        else:
+            decided_qs = (
+                SlidingScale.objects.for_organization(organization)
+                .filter(
+                    organization_id=organization.pk,
+                    student__organization_id=organization.pk,
+                )
+                .exclude(status=SlidingScale.STATUS_PENDING)
+                .select_related("student", "applied_by", "reviewed_by")
+                .order_by(
+                    F("date").desc(nulls_last=True),
+                    "-created_at",
+                )
             )
-            .exclude(status=SlidingScale.STATUS_PENDING)
-            .select_related("student", "applied_by", "reviewed_by")
-            .order_by(
-                F("date").desc(nulls_last=True),
-                "-created_at",
-            )
-        )
 
         active_applications = []
         past_applications = []
@@ -851,8 +879,14 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
     template_name = "programs/sliding_scale_review_detail.html"
 
     def get_object(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
         return get_object_or_404(
-            SlidingScale.objects.filter(status=SlidingScale.STATUS_PENDING),
+            SlidingScale.objects.for_organization(organization).filter(
+                status=SlidingScale.STATUS_PENDING,
+                student__organization=organization,
+            ),
             pk=self.kwargs["pk"],
         )
 
@@ -863,8 +897,11 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
             application.family_size, application.adjusted_gross_income
         )
         existing_approved_sliding_scales = (
-            SlidingScale.objects.filter(
-                student=application.student, status=SlidingScale.STATUS_APPROVED
+            SlidingScale.objects.for_organization(request.organization)
+            .filter(
+                student=application.student,
+                student__organization=request.organization,
+                status=SlidingScale.STATUS_APPROVED,
             )
             .exclude(pk=application.pk)
             .order_by(
@@ -945,14 +982,26 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
     template_name = "programs/sliding_scale_apply.html"
 
     def _get_student_for_parent(self, request, student_id):
-        if not user_is_parent(request.user, org=request.organization):
+        organization = getattr(request, "organization", None)
+        if organization is None or not user_is_parent(request.user, org=organization):
             messages.error(request, "Only a parent can apply for the sliding scale.")
             return None, redirect("parent_payments")
 
-        student = get_object_or_404(Student, pk=student_id)
+        student = get_object_or_404(
+            Student.objects.for_organization(organization).filter(
+                organization_id=organization.pk
+            ),
+            pk=student_id,
+        )
         try:
             adult = request.user.adult_profile
-            if not adult.is_parent or student not in adult.students.all():
+            if (
+                not adult.is_parent
+                or adult.organization_id != organization.pk
+                or not can_user_read(
+                    request.user, "student_info", student, org=organization
+                )
+            ):
                 raise Adult.DoesNotExist
         except (Adult.DoesNotExist, AttributeError):
             messages.error(
@@ -967,9 +1016,16 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
         if error_redirect:
             return error_redirect
 
-        existing_pending = SlidingScale.objects.filter(
-            student=student, status=SlidingScale.STATUS_PENDING
-        ).exists()
+        existing_pending = (
+            SlidingScale.objects.for_organization(request.organization)
+            .filter(
+                organization_id=request.organization.pk,
+                student__organization_id=request.organization.pk,
+                student=student,
+                status=SlidingScale.STATUS_PENDING,
+            )
+            .exists()
+        )
         if existing_pending:
             messages.info(
                 request,
@@ -1001,6 +1057,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
 
         adult = request.user.adult_profile
         application = SlidingScale.objects.create(
+            organization=request.organization,
             student=student,
             family_size=form.cleaned_data["family_size"],
             adjusted_gross_income=form.cleaned_data["adjusted_gross_income"],
@@ -1013,7 +1070,11 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
         if documents:
             files = documents if isinstance(documents, list) else [documents]
             for f in files:
-                TaxForm.objects.create(sliding_scale=application, file=f)
+                TaxForm.objects.create(
+                    organization=request.organization,
+                    sliding_scale=application,
+                    file=f,
+                )
 
         messages.success(
             request,
@@ -1027,42 +1088,67 @@ class SlidingScaleWithdrawView(LoginRequiredMixin, View):
     (e.g. to correct a mistake and reapply)."""
 
     def post(self, request, pk):
-        application = get_object_or_404(
-            SlidingScale, pk=pk, status=SlidingScale.STATUS_PENDING
-        )
-        student = application.student
-
-        if not user_is_parent(request.user, org=request.organization):
+        organization = getattr(request, "organization", None)
+        if organization is None or not user_is_parent(request.user, org=organization):
             messages.error(
                 request, "Only a parent can withdraw a sliding scale application."
             )
             return redirect("parent_payments")
 
-        try:
-            adult = request.user.adult_profile
-            if not adult.is_parent or student not in adult.students.all():
-                raise Adult.DoesNotExist
-        except (Adult.DoesNotExist, AttributeError):
-            messages.error(
-                request,
-                "You do not have permission to withdraw this application.",
+        with transaction.atomic():
+            application = get_object_or_404(
+                SlidingScale.objects.for_organization(organization)
+                .select_for_update()
+                .filter(
+                    organization_id=organization.pk,
+                    student__organization_id=organization.pk,
+                    status=SlidingScale.STATUS_PENDING,
+                ),
+                pk=pk,
             )
-            return redirect("parent_payments")
+            student = application.student
 
-        for tax_form in application.tax_forms.all():
-            tax_form.file.delete(save=False)
-            tax_form.delete()
-        log_deletion(
-            resource=application,
-            request=request,
-            before={
-                "student": str(student),
-                "status": application.status,
-                "percent": application.percent,
-            },
-            notes=f"Sliding scale application for {student} withdrawn by parent.",
-        )
-        application.delete()
+            try:
+                adult = request.user.adult_profile
+                if (
+                    not adult.is_parent
+                    or adult.organization_id != organization.pk
+                    or not can_user_read(
+                        request.user, "student_info", student, org=organization
+                    )
+                ):
+                    raise Adult.DoesNotExist
+            except (Adult.DoesNotExist, AttributeError):
+                messages.error(
+                    request,
+                    "You do not have permission to withdraw this application.",
+                )
+                return redirect("parent_payments")
+
+            tax_forms = TaxForm.objects.select_for_update().filter(
+                sliding_scale=application
+            )
+            if tax_forms.exclude(organization_id=organization.pk).exists():
+                messages.error(
+                    request,
+                    "This application cannot be withdrawn until its related documents are reviewed.",
+                )
+                return redirect("parent_payments")
+
+            for tax_form in tax_forms.filter(organization_id=organization.pk):
+                tax_form.file.delete(save=False)
+                tax_form.delete()
+            log_deletion(
+                resource=application,
+                request=request,
+                before={
+                    "student": str(student),
+                    "status": application.status,
+                    "percent": application.percent,
+                },
+                notes=f"Sliding scale application for {student} withdrawn by parent.",
+            )
+            application.delete()
 
         messages.success(
             request,

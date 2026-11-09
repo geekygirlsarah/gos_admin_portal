@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from applications.models import Application, ApplicationDocumentSubmission
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
@@ -265,4 +266,79 @@ class ProgramEmergencyContactsTenantIsolationTests(
         self.assertEqual(
             [contact["adult"].pk for contact in row["others"]],
             [local_guardians[2].pk],
+        )
+
+
+class ProgramDocumentDeleteTenantIsolationTests(
+    ProgramRelatedRecordTenantIsolationBase
+):
+    def test_delete_is_refused_when_document_has_foreign_submissions(self):
+        document = ProgramDocument.objects.create(
+            program=self.program, name="Local Consent", file=""
+        )
+        foreign_student = Student.objects.create(
+            organization=self.other_organization,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        student_submission = StudentDocument.objects.create(
+            student=foreign_student,
+            program_document=document,
+            file="",
+        )
+        foreign_application = Application.objects.create(
+            organization=self.other_organization,
+            applicant_type=Application.Type.STUDENT,
+            email="foreign@example.test",
+            program=self.other_program,
+        )
+        application_submission = ApplicationDocumentSubmission.objects.create(
+            organization=self.other_organization,
+            application=foreign_application,
+            document=document,
+            file="",
+        )
+        from audit.models import AuditLog
+
+        audit_count = AuditLog.objects.count()
+
+        response = self.client.post(
+            reverse("program_document_delete", args=[self.program.pk, document.pk])
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+        self.assertTrue(ProgramDocument.objects.filter(pk=document.pk).exists())
+        self.assertTrue(
+            StudentDocument.objects.filter(pk=student_submission.pk).exists()
+        )
+        self.assertTrue(
+            ApplicationDocumentSubmission.objects.filter(
+                pk=application_submission.pk
+            ).exists()
+        )
+        self.assertEqual(AuditLog.objects.count(), audit_count)
+
+    def test_delete_still_removes_only_local_document_submissions(self):
+        document = ProgramDocument.objects.create(
+            program=self.program, name="Local Consent", file=""
+        )
+        local_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Local",
+            last_name="Student",
+        )
+        local_submission = StudentDocument.objects.create(
+            student=local_student,
+            program_document=document,
+            file="",
+        )
+
+        response = self.client.post(
+            reverse("program_document_delete", args=[self.program.pk, document.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ProgramDocument.objects.filter(pk=document.pk).exists())
+        self.assertFalse(
+            StudentDocument.objects.filter(pk=local_submission.pk).exists()
         )

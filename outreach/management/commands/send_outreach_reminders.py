@@ -11,10 +11,11 @@ import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
+from django.db.models import F, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from outreach.models import OutreachShift
+from outreach.models import OutreachMentorSignup, OutreachShift, OutreachSignup
 from outreach.services import (
     adult_recipient_email,
     notify_mentor_outreach_reminder,
@@ -83,12 +84,43 @@ class Command(BaseCommand):
             email_filter,
         )
 
+        local_signups = (
+            OutreachSignup.objects.filter(
+                organization_id=F("shift__organization_id"),
+                student__organization_id=F("shift__organization_id"),
+                shift__event__organization_id=F("shift__organization_id"),
+            )
+            .filter(
+                Q(shift__event__program__isnull=True)
+                | Q(shift__event__program__organization_id=F("shift__organization_id"))
+            )
+            .select_related("student__user")
+        )
+        local_mentor_signups = (
+            OutreachMentorSignup.objects.filter(
+                organization_id=F("shift__organization_id"),
+                adult__organization_id=F("shift__organization_id"),
+                shift__event__organization_id=F("shift__organization_id"),
+            )
+            .filter(
+                Q(shift__event__program__isnull=True)
+                | Q(shift__event__program__organization_id=F("shift__organization_id"))
+            )
+            .select_related("adult__user")
+        )
         shifts = (
-            OutreachShift.objects.filter(date=target_date)
+            OutreachShift.objects.filter(
+                date=target_date,
+                event__organization_id=F("organization_id"),
+            )
+            .filter(
+                Q(event__program__isnull=True)
+                | Q(event__program__organization_id=F("organization_id"))
+            )
             .select_related("event", "event__program")
             .prefetch_related(
-                "signups__student__user",
-                "mentor_signups__adult__user",
+                Prefetch("signups", queryset=local_signups),
+                Prefetch("mentor_signups", queryset=local_mentor_signups),
             )
             .order_by("start_time")
         )

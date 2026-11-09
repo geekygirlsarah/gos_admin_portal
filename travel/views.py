@@ -32,6 +32,8 @@ from travel.forms import (
     TravelStaffSignupForm,
 )
 from travel.models import (
+    TravelCostOption,
+    TravelDeparture,
     TravelEvent,
     TravelMentorSignup,
     TravelParentChaperoneSignup,
@@ -103,9 +105,19 @@ class TravelEventListView(
                 Lower("student__last_name"),
             )
         )
+        departures_qs = TravelDeparture.objects.for_organization(org).filter(
+            event__organization=org
+        )
+        cost_options_qs = TravelCostOption.objects.for_organization(org).filter(
+            event__organization=org
+        )
         mentors_qs = (
             TravelMentorSignup.objects.for_organization(org)
-            .filter(event__program=self.program)
+            .filter(
+                event__program=self.program,
+                event__organization=org,
+                adult__organization=org,
+            )
             .select_related("adult", "departure", "event")
             .order_by(
                 Lower(
@@ -119,7 +131,11 @@ class TravelEventListView(
         )
         chaperones_qs = (
             TravelParentChaperoneSignup.objects.for_organization(org)
-            .filter(event__program=self.program)
+            .filter(
+                event__program=self.program,
+                event__organization=org,
+                adult__organization=org,
+            )
             .select_related("adult", "departure", "event")
             .order_by(
                 Lower(
@@ -137,8 +153,8 @@ class TravelEventListView(
             )
             .filter(program=self.program)
             .prefetch_related(
-                Prefetch("departures"),
-                Prefetch("cost_options"),
+                Prefetch("departures", queryset=departures_qs),
+                Prefetch("cost_options", queryset=cost_options_qs),
                 Prefetch("signups", queryset=signups_qs),
                 Prefetch("mentor_signups", queryset=mentors_qs),
                 Prefetch("parent_chaperones", queryset=chaperones_qs),
@@ -178,7 +194,12 @@ class TravelEventListView(
                 TravelParentChaperoneSignup.objects.for_organization(
                     getattr(self.request, "organization", None)
                 )
-                .filter(adult=adult, event__program=self.program)
+                .filter(
+                    adult=adult,
+                    adult__organization=getattr(self.request, "organization", None),
+                    event__organization=getattr(self.request, "organization", None),
+                    event__program=self.program,
+                )
                 .select_related("event", "departure")
             )
             my_chaperone_event_ids = {s.event_id for s in my_chaperones}
@@ -293,7 +314,12 @@ class TravelEventListView(
         if user_is_mentor_or_lead(user, org=org) and adult is not None:
             mentor_signups = list(
                 TravelMentorSignup.objects.for_organization(org)
-                .filter(adult=adult, event__program=self.program)
+                .filter(
+                    adult=adult,
+                    adult__organization=org,
+                    event__organization=org,
+                    event__program=self.program,
+                )
                 .select_related("event", "departure")
             )
             context["my_mentor_signups"] = mentor_signups
@@ -308,21 +334,47 @@ class TravelEventListView(
 class TravelInlineFormsetsMixin:
     """Handle the departures and cost-options inline formsets on one form."""
 
+    def get_inline_formset_querysets(self):
+        organization = getattr(self.request, "organization", None)
+        if organization is None or self.object is None:
+            return TravelDeparture.objects.none(), TravelCostOption.objects.none()
+        return (
+            TravelDeparture.objects.for_organization(organization).filter(
+                event=self.object,
+                event__organization=organization,
+            ),
+            TravelCostOption.objects.for_organization(organization).filter(
+                event=self.object,
+                event__organization=organization,
+            ),
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        departure_queryset, cost_queryset = self.get_inline_formset_querysets()
         if self.request.method == "POST":
             context["departure_formset"] = TravelDepartureFormSet(
-                self.request.POST, instance=self.object, prefix="departures"
+                self.request.POST,
+                instance=self.object,
+                prefix="departures",
+                queryset=departure_queryset,
             )
             context["cost_formset"] = TravelCostOptionFormSet(
-                self.request.POST, instance=self.object, prefix="costs"
+                self.request.POST,
+                instance=self.object,
+                prefix="costs",
+                queryset=cost_queryset,
             )
         else:
             context["departure_formset"] = TravelDepartureFormSet(
-                instance=self.object, prefix="departures"
+                instance=self.object,
+                prefix="departures",
+                queryset=departure_queryset,
             )
             context["cost_formset"] = TravelCostOptionFormSet(
-                instance=self.object, prefix="costs"
+                instance=self.object,
+                prefix="costs",
+                queryset=cost_queryset,
             )
         return context
 
@@ -398,6 +450,67 @@ class TravelEventDeleteView(
             "program_id": obj.program_id,
         }
 
+    def post(self, request, *args, **kwargs):
+        with transaction.atomic():
+            event = get_object_or_404(
+                self.get_queryset().select_for_update(), pk=kwargs.get("pk")
+            )
+            departures = list(
+                TravelDeparture.objects.select_for_update().filter(event=event)
+            )
+            cost_options = list(
+                TravelCostOption.objects.select_for_update().filter(event=event)
+            )
+            departure_ids = [departure.pk for departure in departures]
+            cost_option_ids = [option.pk for option in cost_options]
+
+            related_signup_ids = set(
+                TravelSignup.objects.filter(departure_id__in=departure_ids).values_list(
+                    "pk", flat=True
+                )
+            )
+            if cost_option_ids:
+                related_signup_ids.update(
+                    TravelSignup.objects.filter(
+                        cost_items__in=cost_option_ids
+                    ).values_list("pk", flat=True)
+                )
+
+            signups = list(TravelSignup.objects.select_for_update().filter(event=event))
+            related_signups = list(
+                TravelSignup.objects.select_for_update().filter(
+                    pk__in=related_signup_ids
+                )
+            )
+            mentor_signups = list(
+                TravelMentorSignup.objects.select_for_update().filter(event=event)
+            )
+            parent_signups = list(
+                TravelParentChaperoneSignup.objects.select_for_update().filter(
+                    event=event
+                )
+            )
+            has_foreign_records = any(
+                row.organization_id != event.organization_id
+                for row in [
+                    *departures,
+                    *cost_options,
+                    *signups,
+                    *related_signups,
+                    *mentor_signups,
+                    *parent_signups,
+                ]
+            )
+            if has_foreign_records:
+                messages.error(
+                    request,
+                    "This trip cannot be deleted because related records need review.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            self.object = event
+            return super().post(request, *args, **kwargs)
+
     def dispatch(self, request, *args, **kwargs):
         org = getattr(request, "organization", None)
         self.program = get_object_or_404(
@@ -452,8 +565,6 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
             return redirect("travel:event_list", program_id=self.program.id)
 
         departure, cost_items = self._validated_choices(event, request.POST)
-        if departure is None and event.departures.count() == 1:
-            departure = event.ordered_departures[0]
 
         signup = TravelSignup(
             student=student, event=event, departure=departure, organization=org
@@ -506,14 +617,26 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         return student
 
     def _validated_choices(self, event, post):
+        organization = event.organization
+        departures = TravelDeparture.objects.for_organization(organization).filter(
+            event=event,
+            event__organization=organization,
+        )
+        cost_options = TravelCostOption.objects.for_organization(organization).filter(
+            event=event,
+            event__organization=organization,
+        )
         form = TravelSignupForm(
             post,
-            departures=event.departures.all(),
-            cost_options=event.cost_options.all(),
+            departures=departures,
+            cost_options=cost_options,
         )
         form.is_valid()
+        departure = form.cleaned_data.get("departure")
+        if departure is None and departures.count() == 1:
+            departure = departures.first()
         return (
-            form.cleaned_data.get("departure"),
+            departure,
             list(form.cleaned_data.get("cost_items", [])),
         )
 
@@ -728,19 +851,21 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
                 "Please contact a Lead Mentor.",
             )
             return redirect("travel:event_list", program_id=self.program.id)
+        if adult.organization_id != org.pk:
+            messages.error(
+                request,
+                "Your mentor profile does not belong to this organization.",
+            )
+            return redirect("travel:event_list", program_id=self.program.id)
+        if (
+            TravelMentorSignup.objects.filter(event=event, adult=adult)
+            .exclude(organization=org)
+            .exists()
+        ):
+            messages.error(request, "An existing signup requires organization review.")
+            return redirect("travel:event_list", program_id=self.program.id)
 
-        departure_id = request.POST.get("departure")
-        departure = None
-        if departure_id:
-            departure = event.departures.filter(pk=departure_id).first()
-            if departure is None:
-                departure = (
-                    event.ordered_departures[0]
-                    if event.departures.count() == 1
-                    else None
-                )
-        if departure is None and event.departures.count() == 1:
-            departure = event.ordered_departures[0]
+        departure = _resolve_departure_for_event(event, request.POST)
 
         signup, created = TravelMentorSignup.objects.for_organization(
             org
@@ -776,7 +901,7 @@ class TravelMentorCancelView(LoginRequiredMixin, TravelProgramMixin, View):
         try:
             adult = request.user.adult_profile
             signup = TravelMentorSignup.objects.for_organization(org).get(
-                adult=adult, event=event
+                adult=adult, adult__organization=org, event=event
             )
         except Exception:
             messages.error(request, "You are not signed up to go on this trip.")
@@ -804,6 +929,8 @@ class TravelMentorDriverToggleView(
             TravelMentorSignup.objects.for_organization(org),
             pk=pk,
             event__program=self.program,
+            adult__organization=org,
+            event__organization=org,
         )
         signup.is_driver = not signup.is_driver
         signup.save(update_fields=["is_driver"])
@@ -817,13 +944,18 @@ class TravelMentorDriverToggleView(
 def _resolve_departure_for_event(event, post):
     """Pick the departure for ``post`` (field ``departure``) if it belongs to
     the event; fall back to the single departure when the trip has one."""
+    organization = event.organization
+    departures = TravelDeparture.objects.for_organization(organization).filter(
+        event=event,
+        event__organization=organization,
+    )
     departure_id = post.get("departure")
     if departure_id:
-        departure = event.departures.filter(pk=departure_id).first()
+        departure = departures.filter(pk=departure_id).first()
         if departure is not None:
             return departure
-    if event.departures.count() == 1:
-        return event.ordered_departures[0]
+    if departures.count() == 1:
+        return departures.first()
     return None
 
 
@@ -845,6 +977,16 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
 
         adult = self._resolve_adult(request, event)
         if adult is None:
+            return redirect("travel:event_list", program_id=self.program.id)
+        if adult.organization_id != org.pk:
+            messages.error(request, "That parent isn't eligible to chaperone.")
+            return redirect("travel:event_list", program_id=self.program.id)
+        if (
+            TravelParentChaperoneSignup.objects.filter(event=event, adult=adult)
+            .exclude(organization=org)
+            .exists()
+        ):
+            messages.error(request, "An existing signup requires organization review.")
             return redirect("travel:event_list", program_id=self.program.id)
 
         departure = _resolve_departure_for_event(event, request.POST)
@@ -893,6 +1035,7 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
             adult = None
         if (
             adult is None
+            or adult.organization_id != self.program.organization_id
             or not TravelParentChaperoneSignup.eligible_adults(self.program)
             .filter(pk=adult.pk)
             .exists()
@@ -916,7 +1059,7 @@ class TravelParentChaperoneCancelView(LoginRequiredMixin, TravelProgramMixin, Vi
         try:
             adult = request.user.adult_profile
             signup = TravelParentChaperoneSignup.objects.for_organization(org).get(
-                adult=adult, event=event
+                adult=adult, adult__organization=org, event=event
             )
         except Exception:
             messages.error(request, "You are not signed up to chaperone this trip.")
@@ -946,6 +1089,8 @@ class TravelParentChaperoneRemoveView(
             TravelParentChaperoneSignup.objects.for_organization(org),
             pk=pk,
             event__program=self.program,
+            adult__organization=org,
+            event__organization=org,
         )
         name, event_name = signup.adult.display_name, signup.event.name
         log_deletion(

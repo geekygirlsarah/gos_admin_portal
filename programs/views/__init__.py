@@ -3,6 +3,7 @@ from programs.utils import compute_sliding_discount_rounded
 from .adults import (
     AdultCreateView,
     AdultDetailView,
+    AdultPhotoView,
     AdultsListView,
     AdultUpdateView,
     AlumniListView,
@@ -128,6 +129,7 @@ from .students import (
 __all__ = [
     "AdultCreateView",
     "AdultDetailView",
+    "AdultPhotoView",
     "AdultsListView",
     "AdultUpdateView",
     "AlumniListView",

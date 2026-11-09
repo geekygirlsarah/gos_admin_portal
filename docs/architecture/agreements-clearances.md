@@ -31,6 +31,14 @@ requires administrative review; it is not automatically reassigned. Deletion
 is blocked if an associated acceptance or submission has a mismatched owner or
 adult profile, so it cannot cascade into another organization's records.
 
+Signed submissions remain in `agreement_submissions/`, but direct public media
+requests are denied. Downloads use the authenticated mentor-agreement route and
+require the request organization to match the submission, adult, and agreement.
+Only the uploading adult, a Lead Mentor in that organization, or a platform
+superuser can download; successful downloads are recorded as
+`SENSITIVE_DATA_VIEW` audit events. Files are streamed as attachments with
+private, non-cacheable response headers.
+
 Agreement-related digest action items are tenant-scoped. Other digest data,
 including outreach, attendance, travel, and calendar items, requires separate
 tenant-isolation review.
