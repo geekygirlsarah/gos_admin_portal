@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import models
 from django.utils.functional import lazy
 
@@ -18,6 +20,69 @@ from .models import (
     OrganizationSettings,
     SettingsDict,
 )
+
+_PAYMENT_URL_VALIDATOR = URLValidator(schemes=["http", "https"])
+
+
+def get_organization_payment_settings(
+    organization: Optional[Organization],
+) -> Dict[str, str]:
+    """Return only valid payment guidance saved for the resolved organization."""
+    if organization is None:
+        return {"instructions": "", "online_payment_url": ""}
+
+    data = (
+        OrganizationSettings.objects.filter(organization=organization)
+        .values_list("data", flat=True)
+        .first()
+    )
+    saved_settings = data.get("payment_settings") if isinstance(data, dict) else None
+    if not isinstance(saved_settings, dict):
+        saved_settings = {}
+
+    instructions = saved_settings.get("instructions", "")
+    instructions = instructions.strip() if isinstance(instructions, str) else ""
+    online_payment_url = saved_settings.get("online_payment_url", "")
+    online_payment_url = (
+        online_payment_url.strip() if isinstance(online_payment_url, str) else ""
+    )
+    if online_payment_url:
+        try:
+            _PAYMENT_URL_VALIDATOR(online_payment_url)
+        except ValidationError:
+            online_payment_url = ""
+
+    return {
+        "instructions": instructions,
+        "online_payment_url": online_payment_url,
+    }
+
+
+def update_organization_payment_settings(
+    organization: Organization,
+    *,
+    instructions: str,
+    online_payment_url: str,
+) -> OrganizationSettings:
+    """Save payment guidance without replacing unrelated organization settings."""
+    org_settings, _ = OrganizationSettings.objects.get_or_create(
+        organization=organization
+    )
+    if not isinstance(org_settings.data, dict):
+        org_settings.data = {}
+
+    payment_settings = org_settings.data.get("payment_settings")
+    if not isinstance(payment_settings, dict):
+        payment_settings = {}
+    payment_settings.update(
+        {
+            "instructions": instructions.strip(),
+            "online_payment_url": online_payment_url.strip(),
+        }
+    )
+    org_settings.data["payment_settings"] = payment_settings
+    org_settings.save(update_fields=["data", "updated_at"])
+    return org_settings
 
 
 def get_site_base_url() -> str:

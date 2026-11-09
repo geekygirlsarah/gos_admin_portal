@@ -9,6 +9,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     Enrollment,
@@ -250,6 +251,17 @@ class EmailBalancesTest(TestCase):
 class AutoEmailNotificationsTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)
+        self.lead_user = User.objects.create_user(
+            username="test-lead-mentor",
+            email="lead-mentor@example.com",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.student = Student.objects.create(
             preferred_first_name="Alice", last_name="Alpha"
         )
@@ -397,6 +409,21 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertTrue(
             any("New Sliding Scale Application to Review" in s for s in subjects)
         )
+        reviewer_email = next(
+            message
+            for message in mail.outbox
+            if "Sliding Scale Application to Review" in message.subject
+        )
+        self.assertEqual(reviewer_email.to, ["lead-mentor@example.com"])
+        self.assertEqual(
+            reviewer_email.subject, "New Sliding Scale Application to Review"
+        )
+        reviewer_content = (
+            reviewer_email.body + "\n" + reviewer_email.alternatives[0][0]
+        )
+        self.assertNotIn("Alice Alpha", reviewer_content)
+        self.assertNotIn("30000.00", reviewer_content)
+        self.assertNotIn("Household Size", reviewer_content)
 
     def test_sliding_scale_declined_notifies_parent_and_deletes_documents(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -457,6 +484,13 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertIn("Valid Through:", html_content)
         self.assertIn("Dec. 31, 2025", html_content)
         self.assertIn("Test Program", html_content)
+
+        reviewer_email = next(
+            m for m in mail.outbox if "Application to Review" in m.subject
+        )
+        self.assertEqual(reviewer_email.to, ["lead-mentor@example.com"])
+        self.assertNotIn("Alice Alpha", reviewer_email.body)
+        self.assertNotIn("30000.00", reviewer_email.body)
 
     def test_sliding_scale_approved_email_includes_programs(self):
         mail.outbox = []

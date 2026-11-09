@@ -3,16 +3,27 @@ import hmac
 import json
 import time
 
+from cryptography.fernet import Fernet
 from django.core import mail
+from django.db import models
+from django.db.models.functions import Cast
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from applications.models import Application
-from audit.events import AuditEvent
 from audit.models import AuditLog
-from programs.models import Adult, EmailDeliveryEvent, Program, Student
+from programs.models import (
+    Adult,
+    EmailDeliveryEvent,
+    EmailDeliveryQuarantine,
+    Program,
+    Student,
+)
+
+_FILE_ENCRYPTION_KEY = Fernet.generate_key().decode()
 
 
+@override_settings(FILE_ENCRYPTION_KEY=_FILE_ENCRYPTION_KEY)
 class ToSendWebhookTests(TestCase):
     def setUp(self):
         mail.outbox = []
@@ -55,6 +66,82 @@ class ToSendWebhookTests(TestCase):
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
     )  # nosec B106
+    def test_unattributed_webhook_does_not_create_event_audit_or_alert(self):
+        payload = {
+            "event": "bounced",
+            "email": "jane.doe@example.com",
+            "bounce_type": "hard",
+            "reason": "550 5.1.1 User unknown",
+            "message_id": "unattributed_message",
+        }
+        body = json.dumps(payload).encode("utf-8")
+        response = self.client.post(
+            reverse("tosend_webhook"),
+            data=body,
+            content_type="application/json",
+            **self._sign_payload(body),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        self.assertFalse(
+            AuditLog.objects.filter(resource_type="EmailDeliveryEvent").exists()
+        )
+        self.assertEqual(mail.outbox, [])
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        self.assertEqual(
+            quarantine.reason_code, EmailDeliveryQuarantine.REASON_UNMATCHED
+        )
+        diagnostic = json.loads(quarantine.encrypted_diagnostic)
+        self.assertEqual(diagnostic["recipients"], ["jane.doe@example.com"])
+        self.assertEqual(diagnostic["message_id"], "unattributed_message")
+        self.assertEqual(diagnostic["reason"], "550 5.1.1 User unknown")
+        encrypted_value = (
+            EmailDeliveryQuarantine.objects.filter(pk=quarantine.pk)
+            .annotate(
+                stored_value=Cast(
+                    "encrypted_diagnostic", output_field=models.TextField()
+                )
+            )
+            .values_list("stored_value", flat=True)
+            .get()
+        )
+        self.assertNotIn("jane.doe@example.com", encrypted_value)
+        self.assertNotIn("550 5.1.1", encrypted_value)
+
+    @override_settings(
+        TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
+    )  # nosec B106
+    def test_provider_sha256_signature_header_is_accepted(self):
+        payload = {
+            "type": "bounced",
+            "data": {
+                "email": "jane.doe@example.com",
+                "message_id": "provider_signature_message",
+                "bounce_type": "Permanent",
+                "is_hard_bounce": True,
+                "reason": "User unknown",
+            },
+            "created_at": "2026-04-18T10:30:00.000Z",
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = hmac.new(
+            self.secret.encode("utf-8"), body, hashlib.sha256
+        ).hexdigest()
+        response = self.client.post(
+            reverse("tosend_webhook"),
+            data=body,
+            content_type="application/json",
+            HTTP_X_TOSEND_SIGNATURE=f"sha256={signature}",
+            HTTP_X_TOSEND_TIMESTAMP="2026-04-18T10:30:00.000Z",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(EmailDeliveryQuarantine.objects.count(), 1)
+
+    @override_settings(
+        TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
+    )  # nosec B106
     def test_webhook_hard_bounce_creates_event_and_notifies_lead(self):
         payload = {
             "event": "bounced",
@@ -81,29 +168,19 @@ class ToSendWebhookTests(TestCase):
         self.assertEqual(data.get("status"), "ok")
         self.assertEqual(data.get("processed"), 1)
 
-        event = EmailDeliveryEvent.objects.get(message_id="msg_bounce_999")
-        self.assertEqual(event.recipient_email, "jane.doe@example.com")
-        self.assertEqual(event.event_type, EmailDeliveryEvent.EVENT_BOUNCED)
-        self.assertEqual(event.bounce_type, EmailDeliveryEvent.BOUNCE_HARD)
-        self.assertTrue(event.is_hard_bounce)
-        self.assertTrue(event.is_critical)
-        self.assertEqual(event.student, self.student)
-        self.assertEqual(event.reason, "550 5.1.1 User unknown")
-
-        # Verify AuditLog created
-        audit_log = AuditLog.objects.filter(
-            event=AuditEvent.EMAIL_DELIVERY_FAILED
-        ).first()
-        self.assertIsNotNone(audit_log)
-        self.assertEqual(audit_log.resource_type, "EmailDeliveryEvent")
-        self.assertIn("jane.doe@example.com", audit_log.notes)
-
-        # Verify Lead Mentor notification email was sent
-        self.assertGreaterEqual(len(mail.outbox), 1)
-        lead_email = mail.outbox[0]
-        self.assertIn("Delivery Issue", lead_email.subject)
-        self.assertIn("jane.doe@example.com", lead_email.body)
-        self.assertIn("Jane Doe", lead_email.body)
+        self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        self.assertEqual(
+            quarantine.reason_code, EmailDeliveryQuarantine.REASON_UNMATCHED
+        )
+        diagnostic = json.loads(quarantine.encrypted_diagnostic)
+        self.assertEqual(diagnostic["event_type"], EmailDeliveryEvent.EVENT_BOUNCED)
+        self.assertEqual(diagnostic["bounce_type"], "hard")
+        self.assertEqual(diagnostic["recipients"], ["jane.doe@example.com"])
+        self.assertEqual(mail.outbox, [])
+        self.assertFalse(
+            AuditLog.objects.filter(resource_type="EmailDeliveryEvent").exists()
+        )
 
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
@@ -129,15 +206,12 @@ class ToSendWebhookTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        event = EmailDeliveryEvent.objects.get(message_id="msg_soft_111")
-        self.assertEqual(event.recipient_email, "john.parent@example.com")
-        self.assertEqual(event.bounce_type, EmailDeliveryEvent.BOUNCE_SOFT)
-        self.assertFalse(event.is_hard_bounce)
-        self.assertFalse(event.is_critical)
-        self.assertEqual(event.adult, self.adult)
-
-        # Soft bounce does not trigger immediate lead mentor alert email
-        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        diagnostic = json.loads(quarantine.encrypted_diagnostic)
+        self.assertEqual(diagnostic["bounce_type"], "soft")
+        self.assertEqual(diagnostic["recipients"], ["john.parent@example.com"])
+        self.assertEqual(mail.outbox, [])
 
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
@@ -161,15 +235,12 @@ class ToSendWebhookTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        event = EmailDeliveryEvent.objects.get(message_id="msg_complaint_222")
-        self.assertEqual(event.recipient_email, "applicant.test@example.com")
-        self.assertEqual(event.event_type, EmailDeliveryEvent.EVENT_COMPLAINT)
-        self.assertTrue(event.is_critical)
-        self.assertEqual(event.application, self.application)
-
-        # Spam complaint alerts lead mentors immediately
-        self.assertGreaterEqual(len(mail.outbox), 1)
-        self.assertIn("Spam Complaint", mail.outbox[0].subject)
+        self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        diagnostic = json.loads(quarantine.encrypted_diagnostic)
+        self.assertEqual(diagnostic["event_type"], EmailDeliveryEvent.EVENT_COMPLAINT)
+        self.assertEqual(diagnostic["recipients"], ["applicant.test@example.com"])
+        self.assertEqual(mail.outbox, [])
 
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
@@ -188,6 +259,60 @@ class ToSendWebhookTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        self.assertEqual(EmailDeliveryQuarantine.objects.count(), 0)
+
+    @override_settings(
+        TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
+    )  # nosec B106
+    def test_signed_malformed_json_is_quarantined_without_retaining_body(self):
+        body = b"{malformed sensitive provider body}"
+        response = self.client.post(
+            reverse("tosend_webhook"),
+            data=body,
+            content_type="application/json",
+            **self._sign_payload(body),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        self.assertEqual(
+            quarantine.reason_code, EmailDeliveryQuarantine.REASON_MALFORMED
+        )
+        self.assertEqual(
+            json.loads(quarantine.encrypted_diagnostic),
+            {"error": "malformed_signed_json"},
+        )
+        self.assertNotIn("sensitive", quarantine.encrypted_diagnostic)
+
+    @override_settings(
+        TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
+    )  # nosec B106
+    def test_ambiguous_recipient_list_is_quarantined(self):
+        payload = {
+            "event": "bounced",
+            "to": [
+                {"email": "first@example.com"},
+                {"email": "second@example.com"},
+            ],
+            "message_id": "ambiguous_message",
+        }
+        body = json.dumps(payload).encode("utf-8")
+        response = self.client.post(
+            reverse("tosend_webhook"),
+            data=body,
+            content_type="application/json",
+            **self._sign_payload(body),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        quarantine = EmailDeliveryQuarantine.objects.get()
+        self.assertEqual(
+            quarantine.reason_code, EmailDeliveryQuarantine.REASON_AMBIGUOUS
+        )
+        self.assertEqual(
+            json.loads(quarantine.encrypted_diagnostic)["recipients"],
+            ["first@example.com", "second@example.com"],
+        )
 
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
@@ -218,7 +343,8 @@ class ToSendWebhookTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json().get("processed"), 2)
-        self.assertEqual(EmailDeliveryEvent.objects.count(), 2)
+        self.assertEqual(EmailDeliveryEvent.objects.count(), 0)
+        self.assertEqual(EmailDeliveryQuarantine.objects.count(), 2)
 
     @override_settings(
         TOSEND_WEBHOOK_SECRET="test_webhook_secret_key_12345"
@@ -238,15 +364,11 @@ class ToSendWebhookTests(TestCase):
             url, data=body, content_type="application/json", **headers
         )
         self.assertEqual(res1.status_code, 200)
-        self.assertEqual(
-            EmailDeliveryEvent.objects.filter(message_id="msg_idemp_1").count(), 1
-        )
+        self.assertEqual(EmailDeliveryQuarantine.objects.count(), 1)
 
-        # Second delivery with identical message_id does not duplicate or raise error
+        # Replayed signed events are idempotent.
         res2 = self.client.post(
             url, data=body, content_type="application/json", **headers
         )
         self.assertEqual(res2.status_code, 200)
-        self.assertEqual(
-            EmailDeliveryEvent.objects.filter(message_id="msg_idemp_1").count(), 1
-        )
+        self.assertEqual(EmailDeliveryQuarantine.objects.count(), 1)

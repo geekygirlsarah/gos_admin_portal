@@ -15,7 +15,7 @@ from organizations.models import Organization
 from outreach import utils as outreach_utils
 from outreach.models import OutreachShift, OutreachSignup
 from outreach.tests.factories import create_outreach_event, record_full_attendance
-from outreach.utils import get_student_outreach_stats
+from outreach.utils import get_outreach_stats_by_student, get_student_outreach_stats
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -170,6 +170,29 @@ class OutreachStatsTest(TestCase):
             ),
             self.event2.shifts.first(),
         )
+
+    def test_batch_outreach_stats_match_per_student_stats_and_fail_closed(self):
+        organization = self.program.organization
+        stats = get_outreach_stats_by_student(
+            [self.student.pk, self.student.pk], self.program, organization
+        )[self.student.pk]
+
+        self.assertEqual(stats["championed_count"], 1)
+        self.assertEqual(stats["total_outreach_hours"], 5.0)
+        self.assertEqual(stats["pending_outreach_hours"], 0.0)
+        self.assertEqual(stats["shifts_attended"], 2)
+        self.assertEqual(stats["shifts_signed_up"], 2)
+
+        other_organization = Organization.objects.create(
+            name="Other Outreach Organization",
+            slug="other-outreach-organization",
+            subdomain="other-outreach-organization",
+        )
+        isolated = get_outreach_stats_by_student(
+            [self.student.pk], self.program, other_organization
+        )[self.student.pk]
+        self.assertEqual(isolated["shifts_signed_up"], 0)
+        self.assertEqual(isolated["total_outreach_hours"], 0.0)
 
     def test_event_duration_hours(self):
         self.assertEqual(self.event1.duration_hours, 2.0)

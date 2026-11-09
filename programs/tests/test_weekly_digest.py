@@ -1,18 +1,26 @@
 """Tests for the weekly automated digest service and management command."""
 
 import datetime
+from decimal import Decimal
 from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.management import call_command
+from django.db.models.signals import post_init
 from django.test import TestCase
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
-from calendar_feeds.models import CalendarEvent, CalendarFeed
-from organizations.models import Organization
+from calendar_feeds.models import (
+    CalendarEvent,
+    CalendarFeed,
+    CalendarFeedACL,
+    EventException,
+)
+from GoSAdminPortal.test_runner import _assign_default_test_org
+from organizations.models import Organization, UserOrganizationMembership
 from outreach.models import (
     OutreachEvent,
     OutreachMentorSignup,
@@ -36,9 +44,15 @@ from programs.services.digest import (
     collect_mentor_digest_data,
     collect_parent_digest_data,
     collect_student_digest_data,
+    get_upcoming_calendar_events,
     get_weekly_digest_recipients,
 )
-from travel.models import TravelEvent, TravelMentorSignup
+from travel.models import (
+    TravelEvent,
+    TravelMentorSignup,
+    TravelParentChaperoneSignup,
+    TravelSignup,
+)
 
 
 class WeeklyDigestServiceTests(TestCase):
@@ -459,6 +473,654 @@ class WeeklyDigestServiceTests(TestCase):
         self.assertTrue(mentor_actions.get("has_pending_agreements"))
 
 
+class WeeklyDigestCalendarTenantIsolationTests(TestCase):
+    tenant_models = (
+        Adult,
+        AdultStudentRelationship,
+        CalendarEvent,
+        CalendarFeed,
+        CalendarFeedACL,
+        Enrollment,
+        EventException,
+        Program,
+        Student,
+    )
+
+    def setUp(self):
+        self.disconnected_models = []
+        for model in self.tenant_models:
+            if post_init.disconnect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            ):
+                self.disconnected_models.append(model)
+        self.addCleanup(self._restore_default_organization_hook)
+
+        self.today = timezone.localdate()
+        self.alpha = Organization.objects.create(
+            name="Digest Calendar Alpha",
+            slug="digest-calendar-alpha",
+            subdomain="digest-calendar-alpha",
+        )
+        self.beta = Organization.objects.create(
+            name="Digest Calendar Beta",
+            slug="digest-calendar-beta",
+            subdomain="digest-calendar-beta",
+        )
+
+        self.student_user = User.objects.create_user(
+            username="digest-calendar-student", email="student@example.test"
+        )
+        self.student = Student.objects.create(
+            organization=self.alpha,
+            user=self.student_user,
+            legal_first_name="Local",
+            last_name="Student",
+        )
+        self.parent_user = User.objects.create_user(
+            username="digest-calendar-parent", email="parent@example.test"
+        )
+        self.parent = Adult.objects.create(
+            organization=self.alpha,
+            user=self.parent_user,
+            legal_first_name="Local",
+            last_name="Parent",
+            is_parent=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.parent,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+        self.mentor_user = User.objects.create_user(
+            username="digest-calendar-mentor", email="mentor@example.test"
+        )
+        self.mentor = Adult.objects.create(
+            organization=self.alpha,
+            user=self.mentor_user,
+            legal_first_name="Local",
+            last_name="Mentor",
+            is_mentor=True,
+            mentor_active=True,
+        )
+        for user, role in (
+            (self.student_user, "Student"),
+            (self.parent_user, "Parent"),
+            (self.mentor_user, "Mentor"),
+        ):
+            UserOrganizationMembership.objects.update_or_create(
+                user=user,
+                organization=self.alpha,
+                role=role,
+                defaults={"is_active": True},
+            )
+
+        self.local_public_feed = self._create_feed(
+            self.alpha, "Local Public", CalendarFeed.VISIBILITY_ANONYMOUS
+        )
+        self.local_members_feed = self._create_feed(
+            self.alpha, "Local Members", CalendarFeed.VISIBILITY_MEMBERS
+        )
+        self.mentor_only_feed = self._create_feed(
+            self.alpha, "Mentor Only", CalendarFeed.VISIBILITY_MEMBERS
+        )
+        self.foreign_public_feed = self._create_feed(
+            self.beta, "Foreign Public", CalendarFeed.VISIBILITY_ANONYMOUS
+        )
+        for role in ("Student", "Parent", "Mentor"):
+            CalendarFeedACL.objects.create(
+                organization=self.alpha,
+                feed=self.local_members_feed,
+                role=role,
+                can_read=True,
+            )
+        CalendarFeedACL.objects.create(
+            organization=self.alpha,
+            feed=self.mentor_only_feed,
+            role="Mentor",
+            can_read=True,
+        )
+
+        self._create_event(self.local_public_feed, "Local public event", self.alpha)
+        self._create_event(self.local_members_feed, "Local members event", self.alpha)
+        self._create_event(self.mentor_only_feed, "Mentor-only event", self.alpha)
+        self._create_event(self.foreign_public_feed, "Foreign public event", self.beta)
+
+        self.foreign_event_feed = self._create_feed(
+            self.alpha,
+            "Local feed with foreign event",
+            CalendarFeed.VISIBILITY_ANONYMOUS,
+        )
+        self._create_event(
+            self.foreign_event_feed, "Foreign-owned child event", self.beta
+        )
+        self.foreign_exception_feed = self._create_feed(
+            self.alpha,
+            "Local feed with foreign exception",
+            CalendarFeed.VISIBILITY_ANONYMOUS,
+        )
+        recurring_event = self._create_event(
+            self.foreign_exception_feed,
+            "Event with foreign exception",
+            self.alpha,
+            recurring=True,
+        )
+        EventException.objects.create(
+            organization=self.beta,
+            event=recurring_event,
+            original_date=self.today + datetime.timedelta(days=2),
+            change_type=EventException.CHANGE_DELETED,
+        )
+
+    def _restore_default_organization_hook(self):
+        for model in self.disconnected_models:
+            post_init.connect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            )
+
+    def _create_feed(self, organization, name, visibility):
+        slug = name.lower().replace(" ", "-")
+        return CalendarFeed.objects.create(
+            organization=organization,
+            name=name,
+            slug=slug,
+            visibility=visibility,
+            source_type=CalendarFeed.SOURCE_MANUAL,
+            is_active=True,
+        )
+
+    def _create_event(self, feed, title, organization, *, recurring=False):
+        start = timezone.make_aware(
+            datetime.datetime.combine(
+                self.today + datetime.timedelta(days=1), datetime.time(10, 0)
+            ),
+            timezone.get_current_timezone(),
+        )
+        return CalendarEvent.objects.create(
+            organization=organization,
+            feed=feed,
+            title=title,
+            start_datetime=start,
+            end_datetime=start + datetime.timedelta(hours=1),
+            rrule_ical="FREQ=DAILY;COUNT=5" if recurring else "",
+        )
+
+    @staticmethod
+    def _titles(data):
+        return {event["title"] for event in data["calendar_events"]}
+
+    def test_student_parent_and_mentor_digests_use_local_readable_feeds(self):
+        student_data = collect_student_digest_data(
+            self.student, days_ahead=7, reference_date=self.today
+        )
+        parent_data = collect_parent_digest_data(
+            self.parent, days_ahead=7, reference_date=self.today
+        )
+        mentor_data = collect_mentor_digest_data(
+            self.mentor, days_ahead=7, reference_date=self.today
+        )
+
+        student_titles = self._titles(student_data)
+        parent_titles = self._titles(parent_data)
+        mentor_titles = self._titles(mentor_data)
+        self.assertIn("Local public event", student_titles)
+        self.assertIn("Local members event", student_titles)
+        self.assertIn("Local public event", parent_titles)
+        self.assertIn("Local members event", parent_titles)
+        self.assertIn("Local public event", mentor_titles)
+        self.assertIn("Local members event", mentor_titles)
+        self.assertNotIn("Mentor-only event", student_titles)
+        self.assertNotIn("Mentor-only event", parent_titles)
+        self.assertIn("Mentor-only event", mentor_titles)
+
+        for titles in (student_titles, parent_titles, mentor_titles):
+            self.assertNotIn("Foreign public event", titles)
+            self.assertNotIn("Foreign-owned child event", titles)
+            self.assertNotIn("Event with foreign exception", titles)
+
+    def test_foreign_child_feeds_are_skipped_before_event_expansion(self):
+        expanded_feed_ids = []
+        original_expander = CalendarFeed.get_events_for_date_range
+
+        def record_expansion(feed, start_date, end_date):
+            expanded_feed_ids.append(feed.pk)
+            return original_expander(feed, start_date, end_date)
+
+        with patch.object(
+            CalendarFeed,
+            "get_events_for_date_range",
+            autospec=True,
+            side_effect=record_expansion,
+        ):
+            data = collect_student_digest_data(
+                self.student, days_ahead=7, reference_date=self.today
+            )
+
+        self.assertNotIn(self.foreign_event_feed.pk, expanded_feed_ids)
+        self.assertNotIn(self.foreign_exception_feed.pk, expanded_feed_ids)
+        self.assertIn(self.local_public_feed.pk, expanded_feed_ids)
+        self.assertNotIn("Foreign-owned child event", self._titles(data))
+        self.assertNotIn("Event with foreign exception", self._titles(data))
+
+    def test_missing_organization_returns_no_events_for_any_digest_role(self):
+        for role in ("Student", "Parent", "Mentor"):
+            with self.subTest(role=role):
+                self.assertEqual(
+                    get_upcoming_calendar_events(
+                        organization=None,
+                        role=role,
+                        reference_date=self.today,
+                    ),
+                    [],
+                )
+
+
+class WeeklyDigestRelationshipTenantIsolationTests(TestCase):
+    tenant_models = (
+        Adult,
+        AdultStudentRelationship,
+        CalendarEvent,
+        CalendarFeed,
+        CalendarFeedACL,
+        Enrollment,
+        EventException,
+        Fee,
+        OutreachEvent,
+        OutreachShift,
+        OutreachSignup,
+        Program,
+        ProgramDocument,
+        ProgramFeature,
+        Student,
+        StudentDocument,
+        TravelEvent,
+        TravelParentChaperoneSignup,
+        TravelSignup,
+    )
+
+    def setUp(self):
+        self.disconnected_models = []
+        for model in self.tenant_models:
+            if post_init.disconnect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            ):
+                self.disconnected_models.append(model)
+        self.addCleanup(self._restore_default_organization_hook)
+
+        self.today = timezone.localdate()
+        self.alpha = Organization.objects.create(
+            name="Digest Data Alpha",
+            slug="digest-data-alpha",
+            subdomain="digest-data-alpha",
+        )
+        self.beta = Organization.objects.create(
+            name="Digest Data Beta",
+            slug="digest-data-beta",
+            subdomain="digest-data-beta",
+        )
+        self.student_user = User.objects.create_user(
+            username="digest-data-student", email="digest-student@example.test"
+        )
+        self.student = Student.objects.create(
+            organization=self.alpha,
+            user=self.student_user,
+            legal_first_name="Local",
+            last_name="Student",
+            personal_email="digest-student@example.test",
+        )
+        self.parent_user = User.objects.create_user(
+            username="digest-data-parent", email="digest-parent@example.test"
+        )
+        self.parent = Adult.objects.create(
+            organization=self.alpha,
+            user=self.parent_user,
+            legal_first_name="Local",
+            last_name="Parent",
+            personal_email="digest-parent@example.test",
+            is_parent=True,
+            email_updates=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=self.parent,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+        self.local_program = self._create_program(self.alpha, "Alpha Program")
+        self.local_enrollment = Enrollment.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            program=self.local_program,
+            active=True,
+        )
+
+    def _restore_default_organization_hook(self):
+        for model in self.disconnected_models:
+            post_init.connect(
+                receiver=_assign_default_test_org,
+                sender=model,
+                dispatch_uid=f"default-test-org-{model._meta.label}",
+            )
+
+    def _create_program(self, organization, name):
+        return Program.objects.create(
+            organization=organization,
+            name=name,
+            active=True,
+            start_date=self.today - datetime.timedelta(days=1),
+            end_date=self.today + datetime.timedelta(days=90),
+        )
+
+    @staticmethod
+    def _enable_feature(program, key):
+        feature, _ = ProgramFeature.objects.get_or_create(
+            organization=program.organization,
+            key=key,
+            defaults={"name": key.title()},
+        )
+        program.features.add(feature)
+
+    def _create_calendar_event(self, title):
+        feed = CalendarFeed.objects.create(
+            organization=self.alpha,
+            name=f"{title} Feed",
+            slug=f"{title.lower().replace(' ', '-')}-feed",
+            visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
+            source_type=CalendarFeed.SOURCE_MANUAL,
+        )
+        start = timezone.make_aware(
+            datetime.datetime.combine(
+                self.today + datetime.timedelta(days=2), datetime.time(10, 0)
+            ),
+            timezone.get_current_timezone(),
+        )
+        CalendarEvent.objects.create(
+            organization=self.alpha,
+            feed=feed,
+            title=title,
+            start_datetime=start,
+            end_datetime=start + datetime.timedelta(hours=1),
+        )
+
+    def test_recipients_and_parent_children_require_local_active_enrollment(self):
+        foreign_parent_user = User.objects.create_user(
+            username="digest-foreign-parent", email="foreign-parent@example.test"
+        )
+        foreign_parent = Adult.objects.create(
+            organization=self.beta,
+            user=foreign_parent_user,
+            legal_first_name="Foreign",
+            last_name="Parent",
+            is_parent=True,
+            email_updates=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=foreign_parent,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+        self._create_calendar_event("Local enrollment event")
+        Enrollment.objects.filter(pk=self.local_enrollment.pk).update(
+            organization=self.beta
+        )
+
+        student_recipients = get_weekly_digest_recipients(role="student")
+        parent_recipients = get_weekly_digest_recipients(role="parent")
+        parent_data = collect_parent_digest_data(
+            self.parent, days_ahead=7, reference_date=self.today
+        )
+
+        student_emails = {target["email"] for target in student_recipients}
+        parent_emails = {target["email"] for target in parent_recipients}
+        self.assertNotIn("digest-student@example.test", student_emails)
+        self.assertNotIn("digest-parent@example.test", parent_emails)
+        self.assertNotIn("foreign-parent@example.test", parent_emails)
+        self.assertEqual(parent_data["students_data"], [])
+
+    def test_student_digest_validates_outreach_and_travel_ownership_chains(self):
+        foreign_program = self._create_program(self.beta, "Beta Program")
+        foreign_student = Student.objects.create(
+            organization=self.beta,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        local_event = OutreachEvent.objects.create(
+            organization=self.alpha,
+            program=self.local_program,
+            name="Local Outreach",
+            location_name="Alpha Hall",
+            location_address="Alpha Address",
+        )
+        local_shift = OutreachShift.objects.create(
+            organization=self.alpha,
+            event=local_event,
+            date=self.today + datetime.timedelta(days=3),
+            start_time=datetime.time(10, 0),
+            end_time=datetime.time(12, 0),
+            max_champions=1,
+            max_helpers=0,
+        )
+        OutreachSignup.objects.create(
+            organization=self.beta,
+            student=foreign_student,
+            shift=local_shift,
+            role=OutreachSignup.CHAMPION,
+        )
+        foreign_event = OutreachEvent.objects.create(
+            organization=self.beta,
+            program=foreign_program,
+            name="Beta Confidential Outreach",
+            location_name="Beta Hall",
+            location_address="Beta Address",
+        )
+        foreign_shift = OutreachShift.objects.create(
+            organization=self.beta,
+            event=foreign_event,
+            date=self.today + datetime.timedelta(days=4),
+            start_time=datetime.time(10, 0),
+            end_time=datetime.time(12, 0),
+        )
+        OutreachSignup.objects.create(
+            organization=self.beta,
+            student=self.student,
+            shift=foreign_shift,
+            role=OutreachSignup.HELPER,
+        )
+
+        foreign_trip = TravelEvent.objects.create(
+            organization=self.beta,
+            program=foreign_program,
+            name="Beta Confidential Trip",
+            start_date=self.today + datetime.timedelta(days=5),
+            end_date=self.today + datetime.timedelta(days=6),
+        )
+        TravelSignup.objects.create(
+            organization=self.beta,
+            student=self.student,
+            event=foreign_trip,
+        )
+        local_event_with_foreign_program = TravelEvent.objects.create(
+            organization=self.alpha,
+            program=foreign_program,
+            name="Mismatched Program Trip",
+            start_date=self.today + datetime.timedelta(days=7),
+            end_date=self.today + datetime.timedelta(days=8),
+        )
+        TravelSignup.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            event=local_event_with_foreign_program,
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.beta,
+            adult=self.parent,
+            event=foreign_trip,
+        )
+        local_trip = TravelEvent.objects.create(
+            organization=self.alpha,
+            program=self.local_program,
+            name="Local Trip",
+            start_date=self.today + datetime.timedelta(days=5),
+            end_date=self.today + datetime.timedelta(days=6),
+        )
+        TravelSignup.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            event=local_trip,
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.alpha,
+            adult=self.parent,
+            event=local_trip,
+        )
+
+        student_data = collect_student_digest_data(
+            self.student, days_ahead=10, reference_date=self.today
+        )
+        parent_data = collect_parent_digest_data(
+            self.parent, days_ahead=10, reference_date=self.today
+        )
+
+        self.assertNotIn(
+            "Beta Confidential Outreach",
+            {signup["event_name"] for signup in student_data["confirmed_shifts"]},
+        )
+        local_opportunity = next(
+            opportunity
+            for opportunity in student_data["open_opportunities"]
+            if opportunity["event_name"] == "Local Outreach"
+        )
+        self.assertEqual(local_opportunity["open_champion_slots"], 1)
+        self.assertEqual(student_data["outreach_summary"]["pending_hours"], 0)
+        self.assertEqual(
+            {trip["event_name"] for trip in student_data["travel_highlights"]},
+            {"Local Trip"},
+        )
+        self.assertEqual(
+            {trip["event_name"] for trip in parent_data["chaperone_signups"]},
+            {"Local Trip"},
+        )
+
+    def test_required_documents_exclude_foreign_program_and_optional_documents(self):
+        foreign_program = self._create_program(self.beta, "Beta Confidential Program")
+        Enrollment.objects.create(
+            organization=self.beta,
+            student=self.student,
+            program=foreign_program,
+            active=True,
+        )
+        ProgramDocument.objects.create(
+            program=self.local_program,
+            name="Local Required Form",
+            is_required=True,
+            is_active=True,
+        )
+        local_document = ProgramDocument.objects.get(name="Local Required Form")
+        foreign_student = Student.objects.create(
+            organization=self.beta,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        StudentDocument.objects.create(
+            student=foreign_student,
+            program_document=local_document,
+            file="foreign-student-submission.pdf",
+        )
+        ProgramDocument.objects.create(
+            program=self.local_program,
+            name="Local Optional Form",
+            is_required=False,
+            is_active=True,
+        )
+        ProgramDocument.objects.create(
+            program=foreign_program,
+            name="Beta Confidential Form",
+            is_required=True,
+            is_active=True,
+        )
+
+        data = collect_student_digest_data(
+            self.student, days_ahead=7, reference_date=self.today
+        )
+
+        self.assertEqual(
+            {document.name for document in data["action_items"]["missing_documents"]},
+            {"Local Required Form"},
+        )
+
+    def test_unsafe_financial_statements_render_unavailable_in_student_and_parent_mail(
+        self,
+    ):
+        self._enable_feature(self.local_program, "finances")
+        foreign_program = self._create_program(self.beta, "Beta Confidential Program")
+        self._enable_feature(foreign_program, "finances")
+        Enrollment.objects.create(
+            organization=self.beta,
+            student=self.student,
+            program=foreign_program,
+            active=True,
+        )
+        Fee.objects.create(
+            organization=self.alpha,
+            program=self.local_program,
+            name="Local dues",
+            amount=Decimal("100.00"),
+        )
+        Fee.objects.create(
+            organization=self.beta,
+            program=self.local_program,
+            name="Foreign-owned dues",
+            amount=Decimal("25.00"),
+        )
+        Fee.objects.create(
+            organization=self.beta,
+            program=foreign_program,
+            name="Beta dues",
+            amount=Decimal("500.00"),
+        )
+        ProgramDocument.objects.create(
+            program=foreign_program,
+            name="Beta Confidential Form",
+            is_required=True,
+        )
+        self._create_calendar_event("Local calendar event")
+
+        student_data = collect_student_digest_data(
+            self.student, days_ahead=7, reference_date=self.today
+        )
+        action_items = student_data["action_items"]
+        self.assertTrue(action_items["balance_unavailable"])
+        self.assertIsNone(action_items["total_balance_due"])
+        self.assertEqual(action_items["program_balances"], [])
+
+        mail.outbox.clear()
+        call_command("send_weekly_digest", role="student", stdout=StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+        student_body = mail.outbox[0].body
+        self.assertIn("Balance unavailable", student_body)
+        self.assertNotIn("$125.00", student_body)
+        self.assertNotIn("$500.00", student_body)
+        self.assertNotIn("Beta Confidential Program", student_body)
+        self.assertNotIn("Beta Confidential Form", student_body)
+
+        mail.outbox.clear()
+        call_command("send_weekly_digest", role="parent", stdout=StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+        parent_body = mail.outbox[0].body
+        self.assertIn("Balance unavailable", parent_body)
+        self.assertNotIn("$125.00", parent_body)
+        self.assertNotIn("$500.00", parent_body)
+        self.assertNotIn("Beta Confidential Program", parent_body)
+        self.assertNotIn("Beta Confidential Form", parent_body)
+
+
 class SendWeeklyDigestCommandTests(TestCase):
     def setUp(self):
         self.out = StringIO()
@@ -548,7 +1210,9 @@ class SendWeeklyDigestCommandTests(TestCase):
         logs = "\n".join(cm.output)
         self.assertIn("Dry run complete", output)
         self.assertIn("[DRY RUN]", logs)
-        self.assertIn("student@example.com", logs)
+        self.assertIn("Would send student weekly digest.", logs)
+        self.assertNotIn("student@example.com", logs)
+        self.assertNotIn("student@example.com", output)
 
     def test_command_sends_emails_to_active_users(self):
         mail.outbox.clear()
@@ -562,9 +1226,14 @@ class SendWeeklyDigestCommandTests(TestCase):
         self.assertIn("student@example.com", recipients)
         self.assertIn("parent@example.com", recipients)
         logs = "\n".join(cm.output)
-        self.assertIn("student@example.com", logs)
-        self.assertIn("student_user", logs)
-        self.assertIn("parent@example.com", logs)
+        output = self.out.getvalue()
+        self.assertIn("Sent student weekly digest.", logs)
+        self.assertIn("Sent parent weekly digest.", logs)
+        self.assertNotIn("student@example.com", logs)
+        self.assertNotIn("student_user", logs)
+        self.assertNotIn("parent@example.com", logs)
+        self.assertNotIn("student@example.com", output)
+        self.assertNotIn("parent@example.com", output)
 
     def test_command_filter_by_role(self):
         mail.outbox.clear()

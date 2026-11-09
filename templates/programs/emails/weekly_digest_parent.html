@@ -20,7 +20,9 @@
             Action Items & Reminders
         </h4>
         <ul style="margin: 4px 0; padding-left: 20px; color: #664d03; font-size: 13px;">
-            {% if s_data.action_items.total_balance_due > 0 %}
+            {% if s_data.action_items.balance_unavailable %}
+            <li><strong>Program balance:</strong> Balance unavailable. Please contact the lead mentors for assistance.</li>
+            {% elif s_data.action_items.total_balance_due > 0 %}
             <li>
                 <strong>Program Balance Due:</strong> ${{ s_data.action_items.total_balance_due|floatformat:2 }}
                 {% if s_data.action_items.program_balances %}

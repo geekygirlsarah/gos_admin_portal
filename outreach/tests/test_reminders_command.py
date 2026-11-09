@@ -132,11 +132,18 @@ class SendOutreachRemindersCommandTest(TestCase):
             call_command("send_outreach_reminders", stdout=out)
         logs = "\n".join(cm.output)
 
-        self.assertIn("student1@example.com", logs)
-        self.assertIn("student2@example.com", logs)
-        self.assertIn("mentor@example.com", logs)
-        self.assertIn("student1", logs)
-        self.assertIn("mentor", logs)
+        self.assertIn("Sent an outreach student reminder.", logs)
+        self.assertIn("Sent an outreach mentor reminder.", logs)
+        for sensitive_value in (
+            "student1@example.com",
+            "student2@example.com",
+            "mentor@example.com",
+            "Library Science Fair",
+            "Jane Doe",
+            "Alice Smith",
+            "Mentor Bob",
+        ):
+            self.assertNotIn(sensitive_value, logs)
 
         # 3 emails should be sent: student1, student2, mentor
         self.assertEqual(len(mail.outbox), 3)
@@ -183,10 +190,20 @@ class SendOutreachRemindersCommandTest(TestCase):
 
         self.assertEqual(len(mail.outbox), 0)
         self.assertIn("DRY RUN", output)
-        self.assertIn("Library Science Fair", output)
+        self.assertIn("Would send a student reminder.", output)
+        self.assertIn("Would send a mentor reminder.", output)
         self.assertIn("[DRY RUN]", logs)
-        self.assertIn("student1@example.com", logs)
-        self.assertIn("mentor@example.com", logs)
+        for sensitive_value in (
+            "student1@example.com",
+            "student2@example.com",
+            "mentor@example.com",
+            "Library Science Fair",
+            "Jane Doe",
+            "Alice Smith",
+            "Mentor Bob",
+        ):
+            self.assertNotIn(sensitive_value, output)
+            self.assertNotIn(sensitive_value, logs)
 
     def test_custom_days_ahead(self):
         out = StringIO()

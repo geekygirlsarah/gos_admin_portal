@@ -92,4 +92,9 @@ urlpatterns = [
     ),
     # Audit Logs Explorer
     path("audit/", views.PlatformAuditLogView.as_view(), name="audit_logs"),
+    path(
+        "email-delivery-quarantine/",
+        views.PlatformEmailDeliveryQuarantineView.as_view(),
+        name="email_delivery_quarantine",
+    ),
 ]

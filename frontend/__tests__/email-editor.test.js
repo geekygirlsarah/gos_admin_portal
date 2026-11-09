@@ -66,6 +66,18 @@ describe("email editor bootstrap", () => {
     editor.chain().focus().insertContent("<p>Hello <strong>world</strong></p>").run();
     expect(ta.value).toContain("<strong>world</strong>");
   });
+
+  it("inserts merge-field text from a compose control", () => {
+    const { editor, ta } = mountEditor("");
+    ta.dispatchEvent(
+      new CustomEvent("email-editor-insert", {
+        detail: { text: "{{ first_name }}" },
+      }),
+    );
+
+    expect(editor.getText()).toContain("{{ first_name }}");
+    expect(ta.value).toContain("{{ first_name }}");
+  });
 });
 
 describe("Word paste fixtures", () => {

@@ -52,7 +52,7 @@
           <div class="mb-4">
             <label class="form-label fw-semibold text-dark mb-2">Audience Type <span class="text-danger">*</span></label>
             <div class="row g-2">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <div class="card border rounded-3 p-3 h-100 js-audience-mode-card {% if not form.test_email.value %}border-primary bg-white{% else %}bg-light-subtle{% endif %}" id="modeCardBroadcast" style="cursor: pointer;">
                   <div class="form-check">
                     <input class="form-check-input" type="radio" name="audience_mode" id="mode_broadcast" value="broadcast" {% if not form.test_email.value %}checked{% endif %}>
@@ -63,7 +63,7 @@
                   </div>
                 </div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <div class="card border rounded-3 p-3 h-100 js-audience-mode-card {% if form.test_email.value %}border-primary bg-white{% else %}bg-light-subtle{% endif %}" id="modeCardTest" style="cursor: pointer;">
                   <div class="form-check">
                     <input class="form-check-input" type="radio" name="audience_mode" id="mode_test" value="test" {% if form.test_email.value %}checked{% endif %}>
@@ -74,6 +74,14 @@
                   </div>
                 </div>
               </div>
+              {% if can_mail_merge %}
+                <div class="col-md-4">
+                  <a class="card border rounded-3 p-3 h-100 text-decoration-none text-dark" href="{% url 'program_mail_merge' %}?program={{ program.pk }}">
+                    <div class="fw-bold"><i class="bi bi-person-lines-fill text-success me-1"></i>Mail Merge</div>
+                    <span class="text-muted small d-block mt-1">Select students, add per-student data, preview, and send personalized messages.</span>
+                  </a>
+                </div>
+              {% endif %}
             </div>
           </div>
 

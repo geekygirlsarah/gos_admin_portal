@@ -17,7 +17,11 @@ from .agreements import (
     _agreement_submission_upload_to,
     _mentor_agreement_upload_to,
 )
-from .communication import EmailDeliveryEvent
+from .communication import (
+    EmailDeliveryEvent,
+    EmailDeliveryQuarantine,
+    TrustedOutgoingEmailRecipient,
+)
 from .enrollments import Enrollment
 from .fields import (
     EncryptedCharField,
@@ -66,6 +70,8 @@ __all__ = [
     "CLEARANCE_VALIDITY_YEARS",
     "Crew",
     "EmailDeliveryEvent",
+    "EmailDeliveryQuarantine",
+    "TrustedOutgoingEmailRecipient",
     "EncryptedCharField",
     "EncryptedFieldFile",
     "EncryptedFileDescriptor",

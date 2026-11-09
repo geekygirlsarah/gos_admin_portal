@@ -24,10 +24,12 @@ from organizations.utils import (
     get_default_organization,
     get_organization_email_settings,
     get_organization_momentum_url,
+    get_organization_payment_settings,
     update_organization_email_settings,
+    update_organization_payment_settings,
 )
 from programs.constants import TEAM_TYPES
-from programs.forms import MentorAgreementForm
+from programs.forms import MentorAgreementForm, PaymentInstructionsForm
 from programs.models import (
     BackgroundCheckType,
     Crew,
@@ -110,6 +112,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_read": orders_ok,
                         "can_write": orders_ok,
                     }
+                elif section_code == "mail_merge":
+                    defaults = {"can_read": False, "can_write": False}
                 RolePermission.objects.get_or_create(
                     organization=org,
                     role=role_code,
@@ -123,20 +127,33 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         grouped_permissions = []
         for section_code, section_name in sections:
             active_column = ORDERS_SECTIONS.get(section_code)
-            uses_read = active_column is None or active_column == "view"
-            uses_write = active_column is None or active_column != "view"
+            is_mail_merge = section_code == "mail_merge"
+            uses_read = (
+                is_mail_merge or active_column is None or active_column == "view"
+            )
+            uses_write = not is_mail_merge and (
+                active_column is None or active_column != "view"
+            )
             grouped_permissions.append(
                 {
                     "name": section_name,
                     "mentor": permissions.filter(
                         section=section_code, role="Mentor"
                     ).first(),
-                    "parent": permissions.filter(
-                        section=section_code, role="Parent"
-                    ).first(),
-                    "student": permissions.filter(
-                        section=section_code, role="Student"
-                    ).first(),
+                    "parent": (
+                        None
+                        if is_mail_merge
+                        else permissions.filter(
+                            section=section_code, role="Parent"
+                        ).first()
+                    ),
+                    "student": (
+                        None
+                        if is_mail_merge
+                        else permissions.filter(
+                            section=section_code, role="Student"
+                        ).first()
+                    ),
                     "orders_section": section_code in ORDERS_SECTIONS,
                     "uses_read": uses_read,
                     "uses_write": uses_write,
@@ -266,11 +283,50 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "momentum_portal_url": get_organization_momentum_url(org),
             "email_settings": email_settings,
             "notification_from_override": _stored_notification_sender(org),
+            "payment_settings": get_organization_payment_settings(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
         }
         return render(request, self.template_name, context)
+
+
+class PortalPaymentInstructionsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Update payment guidance for the resolved organization."""
+
+    def post(self, request):
+        organization = _request_organization(request)
+        form = PaymentInstructionsForm(request.POST)
+        if not form.is_valid():
+            messages.error(
+                request,
+                "Enter valid payment instructions and an HTTP(S) online payment URL.",
+            )
+            return redirect("/programs/settings/?tab=payment_instructions")
+
+        before = get_organization_payment_settings(organization)
+        update_organization_payment_settings(
+            organization,
+            instructions=form.cleaned_data["payment_instructions"],
+            online_payment_url=form.cleaned_data["online_payment_url"],
+        )
+        after = get_organization_payment_settings(organization)
+        log_event(
+            request=request,
+            event=AuditEvent.ORGANIZATION_UPDATED,
+            resource=organization,
+            before={
+                "payment_instructions_configured": bool(before["instructions"]),
+                "online_payment_configured": bool(before["online_payment_url"]),
+            },
+            after={
+                "payment_instructions_configured": bool(after["instructions"]),
+                "online_payment_configured": bool(after["online_payment_url"]),
+            },
+            notes="Updated parent payment instructions.",
+        )
+        messages.success(request, "Payment instructions updated successfully.")
+        return redirect("/programs/settings/?tab=payment_instructions")
 
 
 class PortalSlidingScaleSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
@@ -321,6 +377,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 write_key = f"write_{perm.id}"
                 perm.can_read = read_key in request.POST
                 perm.can_write = write_key in request.POST
+            if perm.section == "mail_merge":
+                perm.can_write = False
             if org and perm.organization is None:
                 perm.organization = org
             perm.save()
@@ -1030,6 +1088,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
                     subject="[Test] Admin Portal Email Settings Verification",
                     recipient_list=[test_recipient],
                     organization=org,
+                    track_delivery=False,
                 )
                 if sent:
                     messages.success(

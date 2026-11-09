@@ -137,10 +137,13 @@ def _send_html_email(
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
+        from programs.utils.notifications import _mark_delivery_tracking
+
+        _mark_delivery_tracking(msg, organization)
         try:
             msg.send()
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Failed to send email %r to %r", subject, recipients)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Application email dispatch failed (%s).", type(exc).__name__)
         finally:
             # Only close connections from a background thread. The thread-local
             # connection must be released before the thread exits, but closing

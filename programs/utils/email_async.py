@@ -51,13 +51,12 @@ def _dispatch_worker(
             len(email_messages),
             sent_count,
         )
-    except Exception as e:
-        err = e
+    except Exception as exc:
+        err = exc
         logger.error(
             "Background email dispatch failed | message_count=%d | error=%s",
             len(email_messages),
-            e,
-            exc_info=True,
+            type(exc).__name__,
         )
     finally:
         if manage_connections:
@@ -67,9 +66,8 @@ def _dispatch_worker(
                 on_complete(sent_count, err)
             except Exception as cb_err:
                 logger.error(
-                    "Background email dispatch on_complete callback failed: %s",
-                    cb_err,
-                    exc_info=True,
+                    "Background email dispatch on_complete callback failed (%s).",
+                    type(cb_err).__name__,
                 )
 
     return sent_count

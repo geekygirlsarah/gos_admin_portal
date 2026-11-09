@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-09
+
+### Fixed
+- Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
+- Fee-added and payment-recorded notices now use the owning organization's validated payment guidance and neutral fallback, with tenant-safe email branding instead of hard-coded GoS/CMU destinations.
+- Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
+
+### Added
+- Added Program Mail Merge for selected students, with organization-controlled Mentor access, per-student preview/test delivery, built-in attendance and outreach fields, and request-only custom grid values.
+- Added an option to send mail-merge copies to linked parents who have enabled accounts and opted into email updates; student email and program name remain merge fields but are hidden from the data grid.
+- Added a dry-run-by-default `cleanup_email_delivery_quarantine` command; explicit `--execute` deletes only quarantine rows at least 30 days old. Scheduling remains a separately approved release prerequisite.
+
 ## 2026-11-08
 
 ### Fixed
@@ -13,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - Parent sliding-scale apply/withdraw, finance notifications, and review queues now fail closed on mismatched owners; local tax forms still clean up while foreign-linked forms are preserved for review.
 - Weekly mentor digests and outreach reminders omit cross-organization records, and program-document deletion and duplicate-parent fixes refuse unsafe cross-tenant cascades or merges.
 - `merge_user_accounts --execute` now refuses to transfer different organization memberships; matching memberships are consolidated without creating duplicate membership rows.
+- Parent Payments now uses each organization's plain-text payment instructions and optional validated HTTP(S) destination from Portal Settings; blank instructions show a neutral contact-the-lead-mentors message, with no inherited GoS defaults.
+- Weekly student and parent digests now limit recipients and content to ownership-consistent local enrollments and related records; inconsistent financial statements are labeled unavailable instead of reporting a zero or partial balance.
 
 ## 2026-11-07
 

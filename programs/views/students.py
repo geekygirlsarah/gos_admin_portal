@@ -30,6 +30,7 @@ from ..models import (
     Adult,
     AdultStudentRelationship,
     BackgroundCheck,
+    EmailDeliveryEvent,
     Enrollment,
     Program,
     Student,
@@ -106,22 +107,36 @@ class StudentListView(
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = (
-            super()
-            .get_queryset()
-            .for_organization(getattr(self.request, "organization", None))
-        )
+        organization = getattr(self.request, "organization", None)
+        qs = super().get_queryset().for_organization(organization)
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(enrollment__program_id=program_id).distinct()
 
         qs = self.filter_students_by_role(qs)
 
+        email_delivery_events = (
+            EmailDeliveryEvent.objects.verified_for_organization(organization)
+            .filter(
+                resolved=False,
+                event_type__in=[
+                    EmailDeliveryEvent.EVENT_BOUNCED,
+                    EmailDeliveryEvent.EVENT_COMPLAINT,
+                ],
+            )
+            .select_related(
+                "student", "adult", "application__program", "trusted_mapping"
+            )
+        )
         qs = qs.select_related(
             "school",
             "primary_contact_relationship__adult",
             "secondary_contact_relationship__adult",
-        ).prefetch_related("adults", "enrollment_set__program", "email_delivery_events")
+        ).prefetch_related(
+            "adults",
+            "enrollment_set__program",
+            Prefetch("email_delivery_events", queryset=email_delivery_events),
+        )
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
@@ -375,6 +390,20 @@ class StudentDetailView(
         if organization is None:
             return Student.objects.none()
 
+        email_delivery_events = (
+            EmailDeliveryEvent.objects.verified_for_organization(organization)
+            .filter(
+                resolved=False,
+                event_type__in=[
+                    EmailDeliveryEvent.EVENT_BOUNCED,
+                    EmailDeliveryEvent.EVENT_COMPLAINT,
+                ],
+            )
+            .select_related(
+                "student", "adult", "application__program", "trusted_mapping"
+            )
+        )
+
         return (
             _tenant_student_queryset(organization)
             .select_related(
@@ -429,7 +458,7 @@ class StudentDetailView(
                         )
                     ),
                 ),
-                "email_delivery_events",
+                Prefetch("email_delivery_events", queryset=email_delivery_events),
             )
         )
 

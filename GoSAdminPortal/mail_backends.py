@@ -153,6 +153,67 @@ class ToSendEmailBackend(BaseEmailBackend):
 
         return payload
 
+    def _message_recipient_addresses(self, msg: EmailMessage) -> list[str]:
+        addresses = []
+        for recipient in (msg.to or []) + (msg.cc or []) + (msg.bcc or []):
+            address = _parse_email_address(recipient).get("email", "").strip()
+            if address:
+                addresses.append(address)
+        return addresses
+
+    def _record_successful_message(self, msg, provider_message_id):
+        if not getattr(msg, "_momentum_delivery_tracking", False):
+            return
+        organization_id = getattr(msg, "_momentum_organization_id", None)
+        recipients = self._message_recipient_addresses(msg)
+        if not organization_id or not provider_message_id or len(recipients) != 1:
+            return
+        try:
+            from programs.utils.tosend_webhooks import record_trusted_outgoing_message
+
+            record_trusted_outgoing_message(
+                organization_id, provider_message_id, recipients
+            )
+        except Exception as exc:
+            logger.warning(
+                "ToSend accepted an email but its tenant mapping was not recorded (%s).",
+                type(exc).__name__,
+            )
+
+    @staticmethod
+    def _batch_results(response):
+        try:
+            result = response.json()
+        except (TypeError, ValueError):
+            return None
+        results = result.get("results") if isinstance(result, dict) else None
+        return results if isinstance(results, list) else None
+
+    def _record_batch_successes(self, chunk, results):
+        if results is None or len(results) != len(chunk):
+            return
+        message_ids = [
+            (
+                result.get("message_id")
+                if isinstance(result, dict) and result.get("status") == "success"
+                else None
+            )
+            for result in results
+        ]
+        id_counts = {}
+        for message_id in message_ids:
+            if isinstance(message_id, str) and message_id:
+                id_counts[message_id] = id_counts.get(message_id, 0) + 1
+        for msg, result, message_id in zip(chunk, results, message_ids):
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "success"
+                and isinstance(message_id, str)
+                and message_id
+                and id_counts[message_id] == 1
+            ):
+                self._record_successful_message(msg, message_id)
+
     def send_messages(self, email_messages: Sequence[EmailMessage]) -> int:
         if not email_messages:
             return 0
@@ -184,12 +245,21 @@ class ToSendEmailBackend(BaseEmailBackend):
                 response = requests.post(
                     url, json=payload, headers=headers, timeout=self.timeout
                 )
-                if response.status_code in (200, 201, 202):
+                if response.status_code == 200:
                     sent_count += 1
+                    try:
+                        result = response.json()
+                    except (TypeError, ValueError):
+                        result = None
+                    message_id = (
+                        result.get("message_id") if isinstance(result, dict) else None
+                    )
+                    if isinstance(message_id, str) and message_id:
+                        self._record_successful_message(msg, message_id)
                 else:
                     self._handle_error_response(response)
-            except Exception as e:
-                logger.error("ToSendEmailBackend send failed: %s", e, exc_info=True)
+            except Exception as exc:
+                logger.error("ToSendEmailBackend send failed (%s).", type(exc).__name__)
                 if not self.fail_silently:
                     raise
         else:
@@ -202,35 +272,27 @@ class ToSendEmailBackend(BaseEmailBackend):
                     response = requests.post(
                         url, json=payloads, headers=headers, timeout=self.timeout
                     )
-                    if response.status_code in (200, 201, 202):
+                    if response.status_code == 200:
                         sent_count += len(chunk)
+                        if len(chunk) == 1:
+                            self._record_batch_successes(
+                                chunk, self._batch_results(response)
+                            )
                     elif response.status_code == 207:
-                        # Multi-Status: partial batch success
-                        try:
-                            data = response.json()
-                            results = data.get("results") or data.get("data") or []
-                            chunk_sent = 0
-                            for res in results:
-                                if isinstance(res, dict) and res.get("status") in (
-                                    "success",
-                                    "queued",
-                                    "sent",
-                                ):
-                                    chunk_sent += 1
-                                elif (
-                                    isinstance(res, dict)
-                                    and res.get("id")
-                                    and not res.get("error")
-                                ):
-                                    chunk_sent += 1
-                            sent_count += chunk_sent
-                        except Exception:
-                            sent_count += len(chunk)
+                        results = self._batch_results(response)
+                        if results is not None:
+                            sent_count += sum(
+                                isinstance(result, dict)
+                                and result.get("status") == "success"
+                                for result in results
+                            )
+                        self._record_batch_successes(chunk, results)
                     else:
                         self._handle_error_response(response)
-                except Exception as e:
+                except Exception as exc:
                     logger.error(
-                        "ToSendEmailBackend batch send failed: %s", e, exc_info=True
+                        "ToSendEmailBackend batch send failed (%s).",
+                        type(exc).__name__,
                     )
                     if not self.fail_silently:
                         raise
@@ -244,22 +306,17 @@ class ToSendEmailBackend(BaseEmailBackend):
             if hasattr(response.headers, "get")
             else None
         )
-        err_detail = getattr(response, "text", "")
         logger.error(
-            "ToSendEmailBackend error: HTTP %s | Retry-After: %s | Response: %s",
+            "ToSendEmailBackend error: HTTP %s | Retry-After: %s",
             status,
             retry_after,
-            err_detail,
         )
         if not self.fail_silently:
-            try:
-                response.raise_for_status()
-            except Exception:
-                raise
             if status >= 400:
-                raise requests.HTTPError(
-                    f"HTTP {status}: {err_detail}", response=response
-                )
+                response.raise_for_status()
+            raise requests.HTTPError(
+                f"Unexpected toSend response HTTP {status}", response=response
+            )
 
 
 class RedirectEmailBackend(BaseEmailBackend):
@@ -323,6 +380,7 @@ class RedirectEmailBackend(BaseEmailBackend):
 
         modified_messages = []
         for msg in email_messages:
+            msg._momentum_delivery_tracking = False
             orig_to = list(msg.to or [])
             orig_cc = list(msg.cc or [])
             orig_bcc = list(msg.bcc or [])

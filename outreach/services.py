@@ -47,6 +47,22 @@ def adult_recipient_email(adult):
     return None
 
 
+def _trusted_notification_organization(signup, profile):
+    shift = signup.shift
+    event = shift.event
+    organization = getattr(event, "organization", None)
+    if organization is None or profile is None:
+        return None
+    if (
+        signup.organization_id != organization.pk
+        or shift.organization_id != organization.pk
+        or profile.organization_id != organization.pk
+        or (event.program_id and event.program.organization_id != organization.pk)
+    ):
+        return None
+    return organization
+
+
 def outreach_link(event):
     """Return the tenant's absolute outreach URL, or None when unavailable."""
     if not event or not event.program_id or not event.organization_id:
@@ -219,11 +235,13 @@ def notify_outreach_signup(signup):
             context=context,
             recipient_list=[recipient],
             attachments=[attachment],
-            organization=getattr(signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(signup, signup.student),
         )
         return True
-    except Exception:
-        logger.exception("Failed to send outreach signup confirmation to %s", recipient)
+    except Exception as exc:
+        logger.error(
+            "Outreach signup confirmation dispatch failed (%s).", type(exc).__name__
+        )
         return False
 
 
@@ -245,12 +263,15 @@ def notify_mentor_outreach_signup(mentor_signup):
             context=context,
             recipient_list=[recipient],
             attachments=[attachment],
-            organization=getattr(mentor_signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(
+                mentor_signup, mentor_signup.adult
+            ),
         )
         return True
-    except Exception:
-        logger.exception(
-            "Failed to send outreach mentor signup confirmation to %s", recipient
+    except Exception as exc:
+        logger.error(
+            "Outreach mentor signup confirmation dispatch failed (%s).",
+            type(exc).__name__,
         )
         return False
 
@@ -275,11 +296,11 @@ def notify_outreach_reminder(signup):
             context=context,
             recipient_list=[recipient],
             attachments=[attachment],
-            organization=getattr(signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(signup, signup.student),
         )
         return True
-    except Exception:
-        logger.exception("Failed to send outreach reminder to %s", recipient)
+    except Exception as exc:
+        logger.error("Outreach reminder dispatch failed (%s).", type(exc).__name__)
         return False
 
 
@@ -301,11 +322,15 @@ def notify_mentor_outreach_reminder(mentor_signup):
             context=context,
             recipient_list=[recipient],
             attachments=[attachment],
-            organization=getattr(mentor_signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(
+                mentor_signup, mentor_signup.adult
+            ),
         )
         return True
-    except Exception:
-        logger.exception("Failed to send outreach mentor reminder to %s", recipient)
+    except Exception as exc:
+        logger.error(
+            "Outreach mentor reminder dispatch failed (%s).", type(exc).__name__
+        )
         return False
 
 
@@ -325,11 +350,13 @@ def notify_student_event_deleted(signup):
             template_name="outreach/emails/event_cancelled.html",
             context=context,
             recipient_list=[recipient],
-            organization=getattr(signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(signup, signup.student),
         )
         return True
-    except Exception:
-        logger.exception("Failed to send outreach event cancellation to %s", recipient)
+    except Exception as exc:
+        logger.error(
+            "Outreach event cancellation dispatch failed (%s).", type(exc).__name__
+        )
         return False
 
 
@@ -349,12 +376,15 @@ def notify_mentor_event_deleted(mentor_signup):
             template_name="outreach/emails/mentor_event_cancelled.html",
             context=context,
             recipient_list=[recipient],
-            organization=getattr(mentor_signup.shift.event, "organization", None),
+            organization=_trusted_notification_organization(
+                mentor_signup, mentor_signup.adult
+            ),
         )
         return True
-    except Exception:
-        logger.exception(
-            "Failed to send outreach mentor event cancellation to %s", recipient
+    except Exception as exc:
+        logger.error(
+            "Outreach mentor event cancellation dispatch failed (%s).",
+            type(exc).__name__,
         )
         return False
 

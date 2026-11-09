@@ -60,6 +60,7 @@ from organizations.utils import (
 from programs.models import (
     Adult,
     BackgroundCheck,
+    EmailDeliveryQuarantine,
     Enrollment,
     MentorAgreement,
     Program,
@@ -1043,6 +1044,18 @@ class PlatformAuditLogView(SuperuserRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context["filter_form"] = PlatformAuditLogFilterForm(self.request.GET)
         return context
+
+
+class PlatformEmailDeliveryQuarantineView(SuperuserRequiredMixin, ListView):
+    """Restricted read-only review of unattributed provider delivery events."""
+
+    model = EmailDeliveryQuarantine
+    template_name = "platform_admin/email_delivery_quarantine.html"
+    context_object_name = "quarantine_events"
+    paginate_by = 50
+
+    def get_queryset(self):
+        return EmailDeliveryQuarantine.objects.order_by("-received_at")
 
 
 SUPPORT_HANDOFF_LIFETIME = timedelta(minutes=5)

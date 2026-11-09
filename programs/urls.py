@@ -33,6 +33,7 @@ from .views import (
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
+    PortalPaymentInstructionsView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,
@@ -56,6 +57,7 @@ from .views import (
     ProgramFeeSelectView,
     ProgramFeeUpdateView,
     ProgramListView,
+    ProgramMailMergeView,
     ProgramMedicalInfoView,
     ProgramPaymentCreateView,
     ProgramPaymentDeleteView,
@@ -129,6 +131,11 @@ urlpatterns = [
         "<int:pk>/edit/",
         ProgramUpdateView.as_view(),
         name="program_edit",
+    ),
+    path(
+        "messaging/mail-merge/",
+        login_required(ProgramMailMergeView.as_view()),
+        name="program_mail_merge",
     ),
     path(
         "messaging/",
@@ -687,6 +694,11 @@ urlpatterns = [
         "settings/email/",
         PortalEmailSettingsView.as_view(),
         name="portal_email_settings",
+    ),
+    path(
+        "settings/payment-instructions/",
+        PortalPaymentInstructionsView.as_view(),
+        name="portal_payment_instructions",
     ),
     path(
         "settings/domains/",

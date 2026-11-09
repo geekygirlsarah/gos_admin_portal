@@ -351,6 +351,17 @@ function initEditor(textarea) {
   editor.setEditable(true);
   wrap.appendChild(editor.view.dom);
 
+  const insertMergeText = (event) => {
+    const text = event.detail && event.detail.text;
+    if (typeof text === "string") {
+      editor.chain().focus().insertContent(text).run();
+    }
+  };
+  textarea.addEventListener("email-editor-insert", insertMergeText);
+  editor.on("destroy", () => {
+    textarea.removeEventListener("email-editor-insert", insertMergeText);
+  });
+
   const toolbar = createToolbar(editor);
   wrap.insertBefore(toolbar, editor.view.dom);
 

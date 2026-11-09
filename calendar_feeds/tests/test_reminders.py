@@ -62,11 +62,17 @@ class SendCalendarRemindersCommandTests(TestCase):
         ) as cm:
             call_command("send_calendar_reminders", stdout=self.out)
         self.assertGreater(len(mail.outbox), 0)
+        recipients = {address for message in mail.outbox for address in message.to}
+        self.assertIn("lead@example.com", recipients)
+        self.assertIn("student@example.com", recipients)
         logs = "\n".join(cm.output)
-        self.assertIn("lead@example.com", logs)
-        self.assertIn("student@example.com", logs)
-        self.assertIn(lead.username, logs)
-        self.assertIn(user.username, logs)
+        self.assertIn("Sent calendar reminder.", logs)
+        self.assertNotIn("lead@example.com", logs)
+        self.assertNotIn("student@example.com", logs)
+        self.assertNotIn(lead.username, logs)
+        self.assertNotIn(user.username, logs)
+        self.assertNotIn("lead@example.com", self.out.getvalue())
+        self.assertNotIn("student@example.com", self.out.getvalue())
 
     def test_future_event_no_reminder(self):
         mail.outbox.clear()
@@ -108,9 +114,12 @@ class SendCalendarRemindersCommandTests(TestCase):
             call_command("send_calendar_reminders", dry_run=True, stdout=self.out)
         self.assertEqual(len(mail.outbox), 0)
         logs = "\n".join(cm.output)
+        output = self.out.getvalue()
         self.assertIn("[DRY RUN]", logs)
-        self.assertIn("student_dry@example.com", logs)
-        self.assertIn(user.username, logs)
+        self.assertIn("Would send a calendar reminder.", logs)
+        self.assertNotIn("student_dry@example.com", logs)
+        self.assertNotIn(user.username, logs)
+        self.assertNotIn("student_dry@example.com", output)
 
 
 @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")

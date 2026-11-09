@@ -21,6 +21,7 @@ from ..forms import AdultForm, ParentMergeForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
+    EmailDeliveryEvent,
     Enrollment,
     Program,
     Student,
@@ -86,9 +87,22 @@ class AdultsListView(
         return qs
 
     def get_queryset(self):
-
+        organization = getattr(self.request, "organization", None)
+        email_delivery_events = (
+            EmailDeliveryEvent.objects.verified_for_organization(organization)
+            .filter(
+                resolved=False,
+                event_type__in=[
+                    EmailDeliveryEvent.EVENT_BOUNCED,
+                    EmailDeliveryEvent.EVENT_COMPLAINT,
+                ],
+            )
+            .select_related(
+                "student", "adult", "application__program", "trusted_mapping"
+            )
+        )
         qs = (
-            Adult.objects.for_organization(getattr(self.request, "organization", None))
+            Adult.objects.for_organization(organization)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -96,7 +110,7 @@ class AdultsListView(
             )
             .prefetch_related(
                 "students",
-                "email_delivery_events",
+                Prefetch("email_delivery_events", queryset=email_delivery_events),
                 "background_checks__check_type",
             )
         )
@@ -350,6 +364,19 @@ class AdultDetailView(
         organization = getattr(self.request, "organization", None)
         if organization is None:
             return Adult.objects.none()
+        email_delivery_events = (
+            EmailDeliveryEvent.objects.verified_for_organization(organization)
+            .filter(
+                resolved=False,
+                event_type__in=[
+                    EmailDeliveryEvent.EVENT_BOUNCED,
+                    EmailDeliveryEvent.EVENT_COMPLAINT,
+                ],
+            )
+            .select_related(
+                "student", "adult", "application__program", "trusted_mapping"
+            )
+        )
         return Adult.objects.for_organization(organization).prefetch_related(
             Prefetch(
                 "students",
@@ -373,7 +400,7 @@ class AdultDetailView(
                 )
                 .select_related("check_type"),
             ),
-            "email_delivery_events",
+            Prefetch("email_delivery_events", queryset=email_delivery_events),
         )
 
     def get_object(self, queryset=None):

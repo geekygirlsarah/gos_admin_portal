@@ -13,11 +13,17 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from GoSAdminPortal.test_runner import _assign_default_test_org
-from organizations.models import Organization, UserOrganizationMembership
+from organizations.models import (
+    Organization,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from programs.models import (
     Adult,
     AdultStudentRelationship,
     Enrollment,
+    Fee,
+    Payment,
     Program,
     SlidingScale,
     Student,
@@ -45,6 +51,8 @@ class SlidingScaleRelatedRecordIsolationTests(TestCase):
         Adult,
         AdultStudentRelationship,
         Enrollment,
+        Fee,
+        Payment,
         Program,
         SlidingScale,
         Student,
@@ -85,6 +93,7 @@ class SlidingScaleRelatedRecordIsolationTests(TestCase):
             personal_email="parent@example.test",
             email_updates=True,
             is_parent=True,
+            login_enabled=True,
         )
         AdultStudentRelationship.objects.create(
             organization=self.alpha,
@@ -106,7 +115,9 @@ class SlidingScaleRelatedRecordIsolationTests(TestCase):
             defaults={"is_active": True},
         )
         self.lead_user = get_user_model().objects.create_user(
-            username="sliding-lead", password="password"
+            username="sliding-lead",
+            email="alpha-lead@example.test",
+            password="password",
         )  # nosec B106
         UserOrganizationMembership.objects.update_or_create(
             user=self.lead_user,
@@ -273,6 +284,244 @@ class SlidingScaleRelatedRecordIsolationTests(TestCase):
             for message in mail.outbox
         )
         self.assertNotIn("Beta Confidential Program", contents)
+
+    def test_sliding_scale_reviewer_notices_are_generic_and_local(self):
+        User = get_user_model()
+        another_local_lead = User.objects.create_user(
+            username="another-alpha-lead",
+            email="second-alpha-lead@example.test",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=another_local_lead,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=True,
+        )
+        duplicate_address_lead = User.objects.create_user(
+            username="duplicate-alpha-lead",
+            email="ALPHA-LEAD@example.test",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=duplicate_address_lead,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=True,
+        )
+        foreign_lead = User.objects.create_user(
+            username="beta-lead",
+            email="beta-lead@example.test",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=foreign_lead,
+            organization=self.beta,
+            role="LeadMentor",
+            is_active=True,
+        )
+        inactive_member = User.objects.create_user(
+            username="inactive-alpha-lead",
+            email="inactive-member@example.test",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=inactive_member,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=False,
+        )
+        inactive_user = User.objects.create_user(
+            username="inactive-alpha-user",
+            email="inactive-user@example.test",
+            password="password",
+            is_active=False,
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=inactive_user,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=True,
+        )
+        not_a_lead = User.objects.create_user(
+            username="alpha-mentor",
+            email="mentor@example.test",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=not_a_lead,
+            organization=self.alpha,
+            role="Mentor",
+            is_active=True,
+        )
+        no_email_lead = User.objects.create_user(
+            username="alpha-lead-without-email", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=no_email_lead,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=True,
+        )
+        invalid_email_lead = User.objects.create_user(
+            username="alpha-lead-with-invalid-email",
+            email="not-an-email",
+            password="password",
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=invalid_email_lead,
+            organization=self.alpha,
+            role="LeadMentor",
+            is_active=True,
+        )
+        mail.outbox = []
+
+        SlidingScale.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            status=SlidingScale.STATUS_PENDING,
+            family_size=5,
+            adjusted_gross_income=Decimal("12345.67"),
+        )
+
+        reviewer_messages = [
+            message
+            for message in mail.outbox
+            if "Sliding Scale Application to Review" in message.subject
+        ]
+        self.assertEqual(
+            {tuple(message.to) for message in reviewer_messages},
+            {
+                ("alpha-lead@example.test",),
+                ("second-alpha-lead@example.test",),
+            },
+        )
+        for message in reviewer_messages:
+            content = "\n".join(
+                [message.subject, message.body]
+                + [part[0] for part in message.alternatives]
+            )
+            self.assertEqual(message.subject, "New Sliding Scale Application to Review")
+            self.assertNotIn("Avery Alpha", content)
+            self.assertNotIn("Alpha Program", content)
+            self.assertNotIn("12345.67", content)
+            self.assertNotIn("Household Size", content)
+
+    @override_settings(LEAD_MENTOR_NOTIFICATION_EMAIL="global-lead@example.test")
+    def test_sliding_scale_notice_does_not_fall_back_to_global_address(self):
+        UserOrganizationMembership.objects.filter(
+            user=self.lead_user,
+            organization=self.alpha,
+            role="LeadMentor",
+        ).update(is_active=False)
+        mail.outbox = []
+
+        SlidingScale.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            status=SlidingScale.STATUS_PENDING,
+        )
+
+        self.assertNotIn(
+            "global-lead@example.test",
+            [address for message in mail.outbox for address in message.to],
+        )
+
+    def test_fee_and_payment_emails_use_only_local_payment_guidance(self):
+        OrganizationSettings.objects.create(
+            organization=self.alpha,
+            data={
+                "payment_settings": {
+                    "instructions": "Send <script>alert('x')</script> by mail.\nUse bank transfer & include the student name.",
+                    "online_payment_url": "https://pay.alpha.example.test/checkout?a=1&b=2",
+                }
+            },
+        )
+        OrganizationSettings.objects.create(
+            organization=self.beta,
+            data={
+                "payment_settings": {
+                    "instructions": "Beta confidential payment guidance",
+                    "online_payment_url": "https://pay.beta.example.test/",
+                }
+            },
+        )
+        mail.outbox = []
+
+        Fee.objects.create(
+            organization=self.alpha,
+            program=self.program,
+            name="Alpha Registration",
+            amount=Decimal("40.00"),
+        )
+        Payment.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            program=self.program,
+            amount=Decimal("10.00"),
+            paid_on=self.student.created_at.date(),
+            paid_via="cash",
+        )
+
+        fee_email = next(
+            message for message in mail.outbox if message.subject.startswith("New Fee")
+        )
+        payment_email = next(
+            message
+            for message in mail.outbox
+            if message.subject.startswith("Payment Recorded")
+        )
+        for message in (fee_email, payment_email):
+            html_content = message.alternatives[0][0]
+            content = message.body + "\n" + html_content
+            self.assertIn("Send <script>alert('x')</script> by mail.", message.body)
+            self.assertIn("&lt;script&gt;", html_content)
+            self.assertNotIn("<script>", html_content)
+            self.assertIn("https://pay.alpha.example.test/checkout", content)
+            self.assertNotIn("pay.beta.example.test", content)
+            self.assertNotIn("Beta confidential payment guidance", content)
+            self.assertNotIn("commerce.cashnet.com", content)
+            self.assertNotIn("Carnegie Mellon University", content)
+            self.assertNotIn("Lynnetta Miller", content)
+            self.assertNotIn("Girls of Steel Robotics", content)
+            self.assertIn("Momentum", html_content)
+
+        self.assertIn("Alpha Registration", fee_email.body)
+        self.assertIn("Avery Alpha", payment_email.body)
+
+    def test_fee_email_uses_neutral_payment_fallback_for_blank_guidance(self):
+        mail.outbox = []
+
+        Fee.objects.create(
+            organization=self.alpha,
+            program=self.program,
+            name="Alpha Registration",
+            amount=Decimal("40.00"),
+        )
+        Payment.objects.create(
+            organization=self.alpha,
+            student=self.student,
+            program=self.program,
+            amount=Decimal("10.00"),
+            paid_on=self.student.created_at.date(),
+            paid_via="cash",
+        )
+
+        messages_by_subject = {message.subject: message for message in mail.outbox}
+        for prefix in ("New Fee", "Payment Recorded"):
+            message = next(
+                message
+                for subject, message in messages_by_subject.items()
+                if subject.startswith(prefix)
+            )
+            contents = message.body + "\n" + message.alternatives[0][0]
+            self.assertIn(
+                "Please contact the lead mentors to learn more about how to pay these dues.",
+                contents,
+            )
+            self.assertNotIn("commerce.cashnet.com", contents)
+            self.assertNotIn("Carnegie Mellon University", contents)
+            self.assertNotIn("Girls of Steel Robotics", contents)
 
     def test_review_cleanup_preserves_foreign_form_and_deletes_local_form(self):
         scale = SlidingScale.objects.create(

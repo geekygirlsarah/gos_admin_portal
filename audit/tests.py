@@ -207,9 +207,44 @@ class AuthenticationAuditLogTest(TestCase):
         url = reverse("student_detail", kwargs={"pk": self.student.pk})
         response = self.client.get(url, HTTP_REFERER="http://testserver/")
         self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Mentor and Lead Mentor views of student profiles are logged for safety and compliance.",
+        )
+        self.assertContains(response, "Edit Profile")
+        self.assertContains(response, "Attendance Log")
+        self.assertContains(response, "Hours Chart")
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW,
             actor=self.mentor,
+            resource_type="Student",
+            resource_id=str(self.student.pk),
+        ).first()
+        self.assertIsNotNone(log, "Mentor viewing student detail should be logged")
+
+    def test_mentor_role_view_student_detail(self):
+        mentor = User.objects.create_user(
+            username="regular_mentor",
+            email="regular_mentor@example.com",
+            password="password123",
+            is_staff=True,
+        )  # nosec B106
+        mentor_group, _ = Group.objects.get_or_create(name="Mentor")
+        mentor.groups.add(mentor_group)
+        _add_membership(mentor, "Mentor")
+
+        self.client.force_login(mentor)
+        url = reverse("student_detail", kwargs={"pk": self.student.pk})
+        response = self.client.get(url, HTTP_REFERER="http://testserver/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Mentor and Lead Mentor views of student profiles are logged for safety and compliance.",
+        )
+        log = AuditLog.objects.filter(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            actor=mentor,
             resource_type="Student",
             resource_id=str(self.student.pk),
         ).first()

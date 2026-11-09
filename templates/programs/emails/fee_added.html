@@ -21,17 +21,14 @@
 <p>If you are on the sliding scale plan, the rate will be discounted to reflect that.</p>
 <p>To pay the fee:</p>
 
-<ul>
-    <li><strong>Pay online</strong> through the Online Payment Portal: <a href="https://commerce.cashnet.com/CMU267">https://commerce.cashnet.com/CMU267</a></li>
-    <li><strong>Pay by check</strong> made out to &quot;Carnegie Mellon University&quot; and mail to: <br>
-        Lynnetta Miller or Kaitlyn Buss<br>
-        Girls of Steel Robotics<br>
-        The Robotics Institute<br>
-        5000 Forbes Ave<br>
-        Pittsburgh, PA 15213-3890
-    </li>
-</ul>
+{% if payment_instructions %}
+<p>{{ payment_instructions|linebreaksbr }}</p>
+{% else %}
+<p>Please contact the lead mentors to learn more about how to pay these dues.</p>
+{% endif %}
 
-<p>Please reply to this email, or send a new email to <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a> to let us know what method you paid.</p>
+{% if online_payment_url %}
+<p><strong>Pay online</strong> through the <a href="{{ online_payment_url }}">online payment portal</a>.</p>
+{% endif %}
 
 {% endblock %}

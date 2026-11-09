@@ -419,7 +419,6 @@ def flag_clearance_due_on_enrollment(sender, instance, created, **kwargs):
 
 def _send_fee_notification(student, program, fee):
     from .models import Enrollment
-    from .utils import send_templated_notification
 
     organization_id = fee.organization_id
     if (
@@ -461,8 +460,13 @@ def _send_fee_notification(student, program, fee):
         "fee": fee,
     }
     recipient_list = [p.personal_email for p in parents]
-    send_templated_notification(
-        subject, "programs/emails/fee_added.html", context, recipient_list
+    _send_finance_notification(
+        subject,
+        "programs/emails/fee_added.html",
+        context,
+        recipient_list,
+        fee.organization,
+        payment_guidance=True,
     )
 
 
@@ -471,7 +475,6 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     if not created:
         return
 
-    from .utils import send_templated_notification
     from .utils.balances import (
         InconsistentBalanceStatementError,
         TenantBalanceStatementCalculator,
@@ -523,9 +526,56 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
         "entries": balance_data["entries"],
     }
     recipient_list = [p.personal_email for p in parents]
-    send_templated_notification(
-        subject, "programs/emails/payment_recorded.html", context, recipient_list
+    _send_finance_notification(
+        subject,
+        "programs/emails/payment_recorded.html",
+        context,
+        recipient_list,
+        organization,
+        payment_guidance=True,
     )
+
+
+def _send_finance_notification(
+    subject,
+    template_name,
+    context,
+    recipient_list,
+    organization,
+    *,
+    payment_guidance=False,
+):
+    from organizations.utils import get_organization_payment_settings
+
+    from .utils import send_templated_notification
+    from .utils.balance_email import (
+        get_balance_email_from_address,
+        get_balance_email_settings,
+    )
+
+    email_settings = get_balance_email_settings(organization)
+    email_context = dict(context)
+    email_context["org_email_settings"] = email_settings
+    if payment_guidance:
+        payment_settings = get_organization_payment_settings(organization)
+        email_context["payment_instructions"] = payment_settings["instructions"]
+        email_context["online_payment_url"] = payment_settings["online_payment_url"]
+
+    send_templated_notification(
+        subject,
+        template_name,
+        email_context,
+        recipient_list,
+        from_email=get_balance_email_from_address(email_settings),
+        reply_to=email_settings.get("reply_to_email"),
+        organization=organization,
+    )
+
+
+def _local_lead_mentor_emails(organization_id):
+    from .utils.notifications import get_local_lead_mentor_notification_emails
+
+    return get_local_lead_mentor_notification_emails(organization_id)
 
 
 @receiver(pre_save, sender="programs.SlidingScale")
@@ -616,7 +666,6 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
 
 def _notify_sliding_scale_submitted(student, sliding_scale):
     from .models import Enrollment
-    from .utils import get_lead_mentor_notification_email, send_templated_notification
 
     organization_id = sliding_scale.organization_id
     if organization_id is None or student.organization_id != organization_id:
@@ -634,11 +683,8 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
         .values_list("program__name", flat=True)
     )
 
-    context = {
-        "student": student,
-        "sliding_scale": sliding_scale,
-        "programs": programs,
-    }
+    organization = sliding_scale.organization
+    context = {"student": student, "sliding_scale": sliding_scale, "programs": programs}
 
     parents = [
         p
@@ -646,24 +692,27 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
         if p.login_enabled and p.email_updates and p.personal_email
     ]
     if parents:
-        send_templated_notification(
+        _send_finance_notification(
             f"Sliding Scale Application Submitted for {student}",
             "programs/emails/sliding_scale_submitted.html",
             context,
             [p.personal_email for p in parents],
+            organization,
         )
 
-    send_templated_notification(
-        f"New Sliding Scale Application to Review: {student}",
-        "programs/emails/sliding_scale_submitted_lead_mentor.html",
-        context,
-        [get_lead_mentor_notification_email()],
-    )
+    reviewer_emails = _local_lead_mentor_emails(organization_id)
+    if reviewer_emails:
+        _send_finance_notification(
+            "New Sliding Scale Application to Review",
+            "programs/emails/sliding_scale_submitted_lead_mentor.html",
+            {},
+            reviewer_emails,
+            organization,
+        )
 
 
 def _notify_sliding_scale_processed(student, sliding_scale):
     from .models import Enrollment
-    from .utils import send_templated_notification
 
     organization_id = sliding_scale.organization_id
     if organization_id is None or student.organization_id != organization_id:
@@ -696,9 +745,10 @@ def _notify_sliding_scale_processed(student, sliding_scale):
         "sliding_scale": sliding_scale,
         "programs": programs,
     }
-    send_templated_notification(
+    _send_finance_notification(
         subject,
         "programs/emails/sliding_scale_processed.html",
         context,
         [p.personal_email for p in parents],
+        sliding_scale.organization,
     )

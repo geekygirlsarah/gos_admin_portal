@@ -46,6 +46,7 @@ from .imports import (
     SchoolImportView,
     StudentImportView,
 )
+from .mail_merge import ProgramMailMergeView
 from .mentor_agreement import mentor_agreement_view
 from .mixins import (
     DynamicPermissionMixin,
@@ -68,6 +69,7 @@ from .portal_settings import (
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
+    PortalPaymentInstructionsView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,
@@ -154,6 +156,7 @@ __all__ = [
     "PortalDomainView",
     "PortalEmailSettingsView",
     "PortalKioskView",
+    "PortalPaymentInstructionsView",
     "PortalPermissionsUpdateView",
     "PortalSettingsView",
     "PortalSlidingScaleSettingsView",
@@ -177,6 +180,7 @@ __all__ = [
     "ProgramFeeSelectView",
     "ProgramFeeUpdateView",
     "ProgramListView",
+    "ProgramMailMergeView",
     "ProgramMedicalInfoView",
     "ProgramPaymentCreateView",
     "ProgramPaymentDeleteView",

@@ -359,6 +359,8 @@ def can_user_read(user, section, obj=None, org=None):
         return True
     if role is None:
         return False
+    if section == "mail_merge" and role != "Mentor":
+        return False
 
     # Order requests: students and mentors read by default; the 'orders-view'
     # RolePermission row (configured from Portal Settings) lets Lead Mentors
@@ -404,6 +406,8 @@ def can_user_read(user, section, obj=None, org=None):
         # Default to True for read, except for attendance for mentors
         default_read = True
         if role == "Mentor" and section == "attendance":
+            default_read = False
+        if role == "Mentor" and section == "mail_merge":
             default_read = False
         if role == "Mentor" and section == "team_assignments":
             default_read = False
@@ -533,6 +537,25 @@ def can_user_read(user, section, obj=None, org=None):
     return can_read_section
 
 
+def can_user_mail_merge(user, program, org=None):
+    """Whether a mentor can mail merge for a program they may access."""
+    if program is None:
+        return False
+    org = org or getattr(program, "organization", None)
+    organization_id = getattr(org, "pk", org)
+    if org is None or program.organization_id != organization_id:
+        return False
+
+    role = get_user_role(user, org=org)
+    if role == "LeadMentor":
+        return True
+    return (
+        role == "Mentor"
+        and can_user_read(user, "mail_merge", org=org)
+        and can_user_read(user, "programs", program, org=org)
+    )
+
+
 def can_user_write(user, section, obj=None, org=None):
     if not _object_matches_organization(obj, org):
         return False
@@ -577,6 +600,8 @@ def can_user_write(user, section, obj=None, org=None):
     if role == "Mentor" and section == "outreach":
         return True
     if role is None:
+        return False
+    if section == "mail_merge":
         return False
 
     # Travel: students and mentors may sign up (mentors to go along, students
@@ -773,6 +798,8 @@ def can_user_delete(user, section, obj=None, org=None):
     if role == "LeadMentor":
         return True
     if role is None:
+        return False
+    if section == "mail_merge":
         return False
 
     # Mentors can add/edit attendance but never delete it

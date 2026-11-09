@@ -30,6 +30,21 @@ def _base_context(signup):
     }
 
 
+def _trusted_notification_organization(signup, profile):
+    event = signup.event
+    organization = getattr(signup, "organization", None)
+    if organization is None or profile is None:
+        return None
+    if (
+        event.organization_id != organization.pk
+        or profile.organization_id != organization.pk
+        or (event.program_id and event.program.organization_id != organization.pk)
+        or (signup.departure_id and signup.departure.organization_id != organization.pk)
+    ):
+        return None
+    return organization
+
+
 def notify_signup_created(signup):
     """Student signed up (or a lead mentor added them): confirm to the student,
     ask the parents to review and approve."""
@@ -42,6 +57,7 @@ def notify_signup_created(signup):
             "travel/emails/signup_created.html",
             context,
             student_to,
+            organization=_trusted_notification_organization(signup, signup.student),
         )
 
     parent_to = parent_recipients(signup.student)
@@ -51,6 +67,7 @@ def notify_signup_created(signup):
             "travel/emails/parent_approval_requested.html",
             context,
             parent_to,
+            organization=_trusted_notification_organization(signup, signup.student),
         )
 
 
@@ -64,6 +81,7 @@ def notify_signup_approved(signup):
         "travel/emails/signup_approved.html",
         context,
         recipient,
+        organization=_trusted_notification_organization(signup, signup.student),
     )
 
 
@@ -77,6 +95,7 @@ def notify_signup_declined(signup):
         "travel/emails/signup_declined.html",
         context,
         recipient,
+        organization=_trusted_notification_organization(signup, signup.student),
     )
 
 
@@ -91,6 +110,7 @@ def notify_signup_withdrawn(signup):
             "travel/emails/signup_withdrawn.html",
             context,
             parent_to,
+            organization=_trusted_notification_organization(signup, signup.student),
         )
     student_to = student_recipients(signup.student)
     if student_to:
@@ -99,6 +119,7 @@ def notify_signup_withdrawn(signup):
             "travel/emails/signup_withdrawn.html",
             context,
             student_to,
+            organization=_trusted_notification_organization(signup, signup.student),
         )
 
 
@@ -113,6 +134,7 @@ def notify_signup_decision_undone(signup):
         "travel/emails/signup_decision_undone.html",
         context,
         recipient,
+        organization=_trusted_notification_organization(signup, signup.student),
     )
 
 
@@ -143,6 +165,7 @@ def notify_mentor_signup_created(signup):
         "travel/emails/mentor_signup_confirmed.html",
         _adult_context(signup.adult, signup),
         [email],
+        organization=_trusted_notification_organization(signup, signup.adult),
     )
 
 
@@ -155,6 +178,7 @@ def notify_mentor_signup_cancelled(signup):
         "travel/emails/mentor_signup_cancelled.html",
         _adult_context(signup.adult, signup),
         [email],
+        organization=_trusted_notification_organization(signup, signup.adult),
     )
 
 
@@ -167,6 +191,7 @@ def notify_parent_chaperone_signup_created(signup):
         "travel/emails/parent_chaperone_confirmed.html",
         _adult_context(signup.adult, signup),
         [email],
+        organization=_trusted_notification_organization(signup, signup.adult),
     )
 
 
@@ -179,4 +204,5 @@ def notify_parent_chaperone_signup_cancelled(signup):
         "travel/emails/parent_chaperone_cancelled.html",
         _adult_context(signup.adult, signup),
         [email],
+        organization=_trusted_notification_organization(signup, signup.adult),
     )

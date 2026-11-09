@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Program Mail Merge{% endblock %}
+{% block extra_head %}
+  <link href="{% static 'css/email_editor.css' %}" rel="stylesheet">
+  <link href="{% static 'css/email_form.css' %}" rel="stylesheet">
+  <link href="{% static 'css/mail_merge.css' %}" rel="stylesheet">
+  <script type="module" src="{% static 'js/mail-merge.js' %}" nonce="{{ csp_nonce }}" defer></script>
+{% endblock %}
+{% block extra_scripts %}
+  <script src="{% static 'email-editor.js' %}" nonce="{{ csp_nonce }}"></script>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3" data-mail-merge data-max-rows="{{ max_merge_rows }}" data-max-columns="20" data-max-value-length="1000" data-reserved-fields="{{ reserved_fields_json }}">
+  <div class="mb-3">
+    {% if program %}
+      <a class="link-secondary text-decoration-none" href="{% url 'program_messaging' %}?program={{ program.pk }}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Program Messaging
+      </a>
+    {% else %}
+      <a class="link-secondary text-decoration-none" href="{% url 'program_messaging' %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Program Messaging
+      </a>
+    {% endif %}
+  </div>
+  <div class="row">
+    <div class="col-12 col-xxl-11">
+      <h1 class="h4 fw-bold text-dark"><i class="bi bi-envelope-paper text-primary me-2"></i>Program Mail Merge</h1>
+      <p class="text-muted mb-2">A mail merge sends each student their own copy of one email, with their details filled in. For example, "Hi {% templatetag openvariable %} first_name {% templatetag closevariable %}, you have {% templatetag openvariable %} attendance_total_hours {% templatetag closevariable %} hours" becomes "Hi Sam, you have 42.5 hours" in Sam's email and "Hi Alex, you have 38.0 hours" in Alex's.</p>
+      <details class="mb-3" id="merge-how-it-works">
+        <summary class="small fw-semibold">How it works</summary>
+        <ol class="small text-muted mt-2 mb-0">
+          <li><strong>Choose students:</strong> pick a program, and a team, crew or subteam if you want to narrow it down, then load the list.</li>
+          <li><strong>Check the table:</strong> each row is one student and each column is a piece of information about them. Untick anyone who shouldn't get the email. To include information the portal doesn't have, such as a due date or a note, add your own column and type or paste it in.</li>
+          <li><strong>Write the email:</strong> use the Insert field menus to add placeholders such as <code>{% templatetag openvariable %} first_name {% templatetag closevariable %}</code>. Each placeholder is replaced with that student's value from the table.</li>
+          <li><strong>Preview and test:</strong> step through students to see exactly what each will receive, and send yourself a test copy.</li>
+          <li><strong>Send:</strong> review the count, then confirm. Everyone gets a separate email, so no one sees anyone else's address or information.</li>
+        </ol>
+        <p class="small text-muted mt-2 mb-0">Nothing on this page is saved as a draft. If you leave or reload the page, the email and any information you typed or pasted are lost.</p>
+      </details>
+
+      {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+      <section class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-white py-3"><h2 class="h6 mb-0 fw-bold">1. Choose students</h2></div>
+        <div class="card-body">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-lg-3">
+              <label for="merge-program" class="form-label">Program</label>
+              <select id="merge-program" name="program" class="form-select" required>
+                <option value="">Select a program</option>
+                {% for option in programs %}
+                  <option value="{{ option.pk }}" {% if program and option.pk == program.pk %}selected{% endif %}>{{ option.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-3">
+              <label for="merge-teams" class="form-label">Team filter</label>
+              <select id="merge-teams" name="teams" class="form-select" multiple size="3">
+                {% for team in teams %}
+                  <option value="{{ team.pk }}" {% if team.pk|stringformat:'s' in selected_teams %}selected{% endif %}>{{ team.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-3">
+              <label for="merge-crews" class="form-label">Crew / project filter</label>
+              <select id="merge-crews" name="crews" class="form-select" multiple size="3">
+                {% for crew in crews %}
+                  <option value="{{ crew.pk }}" {% if crew.pk|stringformat:'s' in selected_crews %}selected{% endif %}>{{ crew.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-3">
+              <label for="merge-subteams" class="form-label">Subteam filter</label>
+              <select id="merge-subteams" name="subteams" class="form-select" multiple size="3">
+                {% for subteam in subteams %}
+                  <option value="{{ subteam.pk }}" {% if subteam.pk|stringformat:'s' in selected_subteams %}selected{% endif %}>{{ subteam.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 d-flex justify-content-between align-items-center">
+              <span class="small text-muted">Only students enrolled in your organization's programs are listed. Leave the filters empty to include every current student in the program. Hold Ctrl (or Cmd on a Mac) to select more than one option.</span>
+              <button class="btn btn-outline-primary" type="submit">Load students</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {% if program %}
+        {% if student_limit_exceeded %}
+          <div class="alert alert-warning">This program has more than {{ max_merge_rows }} matching students, and only the first {{ max_merge_rows }} are shown. Use the team, crew or subteam filters above to send to smaller groups, up to {{ max_merge_rows }} students at a time.</div>
+        {% endif %}
+        <form method="post" id="mailMergeForm" class="js-mail-merge-form">
+          {% csrf_token %}
+          <input type="hidden" name="program" value="{{ program.pk }}">
+          {% for team_id in selected_teams %}<input type="hidden" name="teams" value="{{ team_id }}">{% endfor %}
+          {% for crew_id in selected_crews %}<input type="hidden" name="crews" value="{{ crew_id }}">{% endfor %}
+          {% for subteam_id in selected_subteams %}<input type="hidden" name="subteams" value="{{ subteam_id }}">{% endfor %}
+          <input type="hidden" name="merge_data" id="merge-data" value="{{ merge_data_json }}">
+          <input type="hidden" name="preview_index" id="preview-index" value="{{ preview_index }}">
+
+          <section class="card shadow-sm border-0 rounded-3 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+              <h2 class="h6 mb-0 fw-bold">2. Select students and add data</h2>
+              <span class="small text-muted">{{ merge_rows|length }} loaded · {{ max_merge_rows }} max</span>
+            </div>
+            <div class="card-body">
+              {% if not merge_rows %}
+                <p class="text-muted mb-0">No current students match this program and these filters. Try removing a filter.</p>
+              {% else %}
+                <p class="small text-muted">Each row is one student and each column is a piece of information you can put in the email. Untick a student to leave them out. Email addresses are filled in for you and aren't shown here.</p>
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-2" id="merge-grid-controls">
+                  {% if grid_column_groups %}
+                    <span class="small fw-semibold">Show columns:</span>
+                    {% for group in grid_column_groups %}
+                      <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input js-merge-column-toggle" type="checkbox" id="merge-toggle-{{ group.key }}" data-column-group="{{ group.key }}" checked>
+                        <label class="form-check-label small" for="merge-toggle-{{ group.key }}">{{ group.label }}</label>
+                      </div>
+                    {% endfor %}
+                    <span class="small text-muted">Hiding a column only tidies the table. You can still use it in the email.</span>
+                  {% endif %}
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="add-merge-column" data-bs-toggle="modal" data-bs-target="#merge-column-modal" {% if not merge_rows %}disabled{% endif %}>Add custom column</button>
+                  <span id="merge-column-count" class="small text-muted">{{ columns|length }} of 20 custom columns</span>
+                  <span class="small text-muted">Tip: copy a column of values from a spreadsheet and paste it into the top box of a custom column. The values fill down in order, so make sure your spreadsheet rows are in the same order as the students here.</span>
+                </div>
+                <div class="merge-grid-scroll border rounded">
+                  <table class="table table-sm table-bordered align-middle mb-0 merge-grid" id="merge-grid">
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col" class="merge-sticky-col"><input type="checkbox" id="select-all-students" checked aria-label="Select all students"></th>
+                        {% for field in grid_fields %}<th scope="col"{% if field.sticky %} class="merge-sticky-col"{% endif %}{% if field.group %} data-column-group="{{ field.group }}"{% endif %}>{{ field.label }}</th>{% endfor %}
+                        {% for column in columns %}<th scope="col" data-custom-column-header="{{ column }}">{{ column }}</th>{% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for row in merge_rows %}
+                        <tr data-student-id="{{ row.student.pk }}">
+                          <td class="merge-sticky-col"><input type="checkbox" class="js-merge-selected" checked aria-label="Select {{ row.student }}"></td>
+                          {% for cell in row.grid_cells %}<td{% if cell.sticky %} class="merge-sticky-col"{% endif %}{% if cell.group %} data-column-group="{{ cell.group }}"{% endif %}>{{ cell.value }}</td>{% endfor %}
+                          {% for cell in row.custom_cells %}
+                            <td><input class="form-control form-control-sm js-merge-custom-value" type="text" data-custom-column="{{ cell.key }}" value="{{ cell.value }}" maxlength="1000" autocomplete="off"></td>
+                          {% endfor %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+            </div>
+          </section>
+
+          <section class="card shadow-sm border-0 rounded-3 mb-4">
+            <div class="card-header bg-white py-3"><h2 class="h6 mb-0 fw-bold">3. Compose and preview</h2></div>
+            <div class="card-body">
+              <fieldset class="mb-3">
+                <legend class="form-label fw-semibold mb-2">Email recipients</legend>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="recipients" id="merge-recipients-students" value="students" {% if recipient_mode == 'students' %}checked{% endif %}>
+                  <label class="form-check-label" for="merge-recipients-students">Students only</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="recipients" id="merge-recipients-students-and-parents" value="students_and_parents" {% if recipient_mode == 'students_and_parents' %}checked{% endif %}>
+                  <label class="form-check-label" for="merge-recipients-students-and-parents">Students and parents</label>
+                </div>
+                <div class="form-text">Each parent gets their own copy showing their student's information. Only parents with an active portal account who have chosen to receive email updates are included.</div>
+              </fieldset>
+              <div class="mb-3">
+                <label for="id_subject" class="form-label fw-semibold">Subject</label>
+                <input type="text" class="form-control" id="id_subject" name="subject" value="{{ subject }}" maxlength="255" required>
+              </div>
+              <div class="mb-3">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                  <span class="form-label fw-semibold mb-0">Insert field into:</span>
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Subject</button>
+                    <ul class="dropdown-menu">
+                      {% for field, label in field_options %}<li><button class="dropdown-item js-insert-merge-field" type="button" data-insert-target="id_subject" data-insert-field="{{ field }}">{{ label }} <code>{{ field }}</code></button></li>{% endfor %}
+                    </ul>
+                  </div>
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Message</button>
+                    <ul class="dropdown-menu">
+                      {% for field, label in field_options %}<li><button class="dropdown-item js-insert-merge-field" type="button" data-insert-target="id_body" data-insert-field="{{ field }}">{{ label }} <code>{{ field }}</code></button></li>{% endfor %}
+                    </ul>
+                  </div>
+                  <span class="small text-muted">Placeholders like <code>{% templatetag openvariable %} first_name {% templatetag closevariable %}</code> are replaced with each student's value. Use the menus so the spelling matches a column exactly. Misspelled placeholders must be fixed before you can test or send.</span>
+                </div>
+                <label for="id_body" class="form-label fw-semibold">Message</label>
+                <textarea id="id_body" name="body" data-email-editor data-email-editor-placeholder="Compose the personalized email..." rows="12" required>{{ body }}</textarea>
+              </div>
+              {% if tag_report.unknown %}<div class="alert alert-warning">These placeholders don't match any column: {{ tag_report.unknown|join:', ' }}. Check the spelling, add a custom column with that name, or delete the placeholder and insert it again from the menu.</div>{% endif %}
+              {% if tag_report.split %}<div class="alert alert-warning">Text formatting such as bold or a link has been applied to part of these placeholders, so they won't work: {{ tag_report.split|join:', ' }}. Delete each one and insert it again from the menu. You can format the whole placeholder, just not part of it.</div>{% endif %}
+              <div class="row g-3 align-items-end mb-3">
+                <div class="col-md-6">
+                  <label for="id_from_account" class="form-label">Send from</label>
+                  <select class="form-select" id="id_from_account" name="from_account">
+                    {% for sender_key, sender_label in sender_choices %}<option value="{{ sender_key }}" {% if sender_key == sender_value %}selected{% endif %}>{{ sender_label }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="id_test_email" class="form-label">Send test to</label>
+                  <input type="email" class="form-control" id="id_test_email" name="test_email" value="{{ test_email }}" placeholder="you@example.org" aria-describedby="merge-test-help">
+                  <div id="merge-test-help" class="form-text">A test sends one copy, for the student currently shown in the preview, to this address only. Students and parents don't receive it.</div>
+                </div>
+                <div class="col-md-6 d-flex flex-wrap gap-2">
+                  <button class="btn btn-outline-primary" type="submit" name="action" value="preview">Preview</button>
+                  <button class="btn btn-outline-info" type="submit" name="action" value="test_send">Send me a test</button>
+                </div>
+              </div>
+              {% if merge_rows and subject and body %}
+                <div class="border rounded p-3 bg-light mb-3">
+                  <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary js-preview-move" name="action" value="preview" data-preview-move="-1" aria-label="Previous student"><i class="bi bi-chevron-left"></i> Previous</button>
+                    <div class="text-center"><strong>{{ preview_subject }}</strong><div class="small text-muted">Student {{ preview_index|add:1 }} of {{ merge_rows|length }}</div></div>
+                    <button type="submit" class="btn btn-sm btn-outline-secondary js-preview-move" name="action" value="preview" data-preview-move="1" aria-label="Next student">Next <i class="bi bi-chevron-right"></i></button>
+                  </div>
+                  <p class="small text-muted mb-2">This is exactly what this student will receive. Use Previous and Next to check other students.</p>
+                  {% if blank_fields %}<div class="alert alert-warning py-2">This student has no value for: {{ blank_fields|join:', ' }}. Those placeholders will be blank in their email. Fill them in in the table above if needed.</div>{% endif %}
+                  <div class="bg-white border rounded p-3" aria-label="Rendered email preview">{{ preview_html|safe }}</div>
+                  <details class="mt-2"><summary>Plain-text version</summary><pre class="mb-0 mt-2">{{ preview_text }}</pre></details>
+                </div>
+              {% endif %}
+            </div>
+          </section>
+
+          {% if action == 'confirm' %}
+            <div class="alert alert-warning" role="alert">
+              <h2 class="h6 fw-bold">Ready to send?</h2>
+              <p>Send this personalized email to {{ student_recipient_count }} student(s){% if recipient_mode == 'students_and_parents' %} and {{ parent_recipient_count }} parent(s){% endif %}?{% if no_email_count %} {{ no_email_count }} selected student(s) have no usable student email address{% if recipient_mode == 'students' %} and will be skipped{% else %}, so only their parents will receive it{% endif %}.{% endif %}</p>
+              <p class="small mb-2">Each person receives their own separate email. Sending can't be undone, so check the preview and a test first.</p>
+              <button class="btn btn-danger" type="submit" name="action" value="send">Send {{ recipient_count }} personalized email(s)</button>
+              <button class="btn btn-outline-secondary ms-2" type="submit" name="action" value="preview">Back to edit</button>
+            </div>
+          {% else %}
+            <button class="btn btn-primary btn-lg" id="merge-review-send" type="submit" name="action" value="confirm" {% if not merge_rows %}disabled{% endif %}>
+              Review send to <span id="merge-review-count">{{ merge_rows|length }}</span> student(s)<span id="merge-review-parents"{% if recipient_mode != 'students_and_parents' %} class="d-none"{% endif %}> and parent(s)</span>
+            </button>
+          {% endif %}
+        </form>
+      {% endif %}
+      <div class="modal fade" id="merge-column-modal" tabindex="-1" aria-labelledby="merge-column-modal-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2 class="modal-title fs-5" id="merge-column-modal-title">Add custom column</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <label for="merge-column-name" class="form-label">Column name</label>
+              <input type="text" class="form-control" id="merge-column-name" maxlength="50" autocomplete="off" aria-describedby="merge-column-name-help merge-column-name-error">
+              <div id="merge-column-name-help" class="form-text">This name becomes the placeholder you put in the email. For example, a column named <code>due_date</code> is used as <code>{% templatetag openvariable %} due_date {% templatetag closevariable %}</code>. Use lowercase letters, numbers and underscores (_) instead of spaces, starting with a letter.</div>
+              <div id="merge-column-name-error" class="invalid-feedback"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" id="save-merge-column">Add column</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
