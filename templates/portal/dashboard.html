@@ -344,7 +344,12 @@ PARENT DASHBOARD
 <section class="mb-5">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <h2 class="h4 mb-0 fw-bold">My Students</h2>
-        {% if family_total_owed > 0 %}
+        {% if family_balance_unavailable %}
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-warning small">Family balance unavailable. Please contact the lead mentors.</span>
+                <a href="{% url 'parent_payments' %}" class="btn btn-sm btn-primary"><i class="bi bi-credit-card me-1"></i>View Payments</a>
+            </div>
+        {% elif family_total_owed > 0 %}
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small">Total Due: <strong class="text-danger">${{ family_total_owed|floatformat:2 }}</strong></span>
                 <a href="{% url 'parent_payments' %}" class="btn btn-sm btn-primary"><i class="bi bi-credit-card me-1"></i>Pay Dues</a>
@@ -416,16 +421,22 @@ PARENT DASHBOARD
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-2 align-items-center">
-                                <span class="badge {% if row.balance > 0 %}bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25{% elif row.balance < 0 %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% else %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% endif %} px-2 py-1">
-                                    <strong>Balance Owed:</strong>
-                                    {% if row.balance > 0 %}
-                                        <span class="text-danger fw-bold">${{ row.balance|floatformat:2 }}</span>
-                                    {% elif row.balance < 0 %}
-                                        <span class="text-success fw-bold">Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
-                                    {% else %}
-                                        <span class="text-success fw-bold">Paid in full</span>
-                                    {% endif %}
-                                </span>
+                                {% if row.balance_unavailable %}
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1">
+                                        Balance unavailable
+                                    </span>
+                                {% else %}
+                                    <span class="badge {% if row.balance > 0 %}bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25{% elif row.balance < 0 %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% else %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% endif %} px-2 py-1">
+                                        <strong>Balance Owed:</strong>
+                                        {% if row.balance > 0 %}
+                                            <span class="text-danger fw-bold">${{ row.balance|floatformat:2 }}</span>
+                                        {% elif row.balance < 0 %}
+                                            <span class="text-success fw-bold">Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
+                                        {% else %}
+                                            <span class="text-success fw-bold">Paid in full</span>
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
                                 <a class="btn btn-sm btn-outline-primary" href="{% url 'program_student_map' row.enrollment.program.pk %}"><i class="bi bi-geo-alt me-1"></i>Carpool Map</a>
                             </div>
                         </div>
@@ -546,7 +557,9 @@ PARENT DASHBOARD
                                                 {% endif %}
                                             </div>
                                             <div class="small">
-                                                {% if row.balance > 0 %}
+                                                {% if row.balance_unavailable %}
+                                                    <span class="text-warning">Balance unavailable</span>
+                                                {% elif row.balance > 0 %}
                                                     <span class="text-danger fw-bold">${{ row.balance|floatformat:2 }}</span>
                                                 {% else %}
                                                     <span class="text-success">Paid</span>

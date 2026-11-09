@@ -4,6 +4,7 @@ from decimal import Decimal
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
@@ -1649,3 +1650,24 @@ class MentorAgreementForm(forms.ModelForm):
             ),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
+
+
+class PaymentInstructionsForm(forms.Form):
+    payment_instructions = forms.CharField(
+        required=False,
+        max_length=5000,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 6}),
+    )
+    online_payment_url = forms.CharField(
+        required=False,
+        max_length=2048,
+        widget=forms.URLInput(
+            attrs={"class": "form-control", "placeholder": "https://..."}
+        ),
+    )
+
+    def clean_online_payment_url(self):
+        value = self.cleaned_data["online_payment_url"]
+        if value:
+            URLValidator(schemes=["http", "https"])(value)
+        return value

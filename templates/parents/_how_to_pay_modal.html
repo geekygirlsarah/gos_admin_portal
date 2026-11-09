@@ -21,24 +21,19 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <h3 class="h6"><strong>Pay by Check</strong></h3>
-        <p class="mb-2">Make checks payable to <strong>Carnegie Mellon University</strong>.</p>
-        <p class="mb-2">In the memo, please put <strong>Program Dues - [Student Name]</strong>.</p>
-        <p class="mb-2">Mail to: <br>
-          <blockquote class="blockquote">
-            Lynnetta Miller<br>
-            Girls of Steel Robotics<br>
-            The Robotics Institute<br>
-            5000 Forbes Ave<br>
-            Pittsburgh, PA 15213-3890
-          </blockquote>
-          </ul>
+        <h3 class="h6"><strong>Payment Instructions</strong></h3>
+        {% if payment_instructions %}
+          <p class="mb-3">{{ payment_instructions|linebreaksbr }}</p>
+        {% else %}
+          <p class="mb-3">Please contact the lead mentors to learn more about how to pay these dues.</p>
+        {% endif %}
 
-        <h3 class="h6"><strong>Pay Online</strong></h3>
-        <p class="mb-2">You can also pay online using our secure payment portal.</p>
-        <a class="btn btn-primary" href="{{ online_payment_url }}" target="_blank" rel="noopener">
-          Go to Online Payment Portal
-        </a>
+        {% if online_payment_url %}
+          <h3 class="h6"><strong>Pay Online</strong></h3>
+          <a class="btn btn-primary" href="{{ online_payment_url }}" target="_blank" rel="noopener">
+            Go to Online Payment Portal
+          </a>
+        {% endif %}
       </div>
     </div>
   </div>

@@ -60,11 +60,12 @@ Manual balance emails use the request organization for program and active-studen
 
 The monthly job processes all organizations but sends a separate statement for each eligible program in the student's own organization. By default, positive balances and programs with recent activity are included; `--all-balances` also includes older paid-off programs. Mismatched enrollments are excluded and flagged, while inconsistent financial records block the affected program statement without blocking other valid programs. Guardians and their relationships must belong to the student's organization. Warnings and command summaries omit family identities and amounts; no records are repaired automatically.
 
-Balance emails use saved organization branding or a Momentum fallback. The shared sender and reply-to remain deployment-configured and must be verified for Momentum before use. Monthly emails ask families to contact the program for payment instructions; configurable instructions and the separate payments page require further work. Other finance views remain outside this statement boundary and require their own isolation review.
+Balance emails use saved organization branding or a Momentum fallback. The shared sender and reply-to remain deployment-configured and must be verified for Momentum before use. Monthly emails ask families to contact the program for payment instructions. Parent Payments reads plain-text instructions and an optional HTTP(S) online destination from the resolved organization's `OrganizationSettings`; Lead Mentors manage these values in Portal Settings → Payment Instructions. Empty instructions use a neutral lead-mentor contact message, and no organization's payment details are inherited by another. Each organization must enter and verify its own directions after release; the former GoS check details and global online destination are not fallbacks. Other finance views remain outside this statement boundary and require their own isolation review.
 
 Program fee management, balance sheets, and dues lists must resolve programs and students within the request organization. Fee assignment choices require a same-organization active enrollment, and fee assignment changes do not mutate inconsistent foreign-owned rows. Balance views use the tenant-validated calculator; inconsistent financial ownership makes the affected balance unavailable, and dues totals are withheld when an enrollment or displayed balance cannot be verified safely. Sliding-scale tax-form reads and deletions require the tax form, sliding-scale record, and student to belong to the current organization. Missing tenant context fails closed.
 
 Fee-added and payment-recorded notifications omit financial details when fee,
-program, student, or enrollment ownership is inconsistent. Their templates still
-contain GoS/CMU payment destinations, and the payments page can default to a CMU
-payment URL; review these destinations before use by other organizations.
+program, student, or enrollment ownership is inconsistent. Their templates may
+still contain GoS/CMU payment destinations; those notification workflows are
+separate from the tenant-configurable parent Payments page and need their own
+review before use by other organizations.

@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
@@ -312,26 +311,45 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 # Attach per-program balance info to each student
                 parent_data = []
                 from attendance.services import get_student_attendance_stats
+                from programs.permission_views import can_user_read
+                from programs.utils.balances import (
+                    InconsistentBalanceStatementError,
+                    TenantBalanceStatementCalculator,
+                )
+
+                parent_enrollments = list(
+                    _organization_enrollments(org)
+                    .filter(student_id__in=[s.pk for s in linked_students])
+                    .select_related("student", "program", "team", "crew", "subteam")
+                    .order_by("-program__start_date")
+                )
+                enrollments_by_student = {}
+                programs_by_id = {}
+                for enrollment in parent_enrollments:
+                    enrollments_by_student.setdefault(enrollment.student_id, []).append(
+                        enrollment
+                    )
+                    programs_by_id[enrollment.program_id] = enrollment.program
+                balance_calculator = TenantBalanceStatementCalculator(
+                    org, linked_students, programs_by_id.values()
+                )
+                can_view_sliding = can_user_read(
+                    self.request.user, "sliding_scale", org=org
+                )
 
                 for s in linked_students:
-                    enrollments = (
-                        _organization_enrollments(org)
-                        .filter(student=s)
-                        .select_related("program", "team", "crew", "subteam")
-                        .order_by("-program__start_date")
-                    )
+                    enrollments = enrollments_by_student.get(s.pk, [])
                     active_rows = []
                     other_rows = []
                     for e in enrollments:
-                        from programs.permission_views import can_user_read
-                        from programs.utils import get_student_program_balance
-
-                        can_view_sliding = can_user_read(
-                            self.request.user, "sliding_scale"
-                        )
-                        balance = get_student_program_balance(
-                            s, e.program, can_view_sliding=can_view_sliding
-                        )
+                        try:
+                            balance = balance_calculator.get_balance_data(
+                                s, e.program, can_view_sliding=can_view_sliding
+                            )["balance"]
+                            balance_unavailable = False
+                        except InconsistentBalanceStatementError:
+                            balance = None
+                            balance_unavailable = True
 
                         # Add attendance/outreach info
                         e.has_attendance = e.program.has_feature("attendance")
@@ -391,7 +409,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             e.travel_highlights = highlights
                             e.travel_pending = pending
 
-                        row = {"enrollment": e, "balance": balance}
+                        row = {
+                            "enrollment": e,
+                            "balance": balance,
+                            "balance_unavailable": balance_unavailable,
+                        }
                         if e.program.status == "Active" and e.active:
                             active_rows.append(row)
                         else:
@@ -429,11 +451,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         }
                     )
                 context["parent_data"] = parent_data
-                family_total_owed = sum(
-                    max(Decimal("0"), row["balance"])
+                family_balance_unavailable = any(
+                    row["balance_unavailable"]
                     for entry in parent_data
                     for row in entry["active_rows"]
                 )
+                family_total_owed = (
+                    None
+                    if family_balance_unavailable
+                    else sum(
+                        max(Decimal("0"), row["balance"])
+                        for entry in parent_data
+                        for row in entry["active_rows"]
+                    )
+                )
+                context["family_balance_unavailable"] = family_balance_unavailable
                 context["family_total_owed"] = family_total_owed
 
             if adult.is_mentor or is_lead_mentor:
@@ -508,16 +540,17 @@ class ParentPaymentsAccessMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
         from programs.permission_views import user_is_parent
 
+        organization = _request_organization(request)
+        self.parent_adult = _organization_profile(
+            request.user, "adult_profile", organization
+        )
         # Check the parent flag directly rather than the role string so a
         # parent who also mentors (or is an alumni) still reaches Payments.
-        if not user_is_parent(request.user, org=request.organization):
-            messages.error(
-                request, "You do not have permission to access that section."
-            )
-            return redirect("home")
-
-        self.parent_adult = getattr(request.user, "adult_profile", None)
-        if not self.parent_adult or not self.parent_adult.is_parent:
+        if (
+            not self.parent_adult
+            or not self.parent_adult.is_parent
+            or not user_is_parent(request.user, org=organization)
+        ):
             messages.error(
                 request, "You do not have permission to access that section."
             )
@@ -528,48 +561,95 @@ class ParentPaymentsAccessMixin(LoginRequiredMixin):
 
 class ParentPaymentsView(ParentPaymentsAccessMixin, View):
     template_name = "parents/payments.html"
-    online_payment_url = getattr(
-        settings,
-        "PARENT_PAYMENTS_ONLINE_PORTAL_URL",
-        "https://commerce.cashnet.com/CMU267",
-    )
 
     def get(self, request, *args, **kwargs):
-        from programs.models import Enrollment, SlidingScale
+        from programs.models import AdultStudentRelationship, SlidingScale
         from programs.permission_views import can_user_read
-        from programs.utils import get_active_sliding_scale, get_student_program_balance
+        from programs.utils.balances import (
+            InconsistentBalanceStatementError,
+            TenantBalanceStatementCalculator,
+        )
 
-        can_view_sliding = can_user_read(request.user, "sliding_scale")
-        enrollments = (
-            Enrollment.objects.filter(student__in=self.parent_adult.all_students())
+        organization = _request_organization(request)
+        relationships = (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                adult=self.parent_adult,
+                adult__organization=organization,
+                student__organization=organization,
+            )
+            .select_related("student")
+        )
+        students = {
+            relationship.student_id: relationship.student
+            for relationship in relationships
+        }
+        enrollments = list(
+            _organization_enrollments(organization)
+            .filter(student_id__in=students)
             .select_related("student", "program")
             .order_by(
                 "student__last_name", "student__preferred_first_name", "program__name"
             )
         )
+        programs = {
+            enrollment.program_id: enrollment.program for enrollment in enrollments
+        }
+        balance_calculator = TenantBalanceStatementCalculator(
+            organization, students.values(), programs.values()
+        )
+        can_view_sliding = can_user_read(
+            request.user, "sliding_scale", org=organization
+        )
 
-        students = {}
+        student_rows_by_id = {}
+        today = timezone.localdate()
         for enrollment in enrollments:
-            balance = get_student_program_balance(
-                enrollment.student,
-                enrollment.program,
-                can_view_sliding=can_view_sliding,
-            )
-            student_data = students.setdefault(
+            student_data = student_rows_by_id.setdefault(
                 enrollment.student_id,
                 {
                     "student": enrollment.student,
                     "program_rows": [],
                     "student_total_owed": Decimal("0"),
+                    "balance_unavailable": False,
+                    "sliding_scale": None,
                 },
             )
-            amount_owed = max(balance, 0)
-            student_data["student_total_owed"] += amount_owed
+            try:
+                balance_data = balance_calculator.get_balance_data(
+                    enrollment.student,
+                    enrollment.program,
+                    can_view_sliding=can_view_sliding,
+                )
+                balance = balance_data["balance"]
+                amount_owed = max(balance, 0)
+                if student_data["sliding_scale"] is None:
+                    student_data["sliding_scale"] = next(
+                        (
+                            scale
+                            for scale in balance_data["all_overlapping_sliding_scales"]
+                            if (scale.date is None or scale.date <= today)
+                            and (
+                                scale.expiration_date is None
+                                or scale.expiration_date >= today
+                            )
+                        ),
+                        None,
+                    )
+                balance_unavailable = False
+                student_data["student_total_owed"] += amount_owed
+            except InconsistentBalanceStatementError:
+                balance = None
+                amount_owed = None
+                balance_unavailable = True
+                student_data["balance_unavailable"] = True
             student_data["program_rows"].append(
                 {
                     "program": enrollment.program,
                     "balance": balance,
                     "amount_owed": amount_owed,
+                    "balance_unavailable": balance_unavailable,
                     "balance_url": reverse(
                         "program_student_balance",
                         args=[enrollment.program_id, enrollment.student_id],
@@ -578,28 +658,40 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
             )
 
         if can_view_sliding:
-            for student_data in students.values():
-                student = student_data["student"]
-                active = get_active_sliding_scale(student)
-                pending_application = (
-                    SlidingScale.objects.filter(
-                        student=student, status=SlidingScale.STATUS_PENDING
-                    )
-                    .order_by("-created_at")
-                    .first()
+            pending_applications = (
+                SlidingScale.objects.for_organization(organization)
+                .filter(
+                    organization=organization,
+                    student_id__in=student_rows_by_id,
+                    student__organization=organization,
+                    status=SlidingScale.STATUS_PENDING,
                 )
-                student_data["sliding_scale"] = active
+                .select_related("student")
+                .order_by("-created_at")
+            )
+            pending_by_student = {}
+            for application in pending_applications:
+                pending_by_student.setdefault(application.student_id, application)
+
+            for student_data in student_rows_by_id.values():
+                if student_data["balance_unavailable"]:
+                    student_data["student_total_owed"] = None
+                pending_application = pending_by_student.get(student_data["student"].pk)
                 student_data["sliding_scale_pending"] = pending_application
                 student_data["sliding_scale_apply_url"] = reverse(
-                    "sliding_scale_apply", args=[student.pk]
+                    "sliding_scale_apply", args=[student_data["student"].pk]
                 )
                 if pending_application:
                     student_data["sliding_scale_withdraw_url"] = reverse(
                         "sliding_scale_withdraw", args=[pending_application.pk]
                     )
+        else:
+            for student_data in student_rows_by_id.values():
+                if student_data["balance_unavailable"]:
+                    student_data["student_total_owed"] = None
 
         student_rows = sorted(
-            students.values(),
+            student_rows_by_id.values(),
             key=lambda row: (
                 (row["student"].last_name or "").lower(),
                 (
@@ -609,9 +701,21 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
                 ).lower(),
             ),
         )
-        grand_total = sum(
-            (row["student_total_owed"] for row in student_rows),
-            start=Decimal("0"),
+        family_balance_unavailable = any(
+            row["balance_unavailable"] for row in student_rows
+        )
+        grand_total = (
+            None
+            if family_balance_unavailable
+            else sum(
+                (row["student_total_owed"] for row in student_rows),
+                start=Decimal("0"),
+            )
+        )
+        from organizations.utils import get_organization_payment_settings
+
+        payment_settings = get_organization_payment_settings(
+            _request_organization(request)
         )
 
         return render(
@@ -620,6 +724,8 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
             {
                 "student_rows": student_rows,
                 "grand_total": grand_total,
-                "online_payment_url": self.online_payment_url,
+                "family_balance_unavailable": family_balance_unavailable,
+                "payment_instructions": payment_settings["instructions"],
+                "online_payment_url": payment_settings["online_payment_url"],
             },
         )

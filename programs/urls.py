@@ -33,6 +33,7 @@ from .views import (
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
+    PortalPaymentInstructionsView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,
@@ -687,6 +688,11 @@ urlpatterns = [
         "settings/email/",
         PortalEmailSettingsView.as_view(),
         name="portal_email_settings",
+    ),
+    path(
+        "settings/payment-instructions/",
+        PortalPaymentInstructionsView.as_view(),
+        name="portal_payment_instructions",
     ),
     path(
         "settings/domains/",

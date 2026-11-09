@@ -1,7 +1,6 @@
 """Weekly digest service for students, parents, and mentors."""
 
 import datetime
-import logging
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -9,6 +8,7 @@ from django.db.models import F, Prefetch, Q, Sum
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
+from organizations.models import Organization
 from outreach.models import (
     OutreachEvent,
     OutreachMentorSignup,
@@ -18,6 +18,7 @@ from outreach.models import (
 from outreach.utils import compute_outreach_stats
 from programs.models import (
     Adult,
+    AdultStudentRelationship,
     Enrollment,
     Program,
     Student,
@@ -25,19 +26,24 @@ from programs.models import (
 from programs.utils import (
     active_mentors,
     active_students,
-    get_student_balance_data,
 )
-
-logger = logging.getLogger(__name__)
+from programs.utils.balances import (
+    InconsistentBalanceStatementError,
+    TenantBalanceStatementCalculator,
+)
 
 
 def get_upcoming_calendar_events(
+    organization: Optional[Organization],
     user=None,
     role: str = "Student",
     days_ahead: int = 7,
     reference_date: Optional[datetime.date] = None,
 ) -> List[Dict[str, Any]]:
     """Retrieve upcoming events from manual/custom calendar feeds visible to the given user or role."""
+    if not isinstance(organization, Organization) or organization.pk is None:
+        return []
+
     ref_date = reference_date or timezone.localdate()
     end_date = ref_date + datetime.timedelta(days=days_ahead)
     events = []
@@ -45,14 +51,21 @@ def get_upcoming_calendar_events(
     try:
         from calendar_feeds.models import CalendarFeed
 
-        feeds = CalendarFeed.objects.filter(is_active=True).exclude(
-            source_type__in=[
-                CalendarFeed.SOURCE_OUTREACH,
-                CalendarFeed.SOURCE_TRAVEL,
-            ]
+        feeds = (
+            CalendarFeed.objects.for_organization(organization)
+            .filter(organization=organization, is_active=True)
+            .exclude(
+                source_type__in=[
+                    CalendarFeed.SOURCE_OUTREACH,
+                    CalendarFeed.SOURCE_TRAVEL,
+                ]
+            )
         )
 
         for feed in feeds:
+            if feed.has_foreign_owned_children():
+                continue
+
             can_read = False
             if user and user.is_authenticated:
                 can_read = feed.user_can_read(user)
@@ -74,6 +87,84 @@ def get_upcoming_calendar_events(
         events = []
 
     return events[:10]
+
+
+def _active_digest_students():
+    return (
+        active_students()
+        .filter(
+            organization_id__isnull=False,
+            enrollment__organization_id=F("organization_id"),
+            enrollment__student__organization_id=F("organization_id"),
+            enrollment__program__organization_id=F("organization_id"),
+            enrollment__active=True,
+            enrollment__program__active=True,
+        )
+        .distinct()
+    )
+
+
+def _active_student_enrollments(student):
+    organization_id = student.organization_id
+    if not student.pk or organization_id is None:
+        return []
+
+    return list(
+        Enrollment.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student=student,
+            student__organization_id=organization_id,
+            program__organization_id=organization_id,
+            active=True,
+            program__active=True,
+        )
+        .select_related("program")
+    )
+
+
+def _student_outreach_signups(student):
+    organization_id = student.organization_id
+    if not student.pk or organization_id is None:
+        return OutreachSignup.objects.none()
+
+    return (
+        OutreachSignup.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            student=student,
+            student__organization_id=organization_id,
+            shift__organization_id=organization_id,
+            shift__event__organization_id=organization_id,
+        )
+        .filter(
+            Q(shift__event__program__isnull=True)
+            | Q(shift__event__program__organization_id=organization_id)
+        )
+    )
+
+
+def _has_inconsistent_financial_enrollment(student):
+    organization_id = student.organization_id
+    if not student.pk or organization_id is None:
+        return False
+
+    inconsistent_enrollments = (
+        Enrollment.objects.filter(
+            student=student,
+            student__organization_id=organization_id,
+            program__organization_id=organization_id,
+            active=True,
+            program__active=True,
+        )
+        .exclude(organization_id=organization_id)
+        .select_related("program")
+        .prefetch_related("program__features")
+    )
+    return any(
+        enrollment.program.has_feature("finances")
+        for enrollment in inconsistent_enrollments
+    )
 
 
 def compute_attendance_stats(
@@ -190,20 +281,14 @@ def collect_student_digest_data(
     ref_date = reference_date or timezone.localdate()
     end_date = ref_date + datetime.timedelta(days=days_ahead)
 
-    active_enrollments = list(
-        Enrollment.objects.filter(
-            student=student, active=True, program__active=True
-        ).select_related("program")
-    )
+    organization_id = student.organization_id
+    active_enrollments = _active_student_enrollments(student)
     active_programs = [e.program for e in active_enrollments]
 
     # 1. Confirmed outreach shifts
     confirmed_signups = list(
-        OutreachSignup.objects.filter(
-            student=student,
-            shift__date__gte=ref_date,
-            shift__date__lte=end_date,
-        )
+        _student_outreach_signups(student)
+        .filter(shift__date__gte=ref_date, shift__date__lte=end_date)
         .select_related("shift", "shift__event", "shift__event__program")
         .order_by("shift__date", "shift__start_time")
     )
@@ -232,15 +317,26 @@ def collect_student_digest_data(
     # 2. Open outreach opportunities in student's active programs
     open_opportunities = []
     if active_programs:
+        local_signups = OutreachSignup.objects.for_organization(organization_id).filter(
+            organization_id=organization_id,
+            student__organization_id=organization_id,
+            shift__organization_id=organization_id,
+            shift__event__organization_id=organization_id,
+            shift__event__program__organization_id=organization_id,
+        )
         shifts = list(
-            OutreachShift.objects.filter(
+            OutreachShift.objects.for_organization(organization_id)
+            .filter(
+                organization_id=organization_id,
+                event__organization_id=organization_id,
                 event__program__in=active_programs,
+                event__program__organization_id=organization_id,
                 date__gte=ref_date,
                 date__lte=end_date,
             )
             .exclude(id__in=signed_up_shift_ids)
             .select_related("event", "event__program")
-            .prefetch_related("signups")
+            .prefetch_related(Prefetch("signups", queryset=local_signups))
             .order_by("date", "start_time")
         )
 
@@ -274,9 +370,7 @@ def collect_student_digest_data(
 
     # 3. Outreach total stats
     all_signups = list(
-        OutreachSignup.objects.filter(student=student).select_related(
-            "shift", "shift__event"
-        )
+        _student_outreach_signups(student).select_related("shift", "shift__event")
     )
     outreach_stats = compute_outreach_stats(all_signups)
     completed_events_count = len(
@@ -303,13 +397,31 @@ def collect_student_digest_data(
     try:
         from travel.models import TravelSignup
 
-        travel_signups = list(
-            TravelSignup.objects.filter(
-                student=student,
-                event__end_date__gte=ref_date,
-                event__start_date__lte=end_date + datetime.timedelta(days=14),
-            ).select_related("event")
-        )
+        travel_signups = []
+        if organization_id is not None:
+            travel_signups = list(
+                TravelSignup.objects.for_organization(organization_id)
+                .filter(
+                    organization_id=organization_id,
+                    student=student,
+                    student__organization_id=organization_id,
+                    event__organization_id=organization_id,
+                    event__end_date__gte=ref_date,
+                    event__start_date__lte=end_date + datetime.timedelta(days=14),
+                )
+                .filter(
+                    Q(event__program__isnull=True)
+                    | Q(event__program__organization_id=organization_id)
+                )
+                .filter(
+                    Q(departure__isnull=True)
+                    | Q(
+                        departure__organization_id=organization_id,
+                        departure__event_id=F("event_id"),
+                    )
+                )
+                .select_related("event")
+            )
         for ts in travel_signups:
             travel_highlights.append(
                 {
@@ -325,6 +437,7 @@ def collect_student_digest_data(
 
     # 6. Upcoming calendar events from active feeds
     calendar_events = get_upcoming_calendar_events(
+        organization=student.organization,
         user=student.user,
         role="Student",
         days_ahead=days_ahead,
@@ -334,32 +447,57 @@ def collect_student_digest_data(
     # 7. Action items & Reminders (Dues, Required documents, Background checks)
     total_balance = Decimal("0.00")
     program_balances = []
+    balance_unavailable = _has_inconsistent_financial_enrollment(student)
+    balance_calculator = TenantBalanceStatementCalculator(
+        student.organization, [student], active_programs
+    )
     for prog in active_programs:
-        if prog.has_feature("finances"):
+        if prog.has_feature("finances") and not balance_unavailable:
             try:
-                b_data = get_student_balance_data(student, prog, can_view_sliding=True)
-                bal = b_data.get("balance", Decimal("0.00"))
-                if bal > 0:
-                    total_balance += bal
-                    program_balances.append({"program": prog, "balance": float(bal)})
-            except Exception as e:
-                logger.warning(
-                    "Error calculating balance for student %s in program %s: %s",
-                    student.pk,
-                    prog.pk,
-                    e,
-                )
+                balance = balance_calculator.get_balance_data(
+                    student, prog, can_view_sliding=True
+                )["balance"]
+            except InconsistentBalanceStatementError:
+                balance_unavailable = True
+                break
+            if balance > 0:
+                total_balance += balance
+                program_balances.append({"program": prog, "balance": float(balance)})
+
+    if balance_unavailable:
+        program_balances = []
 
     missing_docs = []
     if active_programs:
         try:
-            from programs.models import ProgramDocument
+            from programs.models import ProgramDocument, StudentDocument
 
-            missing_docs = list(
-                ProgramDocument.objects.filter(program__in=active_programs)
-                .exclude(student_submissions__student=student)
-                .select_related("program")
+            local_submissions = StudentDocument.objects.filter(
+                student=student,
+                student__organization_id=organization_id,
+                program_document__program__organization_id=organization_id,
             )
+            required_documents = (
+                ProgramDocument.objects.filter(
+                    program_id__in=[program.pk for program in active_programs],
+                    program__organization_id=organization_id,
+                    is_required=True,
+                    is_active=True,
+                )
+                .select_related("program")
+                .prefetch_related(
+                    Prefetch(
+                        "student_submissions",
+                        queryset=local_submissions,
+                        to_attr="local_submissions",
+                    )
+                )
+            )
+            missing_docs = [
+                document
+                for document in required_documents
+                if not document.local_submissions
+            ]
         except Exception:
             missing_docs = []
 
@@ -375,11 +513,14 @@ def collect_student_digest_data(
             needs_bg = False
 
     action_items = {
-        "total_balance_due": float(total_balance),
+        "total_balance_due": (None if balance_unavailable else float(total_balance)),
+        "balance_unavailable": balance_unavailable,
         "program_balances": program_balances,
         "missing_documents": missing_docs,
         "needs_background_check": needs_bg,
-        "has_action_items": bool(total_balance > 0 or missing_docs or needs_bg),
+        "has_action_items": bool(
+            balance_unavailable or total_balance > 0 or missing_docs or needs_bg
+        ),
     }
 
     has_content = bool(
@@ -416,8 +557,40 @@ def collect_parent_digest_data(
     """Collect commitments, updates, and calendar events for all active enrolled students of a parent."""
     ref_date = reference_date or timezone.localdate()
     end_date = ref_date + datetime.timedelta(days=days_ahead)
+    organization_id = adult.organization_id
 
-    linked_students = [s for s in adult.all_students() if not s.graduated]
+    linked_students = []
+    if adult.pk and organization_id is not None:
+        active_student_ids = (
+            active_students(organization_id)
+            .filter(
+                organization_id=organization_id,
+                enrollment__organization_id=organization_id,
+                enrollment__student__organization_id=organization_id,
+                enrollment__program__organization_id=organization_id,
+                enrollment__active=True,
+                enrollment__program__active=True,
+            )
+            .values("pk")
+        )
+        relationships = (
+            AdultStudentRelationship.objects.for_organization(organization_id)
+            .filter(
+                organization_id=organization_id,
+                adult=adult,
+                adult__organization_id=organization_id,
+                student__organization_id=organization_id,
+                student_id__in=active_student_ids,
+            )
+            .select_related("student")
+            .order_by("student__last_name", "student__preferred_first_name")
+        )
+        linked_students = list(
+            {
+                relationship.student_id: relationship.student
+                for relationship in relationships
+            }.values()
+        )
     students_data = []
 
     for s in linked_students:
@@ -428,6 +601,7 @@ def collect_parent_digest_data(
             students_data.append(s_data)
 
     calendar_events = get_upcoming_calendar_events(
+        organization=adult.organization,
         user=adult.user,
         role="Parent",
         days_ahead=days_ahead,
@@ -438,13 +612,31 @@ def collect_parent_digest_data(
     try:
         from travel.models import TravelParentChaperoneSignup
 
-        chaperones = list(
-            TravelParentChaperoneSignup.objects.filter(
-                adult=adult,
-                event__end_date__gte=ref_date,
-                event__start_date__lte=end_date + datetime.timedelta(days=14),
-            ).select_related("event")
-        )
+        chaperones = []
+        if organization_id is not None:
+            chaperones = list(
+                TravelParentChaperoneSignup.objects.for_organization(organization_id)
+                .filter(
+                    organization_id=organization_id,
+                    adult=adult,
+                    adult__organization_id=organization_id,
+                    event__organization_id=organization_id,
+                    event__end_date__gte=ref_date,
+                    event__start_date__lte=end_date + datetime.timedelta(days=14),
+                )
+                .filter(
+                    Q(event__program__isnull=True)
+                    | Q(event__program__organization_id=organization_id)
+                )
+                .filter(
+                    Q(departure__isnull=True)
+                    | Q(
+                        departure__organization_id=organization_id,
+                        departure__event_id=F("event_id"),
+                    )
+                )
+                .select_related("event")
+            )
         for cs in chaperones:
             chaperone_signups.append(
                 {
@@ -651,6 +843,7 @@ def collect_mentor_digest_data(
 
     # 5. Upcoming calendar events from active feeds
     calendar_events = get_upcoming_calendar_events(
+        organization=adult.organization,
         user=adult.user,
         role="Mentor",
         days_ahead=days_ahead,
@@ -720,15 +913,10 @@ def get_weekly_digest_recipients(
     """Determine all recipient targets and build their digest data."""
     ref_date = reference_date or timezone.localdate()
     targets = []
+    active_student_qs = _active_digest_students().select_related("user")
 
     # 1. Students
     if role in ("all", "student"):
-        active_student_qs = (
-            active_students()
-            .filter(enrollment__active=True, enrollment__program__active=True)
-            .distinct()
-        )
-
         for st in active_student_qs:
             email = (
                 st.personal_email
@@ -751,29 +939,29 @@ def get_weekly_digest_recipients(
 
     # 2. Parents (strictly opted in via email_updates=True)
     if role in ("all", "parent"):
-        active_student_qs = (
-            active_students()
-            .filter(enrollment__active=True, enrollment__program__active=True)
-            .distinct()
-        )
-
         parent_candidates = {}
-        for st in active_student_qs:
-            parents = st.all_parents
-            opted_in = [
-                p
-                for p in parents
-                if p.email_updates and getattr(p, "login_enabled", True)
-            ]
-
-            for p in opted_in:
-                email = (
-                    p.personal_email
-                    or p.andrew_email
-                    or (p.user.email if p.user else None)
-                )
-                if email and email.strip():
-                    parent_candidates[p.pk] = (p, email.strip())
+        parent_relationships = (
+            AdultStudentRelationship.objects.filter(
+                student__in=active_student_qs,
+                adult__is_parent=True,
+                adult__email_updates=True,
+                adult__organization_id=F("organization_id"),
+            )
+            .filter(organization_id=F("student__organization_id"))
+            .select_related("adult", "adult__user")
+            .order_by("adult_id")
+        )
+        for relationship in parent_relationships:
+            parent = relationship.adult
+            if not getattr(parent, "login_enabled", True):
+                continue
+            email = (
+                parent.personal_email
+                or parent.andrew_email
+                or (parent.user.email if parent.user else None)
+            )
+            if email and email.strip():
+                parent_candidates[parent.pk] = (parent, email.strip())
 
         for adult_pk, (adult, email) in parent_candidates.items():
             data = collect_parent_digest_data(
@@ -791,7 +979,9 @@ def get_weekly_digest_recipients(
 
     # 3. Mentors
     if role in ("all", "mentor"):
-        mentors = active_mentors().filter(login_enabled=True)
+        mentors = active_mentors().filter(
+            login_enabled=True, organization_id__isnull=False
+        )
         for m in mentors:
             email = (
                 m.personal_email or m.andrew_email or (m.user.email if m.user else None)

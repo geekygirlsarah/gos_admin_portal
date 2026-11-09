@@ -44,6 +44,11 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'payment_instructions' %}active{% endif %}" id="payment_instructions-tab" data-bs-toggle="pill" data-bs-target="#payment_instructions" type="button" role="tab" aria-controls="payment_instructions" aria-selected="{% if active_tab == 'payment_instructions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-credit-card me-1"></i> Payment Instructions
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'email' %}active{% endif %}" id="email-tab" data-bs-toggle="pill" data-bs-target="#email" type="button" role="tab" aria-controls="email" aria-selected="{% if active_tab == 'email' %}true{% else %}false{% endif %}">
                         <i class="bi bi-envelope-at me-1"></i> Email Settings
                     </button>
@@ -1973,6 +1978,39 @@
                     </div>
                     {% endif %}
                     <p class="text-muted small mb-0">Your portal address and your email sending domain are configured separately.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Instructions Tab -->
+        <div class="tab-pane fade {% if active_tab == 'payment_instructions' %}show active{% endif %}" id="payment_instructions" role="tabpanel" aria-labelledby="payment_instructions-tab">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-credit-card text-primary me-2"></i>Parent Payment Instructions</h5>
+                    <p class="text-muted small mb-0">Set the payment guidance and optional online payment destination shown to parents in {{ organization.name }}.</p>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info small" role="alert">
+                        If instructions are blank, parents will be asked to contact the lead mentors. Payment information is not inherited from another organization.
+                    </div>
+                    <form method="post" action="{% url 'portal_payment_instructions' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="payment_instructions_text" class="form-label fw-semibold">Payment instructions</label>
+                            <textarea name="payment_instructions" id="payment_instructions_text" class="form-control" rows="6" maxlength="5000">{{ payment_settings.instructions }}</textarea>
+                            <div class="form-text">Plain text shown in the parent Payments page. Leave blank to use the contact-the-lead-mentors message.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="online_payment_url" class="form-label fw-semibold">Online payment URL (optional)</label>
+                            <input type="url" name="online_payment_url" id="online_payment_url" class="form-control" value="{{ payment_settings.online_payment_url }}" maxlength="2048" placeholder="https://...">
+                            <div class="form-text">Only HTTP or HTTPS destinations are accepted. Leave blank to hide the online payment link.</div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                <i class="bi bi-save me-1"></i> Save Payment Instructions
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
