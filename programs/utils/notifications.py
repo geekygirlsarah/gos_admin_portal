@@ -157,7 +157,7 @@ def get_sender_connection(from_account, organization=None):
             org_cfg.get("notification_from_email")
             or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
             or settings.DEFAULT_FROM_EMAIL
-            or "notifications@girlsofsteelrobotics.org"
+            or "no-reply@example.com"
         )
         name = org_cfg.get("sender_display_name") or getattr(
             settings, "DEFAULT_FROM_NAME", None

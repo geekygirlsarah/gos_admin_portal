@@ -484,7 +484,6 @@ def get_organization_email_settings(
         or (org.name if org else None)
         or default_name
         or "Platform Notifications"
-        or "Girls of Steel Notifications"
     )
     reply_to_email = raw_cfg.get("reply_to_email") or default_reply_to
     notification_from_email = (
@@ -501,7 +500,7 @@ def get_organization_email_settings(
     )
 
     # Email Branding & Template Customization Settings
-    primary_color = raw_cfg.get("primary_color") or "#4a154b"
+    primary_color = raw_cfg.get("primary_color") or "#334155"
     secondary_color = raw_cfg.get("secondary_color") or "#f8f9fa"
     header_text_color = raw_cfg.get("header_text_color") or "#ffffff"
     logo_url = raw_cfg.get("logo_url") or ""
@@ -514,33 +513,13 @@ def get_organization_email_settings(
         or (org.name if org else default_name)
         or default_name
     )
-    address_line1 = (
-        raw_cfg.get("address_line1")
-        if "address_line1" in raw_cfg
-        else "Carnegie Mellon University"
-    )
-    address_line2 = (
-        raw_cfg.get("address_line2")
-        if "address_line2" in raw_cfg
-        else "5000 Forbes Ave, Pittsburgh, PA 15213-3890"
-    )
-    footer_text = (
-        raw_cfg.get("footer_text")
-        if "footer_text" in raw_cfg
-        else "Thank you for being part of Girls of Steel Robotics!"
-    )
+    address_line1 = raw_cfg.get("address_line1", "")
+    address_line2 = raw_cfg.get("address_line2", "")
+    footer_text = raw_cfg.get("footer_text", "")
     portal_url = lazy(_resolve_portal_url, str)(raw_cfg, org)
 
-    contact_name = (
-        raw_cfg.get("contact_name")
-        if "contact_name" in raw_cfg
-        else "Elizabeth Kysel, Sarah Withee"
-    )
-    contact_email = (
-        raw_cfg.get("contact_email")
-        or reply_to_email
-        or "leads@girlsofsteelrobotics.org"
-    )
+    contact_name = raw_cfg.get("contact_name", "")
+    contact_email = raw_cfg.get("contact_email") or reply_to_email
 
     return {
         "sender_display_name": sender_display_name,

@@ -57,17 +57,13 @@ class OrganizationEmailBrandingTests(TestCase):
 
     def test_default_branding_settings(self):
         cfg = get_organization_email_settings(self.org)
-        self.assertEqual(cfg["primary_color"], "#4a154b")
+        self.assertEqual(cfg["primary_color"], "#334155")
         self.assertEqual(cfg["header_text_color"], "#ffffff")
         self.assertEqual(cfg["organization_name"], self.org.name)
-        self.assertEqual(cfg["address_line1"], "Carnegie Mellon University")
-        self.assertEqual(
-            cfg["address_line2"], "5000 Forbes Ave, Pittsburgh, PA 15213-3890"
-        )
-        self.assertEqual(
-            cfg["footer_text"],
-            "Thank you for being part of Girls of Steel Robotics!",
-        )
+        self.assertEqual(cfg["address_line1"], "")
+        self.assertEqual(cfg["address_line2"], "")
+        self.assertEqual(cfg["footer_text"], "")
+        self.assertEqual(cfg["contact_name"], "")
         self.assertEqual(cfg["contact_email"], settings.DEFAULT_REPLY_TO_EMAIL)
         self.assertIn("portal_url", cfg)
 

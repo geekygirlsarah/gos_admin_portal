@@ -150,6 +150,32 @@ class MonthlyBalancesTenantIsolationTests(TestCase):
                 with self.subTest(recipient=email, check=label):
                     check()
 
+    def test_inactive_organization_does_not_receive_balance_email(self):
+        self.alpha.is_active = False
+        self.alpha.save(update_fields=["is_active"])
+
+        messages, _ = self.run_job()
+
+        self.assertEqual(
+            set(self.messages_by_recipient(messages)), {self.beta_parent.personal_email}
+        )
+
+    def test_only_opted_in_local_adults_receive_balance_emails(self):
+        opted_out = self.make_parent(
+            self.alpha, "opted-out@example.test", email_updates=False
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            student=self.alpha_student,
+            adult=opted_out,
+        )
+
+        messages, _ = self.run_job(student_id=self.alpha_student.pk)
+
+        self.assertEqual(
+            {message.to[0] for message in messages}, {self.alpha_parent.personal_email}
+        )
+
     def test_local_multi_program_total_and_financial_records(self):
         second = self.make_program(self.alpha, "Alpha Art", "75.00")
         Enrollment.objects.create(
@@ -373,9 +399,7 @@ class MonthlyBalancesTenantIsolationTests(TestCase):
                     primary_contact_relationship=relationship
                 )
                 messages, _ = self.run_job(student_id=self.alpha_student.pk)
-                self.assertEqual(
-                    [m.to for m in messages], [[self.alpha_parent.personal_email]]
-                )
+                self.assertEqual(messages, [])
 
     def test_local_primary_fallback_and_disabled_guardian_policy(self):
         self.alpha_parent.email_updates = False
@@ -390,7 +414,7 @@ class MonthlyBalancesTenantIsolationTests(TestCase):
             organization=self.alpha, student=self.alpha_student, adult=disabled
         )
         messages, _ = self.run_job(student_id=self.alpha_student.pk)
-        self.assertEqual([m.to for m in messages], [[self.alpha_parent.personal_email]])
+        self.assertEqual(messages, [])
 
     def assert_affected_statement_suppressed(self, all_alpha=False):
         for all_balances in (False, True):

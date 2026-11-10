@@ -408,3 +408,33 @@ class SendOutreachRemindersCommandTest(TestCase):
         for message in mail.outbox:
             self.assertNotIn("Foreign Student", message.body)
             self.assertNotIn("Foreign Mentor", message.body)
+
+    def test_reminders_skip_inactive_organizations(self):
+        organization = self.tomorrow_shift.organization
+        organization.is_active = False
+        organization.save(update_fields=["is_active"])
+
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            stdout=StringIO(),
+        )
+
+        self.assertEqual(mail.outbox, [])
+
+    def test_reminders_skip_inactive_students_and_mentors(self):
+        Enrollment.objects.filter(student=self.student1, program=self.program).update(
+            active=False
+        )
+        self.mentor.mentor_active = False
+        self.mentor.save(update_fields=["mentor_active"])
+
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            stdout=StringIO(),
+        )
+
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox}, {"student2@example.com"}
+        )

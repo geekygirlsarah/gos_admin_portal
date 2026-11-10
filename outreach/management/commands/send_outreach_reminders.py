@@ -88,18 +88,35 @@ class Command(BaseCommand):
             OutreachSignup.objects.filter(
                 organization_id=F("shift__organization_id"),
                 student__organization_id=F("shift__organization_id"),
+                student__enrollment__organization_id=F("shift__organization_id"),
+                student__enrollment__student__organization_id=F(
+                    "shift__organization_id"
+                ),
+                student__enrollment__program__organization_id=F(
+                    "shift__organization_id"
+                ),
+                student__enrollment__active=True,
+                student__enrollment__program__active=True,
+                student__graduated=False,
                 shift__event__organization_id=F("shift__organization_id"),
             )
             .filter(
                 Q(shift__event__program__isnull=True)
                 | Q(shift__event__program__organization_id=F("shift__organization_id"))
             )
+            .filter(
+                Q(shift__event__program__isnull=True)
+                | Q(student__enrollment__program_id=F("shift__event__program_id"))
+            )
             .select_related("student__user")
+            .distinct()
         )
         local_mentor_signups = (
             OutreachMentorSignup.objects.filter(
                 organization_id=F("shift__organization_id"),
                 adult__organization_id=F("shift__organization_id"),
+                adult__is_mentor=True,
+                adult__mentor_active=True,
                 shift__event__organization_id=F("shift__organization_id"),
             )
             .filter(
@@ -111,12 +128,14 @@ class Command(BaseCommand):
         shifts = (
             OutreachShift.objects.filter(
                 date=target_date,
+                organization__is_active=True,
                 event__organization_id=F("organization_id"),
             )
             .filter(
                 Q(event__program__isnull=True)
                 | Q(event__program__organization_id=F("organization_id"))
             )
+            .filter(Q(event__program__isnull=True) | Q(event__program__active=True))
             .select_related("event", "event__program")
             .prefetch_related(
                 Prefetch("signups", queryset=local_signups),

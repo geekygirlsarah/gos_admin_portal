@@ -193,6 +193,6 @@
 {% endif %}
 
 <div style="margin-top: 24px;">
-    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to view full schedules, manage permissions, or sign up for shifts.</p>
+    <p>Please log in to the {% if org_email_settings.portal_url %}<a href="{{ org_email_settings.portal_url }}">{{ org_email_settings.organization_name|default:"Organization" }} Portal</a>{% else %}{{ org_email_settings.organization_name|default:"Organization" }} Portal{% endif %} to view full schedules, manage permissions, or sign up for shifts.</p>
 </div>
 {% endblock %}

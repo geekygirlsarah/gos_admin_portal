@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-09
 
 ### Fixed
+- Scheduled outreach, weekly digest, and monthly balance messages now exclude inactive organizations and ineligible participants; monthly statements honor adult email opt-in, and weekly digest branding and portal links use organization settings.
 - Daily outreach reminders now combine a recipient's same-event shifts into one email with shift-specific details and calendar invites.
 - Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
 - Fee-added and payment-recorded notices now use the owning organization's validated payment guidance and neutral fallback, with tenant-safe email branding instead of hard-coded GoS/CMU destinations.

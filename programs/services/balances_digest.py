@@ -144,7 +144,7 @@ def _collect_balances_for_enrollments(
 def _get_student_parent_emails(
     student: Student, relationships=None
 ) -> List[tuple[Any, str]]:
-    """Resolve opted-in or fallback parent notification emails for a student."""
+    """Resolve opted-in local adult notification emails for a student."""
     if not student.organization_id:
         return []
     if relationships is None:
@@ -165,7 +165,6 @@ def _get_student_parent_emails(
         and relationship.adult.organization_id == student.organization_id
     ]
     by_id = {relationship.pk: relationship for relationship in local_relationships}
-    primary = by_id.get(student.primary_contact_relationship_id)
     ordered = [
         by_id[relationship_id]
         for relationship_id in (
@@ -183,10 +182,6 @@ def _get_student_parent_emails(
     opted_in = [
         p for p in parents if p.email_updates and getattr(p, "login_enabled", True)
     ]
-    if not opted_in:
-        fallback = primary.adult if primary else (parents[0] if parents else None)
-        if fallback and getattr(fallback, "login_enabled", True):
-            opted_in = [fallback]
 
     parent_emails = []
     for p in opted_in:
@@ -206,7 +201,10 @@ def get_monthly_balance_recipients(
     """Determine all recipient targets for monthly balance statements."""
     active_student_qs = (
         Student.objects.filter(
-            graduated=False, enrollment__active=True, enrollment__program__active=True
+            graduated=False,
+            organization__is_active=True,
+            enrollment__active=True,
+            enrollment__program__active=True,
         )
         .select_related("organization")
         .distinct()
