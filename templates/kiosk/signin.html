@@ -658,6 +658,10 @@
         "There you are, {name}! Let's get started!",
         "Ready to create, {name}?",
         "Welcome back, {name}!",
+        "Happy to have you on the team today, {name}!",
+        "Hello, {name}! Let's make today a great one!",
+        "Your ideas are welcome here, {name}!",
+        "Ready for a great day, {name}?",
     ];
 
     var MSG_STUDENT_OUT = [
@@ -667,6 +671,10 @@
         "Later {name}! You put in {session} hours this session — {week} hours this week!",
         "Nice work today, {name}! {session} hours this session, {week} hours this week.",
         "Until next time, {name}! {session} hours this session and {week} hours this week.",
+        "Thanks for bringing your creativity, {name}! {session} hours this session and {week} hours this week.",
+        "Way to go, {name}! {session} hours this session and {week} hours this week.",
+        "See you soon, {name}! You logged {session} hours this session and {week} hours this week.",
+        "Keep shining, {name}! {session} hours this session and {week} hours this week.",
     ];
 
     var MSG_MENTOR_IN = [
@@ -678,14 +686,22 @@
         "Welcome back, {name}!",
         "Great to see you, {name}!",
         "{name}, thanks for volunteering today!",
+        "Welcome in, {name}! Thanks for sharing your time!",
+        "It's great to have you with us, {name}!",
+        "Hello, {name}! Thanks for supporting the team!",
+        "We're glad you're here, {name}!",
     ];
 
     var MSG_MENTOR_OUT = [
-        "Thank you for volunteering today, {name}!",
-        "You make a difference, {name}! Thanks for today!",
-        "We appreciate you, {name}! See you next time!",
-        "Thanks for everything, {name}! Hope to see you again soon!",
-        "You're awesome, {name}! Thanks for giving your time today!",
+        "Thank you for volunteering, {name}! You volunteered {week} hours this week.",
+        "You make a difference, {name}! You volunteered {week} hours this week.",
+        "We appreciate you, {name}! You volunteered {week} hours this week.",
+        "Thanks for everything, {name}! You volunteered {week} hours this week.",
+        "You're awesome, {name}! You volunteered {week} hours this week.",
+        "Thanks for supporting the team, {name}! You volunteered {week} hours this week.",
+        "See you next time, {name}! You volunteered {week} hours this week.",
+        "Your time matters, {name}! You volunteered {week} hours this week.",
+        "Thanks for sharing your skills, {name}! You volunteered {week} hours this week.",
     ];
 
     var MSG_VISITOR_IN = [
@@ -693,6 +709,10 @@
         "Thanks for stopping by, {name}!",
         "Good to see you, {name}!",
         "Welcome, {name}! Glad you're here!",
+        "Hello, {name}! Make yourself at home!",
+        "We're happy you could join us, {name}!",
+        "A warm welcome to you, {name}!",
+        "It's a pleasure to see you, {name}!",
     ];
 
     var MSG_VISITOR_OUT = [
@@ -700,6 +720,10 @@
         "We enjoyed having you, {name}!",
         "Come back anytime, {name}!",
         "Thanks for stopping by, {name}! See you again!",
+        "It was lovely to have you here, {name}!",
+        "Safe travels, {name}! Thanks for visiting!",
+        "See you next time, {name}!",
+        "Thanks for sharing your time with us, {name}!",
     ];
 
     function pickMessage(pool) {
@@ -849,7 +873,9 @@
                         }
                     } else {
                         if (res.person_type === "mentor") {
-                            msg = buildMessage(MSG_MENTOR_OUT, name);
+                            msg = buildMessage(MSG_MENTOR_OUT, name, {
+                                week: res.week_hours || 0,
+                            });
                         } else if (res.person_type === "visitor") {
                             msg = buildMessage(MSG_VISITOR_OUT, name);
                         } else {

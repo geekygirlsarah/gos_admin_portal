@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 - Program Mail Merge choices now include program years, default to active/upcoming programs, and let Lead Mentors opt into past or archived programs.
 
 ### Added
+- Attendance kiosks have more sign-in and sign-out greetings for students, mentors, and visitors.
+- Attendance kiosk mentor sign-out messages now thank mentors and show their volunteer hours in the current program this week.
 - Added near-real-time `SECURITY_ALERT` audit events and tenant-scoped email alerts for unusual student-profile access and rate-limit breaches, with a configurable rolling threshold and six-hour per-user cooldown.
 - Renamed the shared student/adult detail throttle settings to `PROFILE_RATE_LIMIT_*` while retaining the former environment variable names as fallbacks; throttling notices now use tenant-specific configured contact details.
 - Added the same rolling rate limit for Mentor adult-profile detail requests, with a separate budget from student profiles.
