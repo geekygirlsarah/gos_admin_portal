@@ -39,6 +39,43 @@ jobs, or other external services. It also cannot help if the application fails
 before it can start. Confirm the deployment platform's health-check and restart
 behavior before relying on this switch during an incident.
 
+## Profile Rate Limiting
+
+Student and adult detail requests from Mentors are each limited to 10 requests
+per rolling 60-second window by default. Each profile type has a separate budget
+per user and organization; repeated requests count. Lead Mentors and platform
+superusers are exempt.
+The limit and window can be configured with
+`PROFILE_RATE_LIMIT_COUNT` and
+`PROFILE_RATE_LIMIT_WINDOW_SECONDS`. Both profile limits are controlled
+by `PROFILE_RATE_LIMIT_ENABLED` and are disabled during automated tests
+unless explicitly enabled by the test. The previous `STUDENT_PROFILE_RATE_LIMIT_*`
+environment variable names remain supported as fallbacks.
+
+The limiter uses Django's default cache and atomic cache `add` operations.
+Configure a shared cache backend, such as Redis, in multi-worker or multi-server
+deployments; `LocMemCache` only coordinates requests within one process. If the
+cache is unavailable, profile requests from Mentors fail closed with HTTP 503.
+The shared 429 page uses the current organization's configured public contact
+email or email reply-to address; it does not fall back to another organization's
+contact address.
+
+## Student Profile Access Anomaly Alerts
+
+Student views by non-Lead Mentors are monitored for more than 20 distinct
+student profiles in a rolling 30-minute window by default. A `SECURITY_ALERT`
+audit event and email notification are also generated when an authorized Mentor
+is blocked by the student-profile rate limit. Configure the threshold, rolling
+window, and per-user/per-organization cooldown with
+`PROFILE_ACCESS_ALERT_THRESHOLD`, `PROFILE_ACCESS_ALERT_WINDOW_SECONDS`, and
+`PROFILE_ACCESS_ALERT_COOLDOWN_SECONDS`.
+
+Notifications are sent to `ADMIN_EMAILS` and active Lead Mentors belonging to
+the affected organization. Use a shared cache backend across workers for
+consistent six-hour debounce; if the cache or email backend is unavailable, the
+profile response remains available and the failure is logged. Review
+`docs/security.md` for tenant attribution and alert-content limitations.
+
 ## Protected Media Files
 
 For a directory-by-directory map and a safe review process for older uploads,

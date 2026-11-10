@@ -48,6 +48,7 @@ from programs.utils.mail_merge import (
     substitute_text_fields,
 )
 from programs.utils.notifications import _mark_delivery_tracking, get_sender_connection
+from programs.utils.programs import group_programs_by_status
 
 logger = logging.getLogger(__name__)
 
@@ -149,31 +150,41 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def _accessible_programs(self):
-        programs = Program.objects.for_organization(self.organization).order_by(
-            "-active", "name"
-        )
-        if self.role == "LeadMentor":
-            return list(programs)
-        if self.role != "Mentor":
+        programs = Program.objects.for_organization(self.organization)
+        if self.role == "Mentor":
+            program_access = (
+                RolePermission.objects.for_organization(self.organization)
+                .filter(role="Mentor", section="programs")
+                .values_list("can_read", flat=True)
+                .first()
+            )
+            if program_access is False:
+                return []
+            programs = [
+                program
+                for program in programs.filter(active=True)
+                if program.status in ("Active", "Upcoming")
+            ]
+        elif self.role != "LeadMentor":
             return []
-        program_access = (
-            RolePermission.objects.for_organization(self.organization)
-            .filter(role="Mentor", section="programs")
-            .values_list("can_read", flat=True)
-            .first()
-        )
-        if program_access is False:
-            return []
+        grouped_programs = group_programs_by_status(programs)
         return [
-            program
-            for program in programs.filter(active=True)
-            if program.status in ("Active", "Upcoming")
+            *grouped_programs["active"],
+            *grouped_programs["upcoming"],
+            *grouped_programs["past"],
         ]
 
     def _resolve_program(self, request, query_data, programs) -> Program | None:
         program_id = query_data.get("program")
         if not program_id and programs:
-            return programs[0]
+            return next(
+                (
+                    program
+                    for program in programs
+                    if program.status in ("Active", "Upcoming")
+                ),
+                None,
+            )
         if not program_id:
             return None
         try:
@@ -520,6 +531,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
         query_data = request.POST if request.method == "POST" else request.GET
         recipient_mode = self._recipient_mode(query_data)
         programs = self._accessible_programs()
+        program_groups = group_programs_by_status(programs)
         program = self._resolve_program(request, query_data, programs)
         subgroups = self._subgroups(program)
         try:
@@ -644,6 +656,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
             sender_choices = []
         context = {
             "programs": programs,
+            "program_groups": program_groups,
             "program": program,
             "teams": subgroups["teams"],
             "crews": subgroups["crews"],

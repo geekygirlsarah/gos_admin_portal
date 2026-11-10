@@ -102,15 +102,15 @@ class MonthlyBalancesServiceTests(TestCase):
         self.assertEqual(prog_data["total_sliding"], Decimal("100.00"))
         self.assertEqual(prog_data["balance"], Decimal("100.00"))
 
-    def test_recipients_resolution_and_fallback(self):
+    def test_recipients_resolution_requires_opt_in(self):
         # Unset email_updates on parent
         self.parent.email_updates = False
         self.parent.save()
 
-        # Should still resolve the primary contact so parents are never omitted from billing notices
+        # An opted-out adult must not receive a statement through fallback selection.
         recipients = get_monthly_balance_recipients(positive_only=True)
         emails = [r["email"] for r in recipients]
-        self.assertIn("patricia@example.com", emails)
+        self.assertNotIn("patricia@example.com", emails)
 
     def test_collect_monthly_balances_excludes_old_paid_off_programs(self):
         # Program 2 paid off 60 days ago

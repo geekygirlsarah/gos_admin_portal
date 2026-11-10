@@ -14,6 +14,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from organizations.utils import get_organization_email_settings
 from programs.services.digest import get_weekly_digest_recipients
 from programs.utils.notifications import send_templated_notification
 
@@ -147,24 +148,35 @@ class Command(BaseCommand):
             return
 
         total_sent = 0
+        email_settings_by_org = {}
         for r in to_send:
             recip_role = r["role"]
             recip_email = r["email"]
             recip_obj = r.get("recipient_obj")
             data = r["data"]
             organization = getattr(recip_obj, "organization", None)
+            organization_id = getattr(organization, "pk", None)
+            if organization_id not in email_settings_by_org:
+                email_settings_by_org[organization_id] = (
+                    get_organization_email_settings(organization)
+                )
+            organization_name = (
+                email_settings_by_org[organization_id].get("organization_name")
+                or getattr(organization, "name", None)
+                or "Organization"
+            )
 
             ref_date = data.get("reference_date") or target_date or timezone.localdate()
             date_str = _format_ordinal_date(ref_date)
 
             if recip_role == "student":
-                subject = f"Your Girls of Steel Portal Update for {date_str}"
+                subject = f"Your {organization_name} Portal Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_student.html"
             elif recip_role == "parent":
-                subject = f"Your Girls of Steel Family Update for {date_str}"
+                subject = f"Your {organization_name} Family Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_parent.html"
             else:  # mentor
-                subject = f"Your Girls of Steel Mentor Update for {date_str}"
+                subject = f"Your {organization_name} Mentor Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_mentor.html"
 
             if dry_run:

@@ -40,7 +40,10 @@ def get_upcoming_calendar_events(
     days_ahead: int = 7,
     reference_date: Optional[datetime.date] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve upcoming events from manual/custom calendar feeds visible to the given user or role."""
+    """Retrieve upcoming events visible to the user.
+
+    Userless recipients can see public feeds only.
+    """
     if not isinstance(organization, Organization) or organization.pk is None:
         return []
 
@@ -72,11 +75,6 @@ def get_upcoming_calendar_events(
             else:
                 if feed.is_public:
                     can_read = True
-                elif feed.visibility == CalendarFeed.VISIBILITY_MEMBERS:
-                    if not feed.acls.exists():
-                        can_read = True
-                    else:
-                        can_read = feed.acls.filter(role=role, can_read=True).exists()
 
             if can_read:
                 feed_events = feed.get_events_for_date_range(ref_date, end_date)
@@ -94,6 +92,7 @@ def _active_digest_students():
         active_students()
         .filter(
             organization_id__isnull=False,
+            organization__is_active=True,
             enrollment__organization_id=F("organization_id"),
             enrollment__student__organization_id=F("organization_id"),
             enrollment__program__organization_id=F("organization_id"),
@@ -980,7 +979,9 @@ def get_weekly_digest_recipients(
     # 3. Mentors
     if role in ("all", "mentor"):
         mentors = active_mentors().filter(
-            login_enabled=True, organization_id__isnull=False
+            login_enabled=True,
+            organization_id__isnull=False,
+            organization__is_active=True,
         )
         for m in mentors:
             email = (

@@ -32,6 +32,7 @@ class AuditEvent(models.TextChoices):
 
     # --- Sensitive Data Access ---
     SENSITIVE_DATA_VIEW = "SENSITIVE_DATA_VIEW", "Sensitive data viewed by mentor"
+    SECURITY_ALERT = "SECURITY_ALERT", "Security anomaly detected"
 
     # --- Email & Communication ---
     EMAIL_DELIVERY_FAILED = "EMAIL_DELIVERY_FAILED", "Email delivery issue received"

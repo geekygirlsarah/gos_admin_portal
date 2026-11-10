@@ -88,18 +88,35 @@ class Command(BaseCommand):
             OutreachSignup.objects.filter(
                 organization_id=F("shift__organization_id"),
                 student__organization_id=F("shift__organization_id"),
+                student__enrollment__organization_id=F("shift__organization_id"),
+                student__enrollment__student__organization_id=F(
+                    "shift__organization_id"
+                ),
+                student__enrollment__program__organization_id=F(
+                    "shift__organization_id"
+                ),
+                student__enrollment__active=True,
+                student__enrollment__program__active=True,
+                student__graduated=False,
                 shift__event__organization_id=F("shift__organization_id"),
             )
             .filter(
                 Q(shift__event__program__isnull=True)
                 | Q(shift__event__program__organization_id=F("shift__organization_id"))
             )
+            .filter(
+                Q(shift__event__program__isnull=True)
+                | Q(student__enrollment__program_id=F("shift__event__program_id"))
+            )
             .select_related("student__user")
+            .distinct()
         )
         local_mentor_signups = (
             OutreachMentorSignup.objects.filter(
                 organization_id=F("shift__organization_id"),
                 adult__organization_id=F("shift__organization_id"),
+                adult__is_mentor=True,
+                adult__mentor_active=True,
                 shift__event__organization_id=F("shift__organization_id"),
             )
             .filter(
@@ -111,12 +128,14 @@ class Command(BaseCommand):
         shifts = (
             OutreachShift.objects.filter(
                 date=target_date,
+                organization__is_active=True,
                 event__organization_id=F("organization_id"),
             )
             .filter(
                 Q(event__program__isnull=True)
                 | Q(event__program__organization_id=F("organization_id"))
             )
+            .filter(Q(event__program__isnull=True) | Q(event__program__active=True))
             .select_related("event", "event__program")
             .prefetch_related(
                 Prefetch("signups", queryset=local_signups),
@@ -134,9 +153,12 @@ class Command(BaseCommand):
 
         total_sent = 0
         email_filter_lower = email_filter.lower().strip() if email_filter else None
+        student_groups = {}
+        mentor_groups = {}
+        shifts_by_id = {}
 
         for shift in shifts:
-            event = shift.event
+            shifts_by_id[shift.pk] = shift
             self.stdout.write(
                 f"Processing outreach shift ({shift.date} "
                 f"{shift.start_time}-{shift.end_time})..."
@@ -150,14 +172,8 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
-                if dry_run:
-                    self.stdout.write("  [DRY RUN] Would send a student reminder.")
-                    logger.info("[DRY RUN] Would send an outreach student reminder.")
-                else:
-                    if notify_outreach_reminder(signup):
-                        total_sent += 1
-                        self.stdout.write("  Sent an outreach student reminder.")
-                        logger.info("Sent an outreach student reminder.")
+                group_key = (signup.organization_id, shift.event_id, signup.student_id)
+                student_groups.setdefault(group_key, []).append(signup)
 
             # Mentor signups
             for mentor_signup in shift.mentor_signups.all():
@@ -167,14 +183,36 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
-                if dry_run:
-                    self.stdout.write("  [DRY RUN] Would send a mentor reminder.")
-                    logger.info("[DRY RUN] Would send an outreach mentor reminder.")
-                else:
-                    if notify_mentor_outreach_reminder(mentor_signup):
-                        total_sent += 1
-                        self.stdout.write("  Sent an outreach mentor reminder.")
-                        logger.info("Sent an outreach mentor reminder.")
+                group_key = (
+                    mentor_signup.organization_id,
+                    shift.event_id,
+                    mentor_signup.adult_id,
+                )
+                mentor_groups.setdefault(group_key, []).append(mentor_signup)
+
+        for signups in student_groups.values():
+            if dry_run:
+                self.stdout.write("  [DRY RUN] Would send a student reminder.")
+                logger.info("[DRY RUN] Would send an outreach student reminder.")
+            elif notify_outreach_reminder(
+                signups[0], signups=signups, shifts_by_id=shifts_by_id
+            ):
+                total_sent += 1
+                self.stdout.write("  Sent an outreach student reminder.")
+                logger.info("Sent an outreach student reminder.")
+
+        for mentor_signups in mentor_groups.values():
+            if dry_run:
+                self.stdout.write("  [DRY RUN] Would send a mentor reminder.")
+                logger.info("[DRY RUN] Would send an outreach mentor reminder.")
+            elif notify_mentor_outreach_reminder(
+                mentor_signups[0],
+                signups=mentor_signups,
+                shifts_by_id=shifts_by_id,
+            ):
+                total_sent += 1
+                self.stdout.write("  Sent an outreach mentor reminder.")
+                logger.info("Sent an outreach mentor reminder.")
 
         if dry_run:
             self.stdout.write(

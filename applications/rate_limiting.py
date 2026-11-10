@@ -16,7 +16,10 @@ import math
 import time
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.shortcuts import render
+
+from organizations.models import Organization, OrganizationSettings
 
 
 def get_client_ip(request):
@@ -69,7 +72,43 @@ def _friendly_duration(seconds: int) -> str:
     return f"about {seconds} seconds"
 
 
-def rate_limited_response(request, retry_after: int):
+def _organization_contact_email(request) -> str:
+    organization: Organization | None = getattr(request, "organization", None)
+    if organization is None:
+        return ""
+
+    contact_email = organization.get_setting("contact_email", "")
+    if isinstance(contact_email, str) and contact_email.strip():
+        return contact_email.strip()
+
+    try:
+        data = (
+            OrganizationSettings.objects.filter(organization=organization)
+            .values_list("data", flat=True)
+            .first()
+        )
+    except DatabaseError:
+        return ""
+
+    if not isinstance(data, dict):
+        return ""
+    contact_email = data.get("contact_email")
+    if isinstance(contact_email, str) and contact_email.strip():
+        return contact_email.strip()
+
+    email_settings = data.get("email_settings")
+    if not isinstance(email_settings, dict):
+        return ""
+    email = email_settings.get("contact_email") or email_settings.get("reply_to_email")
+    return email.strip() if isinstance(email, str) else ""
+
+
+def rate_limited_response(
+    request,
+    retry_after: int,
+    return_url: str = "/apply/",
+    return_label: str = "Back to the application",
+):
     """Build a 429 response with a Retry-After header and a friendly page."""
     response = render(
         request,
@@ -77,6 +116,9 @@ def rate_limited_response(request, retry_after: int):
         {
             "retry_after": retry_after,
             "retry_after_text": _friendly_duration(retry_after),
+            "return_url": return_url,
+            "return_label": return_label,
+            "rate_limit_contact_email": _organization_contact_email(request),
         },
         status=429,
     )

@@ -1,0 +1,16 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Student Profile Access Alert{% endblock %}
+{% block header %}Potential Bulk Profile Access Detected{% endblock %}
+
+{% block content %}
+<p style="margin-top: 0; font-size: 15px;">A user's student-profile access pattern exceeded the configured safety threshold for {{ organization_name }}.</p>
+<ul>
+    <li><strong>User:</strong> {{ actor_name }} ({{ actor_email }})</li>
+    <li><strong>Detected:</strong> {{ alert_timestamp|date:"Y-m-d H:i:s T" }}</li>
+    <li><strong>Distinct student profiles accessed:</strong> {{ distinct_student_count }}</li>
+    <li><strong>Detection window:</strong> {{ window_seconds }} seconds</li>
+    <li><strong>Trigger:</strong> {{ reason }}</li>
+</ul>
+<p>Please review the audit history and follow your organization's established response process. This message does not include student names or profile identifiers.</p>
+{% endblock %}

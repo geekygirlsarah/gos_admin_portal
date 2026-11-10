@@ -5,11 +5,18 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-09
 
 ### Fixed
+- Scheduled outreach, weekly digest, and monthly balance messages now exclude inactive organizations and ineligible participants; monthly statements honor adult email opt-in, and weekly digest branding and portal links use organization settings.
+- Daily outreach reminders now combine a recipient's same-event shifts into one email with shift-specific details and calendar invites.
 - Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
 - Fee-added and payment-recorded notices now use the owning organization's validated payment guidance and neutral fallback, with tenant-safe email branding instead of hard-coded GoS/CMU destinations.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
+- Program Mail Merge choices now include program years, default to active/upcoming programs, and let Lead Mentors opt into past or archived programs.
 
 ### Added
+- Added near-real-time `SECURITY_ALERT` audit events and tenant-scoped email alerts for unusual student-profile access and rate-limit breaches, with a configurable rolling threshold and six-hour per-user cooldown.
+- Renamed the shared student/adult detail throttle settings to `PROFILE_RATE_LIMIT_*` while retaining the former environment variable names as fallbacks; throttling notices now use tenant-specific configured contact details.
+- Added the same rolling rate limit for Mentor adult-profile detail requests, with a separate budget from student profiles.
+- Added a rolling rate limit for Mentor student-profile detail requests, with a 429 cooldown notice and exemptions for Lead Mentors and superusers.
 - Added Program Mail Merge for selected students, with organization-controlled Mentor access, per-student preview/test delivery, built-in attendance and outreach fields, and request-only custom grid values.
 - Added an option to send mail-merge copies to linked parents who have enabled accounts and opted into email updates; student email and program name remain merge fields but are hidden from the data grid.
 - Added a dry-run-by-default `cleanup_email_delivery_quarantine` command; explicit `--execute` deletes only quarantine rows at least 30 days old. Scheduling remains a separately approved release prerequisite.

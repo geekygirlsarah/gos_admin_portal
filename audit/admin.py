@@ -3,9 +3,11 @@ import json
 from django.contrib import admin
 from django.contrib.admin import ActionLocation
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils.html import format_html
 
+from .events import AuditEvent
 from .models import AuditLog
 
 # ---------------------------------------------------------------------------
@@ -146,6 +148,21 @@ class AuditLogAdmin(_LeadMentorOnly, admin.ModelAdmin):
     ordering = ["-timestamp"]
     # Only expose the export action; never expose delete.
     actions = ["export_as_csv"]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            return queryset.exclude(event=AuditEvent.SECURITY_ALERT)
+        return queryset.filter(
+            ~Q(event=AuditEvent.SECURITY_ALERT)
+            | Q(
+                event=AuditEvent.SECURITY_ALERT,
+                after__organization_id=organization.pk,
+            )
+        )
 
     def get_actions(self, request, action_location=ActionLocation.CHANGE_LIST):
         actions = super().get_actions(request, action_location=action_location)

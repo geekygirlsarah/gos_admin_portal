@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Please wait a moment – Girls of Steel{% endblock %}
+{% block title %}Please wait a moment{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -18,14 +18,20 @@
                     <strong>{{ retry_after_text|default:"about a minute" }}</strong> and then try again.
                 </p>
                 <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
-                    <a href="/apply/" class="btn btn-primary btn-lg px-4">Back to the application</a>
+                    <a href="{{ return_url|default:'/apply/' }}" class="btn btn-primary btn-lg px-4">{{ return_label|default:"Back to the application" }}</a>
                 </div>
             </div>
         </div>
+        {% if rate_limit_contact_email %}
         <p class="text-center text-muted small mt-4">
-            If this keeps happening, please contact us at
-            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            If this keeps happening, please contact the organization administrators at
+            <a href="mailto:{{ rate_limit_contact_email }}">{{ rate_limit_contact_email }}</a>.
         </p>
+        {% else %}
+        <p class="text-center text-muted small mt-4">
+            If this keeps happening, please contact your organization administrators.
+        </p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

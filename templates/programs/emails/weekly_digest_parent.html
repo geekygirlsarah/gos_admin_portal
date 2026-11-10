@@ -1,6 +1,6 @@
 {% extends "programs/emails/base_notification.html" %}
 
-{% block title %}Weekly Family Update - Girls of Steel{% endblock %}
+{% block title %}Weekly Family Update - {{ org_email_settings.organization_name|default:"Organization" }}{% endblock %}
 
 {% block header %}Weekly Family Update{% endblock %}
 
@@ -210,6 +210,6 @@
 {% endif %}
 
 <div style="margin-top: 24px;">
-    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to review student schedules or manage permissions and balances.</p>
+    <p>Please log in to the {% if org_email_settings.portal_url %}<a href="{{ org_email_settings.portal_url }}">{{ org_email_settings.organization_name|default:"Organization" }} Portal</a>{% else %}{{ org_email_settings.organization_name|default:"Organization" }} Portal{% endif %} to review student schedules or manage permissions and balances.</p>
 </div>
 {% endblock %}

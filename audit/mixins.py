@@ -65,7 +65,8 @@ class SensitiveDataViewMixin:
         response = super().get(request, *args, **kwargs)
 
         # We only log if the user is a mentor (including lead mentors)
-        role = get_user_role(request.user)
+        organization = getattr(request, "organization", None)
+        role = get_user_role(request.user, org=organization)
         if role in ["Mentor", "LeadMentor"]:
             # The object being viewed
             obj = getattr(self, "object", None)
@@ -75,7 +76,7 @@ class SensitiveDataViewMixin:
 
             if obj:
                 scope_notes = _build_scope_notes(request.user, obj)
-                log_event(
+                audit_entry = log_event(
                     event=AuditEvent.SENSITIVE_DATA_VIEW,
                     resource=obj,
                     request=request,
@@ -84,6 +85,14 @@ class SensitiveDataViewMixin:
                         f"{type(obj).__name__} data.{scope_notes}"
                     ),
                 )
+                from programs.models import Student
+
+                if audit_entry and isinstance(obj, Student):
+                    from audit.profile_alerts import check_profile_access_anomaly
+
+                    check_profile_access_anomaly(
+                        request.user, organization, request=request
+                    )
 
         return response
 

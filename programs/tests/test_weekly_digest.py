@@ -21,6 +21,10 @@ from calendar_feeds.models import (
 )
 from GoSAdminPortal.test_runner import _assign_default_test_org
 from organizations.models import Organization, UserOrganizationMembership
+from organizations.utils import (
+    get_organization_email_settings,
+    update_organization_email_settings,
+)
 from outreach.models import (
     OutreachEvent,
     OutreachMentorSignup,
@@ -332,6 +336,15 @@ class WeeklyDigestServiceTests(TestCase):
         recipients = get_weekly_digest_recipients(role="parent")
         parent_emails = [r["email"] for r in recipients]
         self.assertIn("parent1@example.com", parent_emails)
+
+    def test_inactive_organization_has_no_weekly_digest_recipients(self):
+        organization = self.student.organization
+        organization.is_active = False
+        organization.save(update_fields=["is_active"])
+
+        recipients = get_weekly_digest_recipients(role="all")
+
+        self.assertEqual(recipients, [])
 
     def test_parent_digest_excludes_unenrolled_student_without_content(self):
         # Student 1 is enrolled with an upcoming shift
@@ -717,6 +730,19 @@ class WeeklyDigestCalendarTenantIsolationTests(TestCase):
                     ),
                     [],
                 )
+
+    def test_user_without_account_only_sees_public_calendar_events(self):
+        events = get_upcoming_calendar_events(
+            organization=self.alpha,
+            role="Student",
+            days_ahead=7,
+            reference_date=self.today,
+        )
+
+        titles = {event["title"] for event in events}
+        self.assertIn("Local public event", titles)
+        self.assertNotIn("Local members event", titles)
+        self.assertNotIn("Mentor-only event", titles)
 
 
 class WeeklyDigestRelationshipTenantIsolationTests(TestCase):
@@ -1249,6 +1275,10 @@ class SendWeeklyDigestCommandTests(TestCase):
 
     def test_command_email_subjects_include_date(self):
         mail.outbox.clear()
+        update_organization_email_settings(
+            self.student.organization,
+            {"organization_name": "Digest Organization"},
+        )
         call_command("send_weekly_digest", stdout=self.out)
 
         student_mail = next(m for m in mail.outbox if "student@example.com" in m.to)
@@ -1264,16 +1294,18 @@ class SendWeeklyDigestCommandTests(TestCase):
 
         self.assertEqual(
             student_mail.subject,
-            f"Your Girls of Steel Portal Update for {expected_date}",
+            f"Your Digest Organization Portal Update for {expected_date}",
         )
         self.assertEqual(
             parent_mail.subject,
-            f"Your Girls of Steel Family Update for {expected_date}",
+            f"Your Digest Organization Family Update for {expected_date}",
         )
         self.assertEqual(
             mentor_mail.subject,
-            f"Your Girls of Steel Mentor Update for {expected_date}",
+            f"Your Digest Organization Mentor Update for {expected_date}",
         )
+        self.assertIn("Digest Organization", student_mail.body)
+        self.assertNotIn("portal.girlsofsteel.org", student_mail.body)
 
     def test_command_custom_date_option(self):
         mail.outbox.clear()
@@ -1285,7 +1317,7 @@ class SendWeeklyDigestCommandTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(
             mail.outbox[0].subject,
-            "Your Girls of Steel Portal Update for November 1st",
+            f"Your {get_organization_email_settings(self.student.organization)['organization_name']} Portal Update for November 1st",
         )
 
     def test_email_template_rendering_content(self):
