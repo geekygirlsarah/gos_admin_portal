@@ -50,6 +50,8 @@ describe("kiosk sign-in session handling", () => {
     expect(poolText).not.toBeNull();
     const messages = new Function(`return ${poolText[1]}`)();
     for (const message of messages) {
+      expect(message).toMatch(/volunteer/i);
+      expect(message).not.toMatch(/you logged/i);
       const input = { value: "Test Mentor", focus: vi.fn() };
       const button = {};
       const showToast = vi.fn();
