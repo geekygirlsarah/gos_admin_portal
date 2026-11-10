@@ -2,6 +2,9 @@
 
 import json
 import secrets
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group
 from django.core import signing
@@ -10,7 +13,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from attendance.kiosk_utils import _otp_cache_key, _otp_ready_cache_key
-from attendance.models import AttendanceEvent, KioskConfig, RFIDCard
+from attendance.models import AttendanceEvent, AttendanceSession, KioskConfig, RFIDCard
 from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
@@ -514,6 +517,52 @@ class KioskProxyTapTests(TestCase):
         self.kiosk_config = KioskConfig.objects.create(
             label="Tap Test Kiosk", program=self.program
         )
+
+    def test_mentor_signout_reports_program_week_hours(self):
+        now = datetime(2026, 11, 10, 12, tzinfo=datetime_timezone.utc)
+        mentor = Adult.objects.create(
+            legal_first_name="Test", last_name="Mentor", is_mentor=True
+        )
+        other_program = make_program(name="Other program")
+        for program, check_in, minutes in [
+            (self.program, now - timedelta(days=1), 90),
+            (self.program, now - timedelta(days=8), 600),
+            (other_program, now - timedelta(days=1), 600),
+        ]:
+            AttendanceSession.objects.create(
+                program=program,
+                adult=mentor,
+                check_in=check_in,
+                check_out=check_in + timedelta(minutes=minutes),
+                duration_minutes=minutes,
+            )
+        AttendanceSession.objects.create(
+            program=self.program, adult=mentor, check_in=now - timedelta(hours=1)
+        )
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        with patch("django.utils.timezone.now", return_value=now):
+            response = self.client.post(
+                reverse("api_kiosk_tap", args=[self.kiosk_config.pk]),
+                data=json.dumps({"adult_id": mentor.pk}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["event_type"], "OUT")
+        self.assertEqual(response.json()["week_hours"], 2.5)
+        self.assertNotIn("session_hours", response.json())
+
+    def test_visitor_signout_does_not_report_hours(self):
+        _set_unlocked_cookie(self.client, self.kiosk_config)
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        for _ in range(2):
+            response = self.client.post(
+                url,
+                data=json.dumps({"visitor_name": "Test Visitor"}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.json()["event_type"], "OUT")
+        self.assertNotIn("week_hours", response.json())
+        self.assertNotIn("session_hours", response.json())
 
     def test_tap_without_cookie_returns_403(self):
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])

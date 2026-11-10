@@ -681,11 +681,11 @@
     ];
 
     var MSG_MENTOR_OUT = [
-        "Thank you for volunteering today, {name}!",
-        "You make a difference, {name}! Thanks for today!",
-        "We appreciate you, {name}! See you next time!",
-        "Thanks for everything, {name}! Hope to see you again soon!",
-        "You're awesome, {name}! Thanks for giving your time today!",
+        "Thank you for volunteering today, {name}! You logged {week} hours this week.",
+        "You make a difference, {name}! You logged {week} hours this week.",
+        "We appreciate you, {name}! You logged {week} hours this week.",
+        "Thanks for everything, {name}! You logged {week} hours this week.",
+        "You're awesome, {name}! You logged {week} hours this week.",
     ];
 
     var MSG_VISITOR_IN = [
@@ -849,7 +849,9 @@
                         }
                     } else {
                         if (res.person_type === "mentor") {
-                            msg = buildMessage(MSG_MENTOR_OUT, name);
+                            msg = buildMessage(MSG_MENTOR_OUT, name, {
+                                week: res.week_hours || 0,
+                            });
                         } else if (res.person_type === "visitor") {
                             msg = buildMessage(MSG_VISITOR_OUT, name);
                         } else {

@@ -404,9 +404,10 @@ def kiosk_tap(request, kiosk_id):
         )
         res_data["week_hours"] = stats["week_hours"]
 
-        # If it's not a student, we don't want to gamify (remove hours)
+        # Session hours are shown only for students; visitors see no hours.
         if person_type != "student":
             res_data.pop("session_hours", None)
+        if person_type == "visitor":
             res_data.pop("week_hours", None)
 
     return JsonResponse(res_data)
