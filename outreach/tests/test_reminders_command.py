@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from organizations.models import Organization
 from organizations.utils import get_organization_email_settings
-from outreach.models import OutreachMentorSignup, OutreachSignup
+from outreach.models import OutreachMentorSignup, OutreachShift, OutreachSignup
 from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
@@ -179,6 +179,118 @@ class SendOutreachRemindersCommandTest(TestCase):
             self.assertEqual(mimetype, "text/calendar")
             self.assertIn("BEGIN:VCALENDAR", content)
 
+    def test_multiple_shifts_for_same_person_and_event_are_combined(self):
+        second_shift = OutreachShift.objects.create(
+            organization=self.tomorrow_shift.organization,
+            event=self.tomorrow_event,
+            date=self.tomorrow,
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+        )
+        OutreachSignup.objects.create(
+            student=self.student1,
+            shift=second_shift,
+            role=OutreachSignup.HELPER,
+        )
+        OutreachMentorSignup.objects.create(adult=self.mentor, shift=second_shift)
+
+        other_event = create_outreach_event(
+            program=self.program,
+            name="Second Library Event",
+            start_date=self.tomorrow,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+        )
+        OutreachSignup.objects.create(
+            student=self.student1,
+            shift=other_event.shifts.first(),
+            role=OutreachSignup.CHAMPION,
+        )
+
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            stdout=StringIO(),
+        )
+
+        student1_emails = [
+            message for message in mail.outbox if message.to == ["student1@example.com"]
+        ]
+        mentor_emails = [
+            message for message in mail.outbox if message.to == ["mentor@example.com"]
+        ]
+        self.assertEqual(len(student1_emails), 2)
+        self.assertEqual(len(mentor_emails), 1)
+
+        combined_student_email = next(
+            message
+            for message in student1_emails
+            if "Library Science Fair" in message.subject
+        )
+        self.assertIn("1:00 PM", combined_student_email.body)
+        self.assertIn("4:00 PM", combined_student_email.body)
+        self.assertIn("Champion", combined_student_email.body)
+        self.assertIn("Helper", combined_student_email.body)
+        self.assertIn("Alice Smith", combined_student_email.body)
+        self.assertIn("Jane Doe", combined_student_email.body)
+        self.assertEqual(len(combined_student_email.attachments), 2)
+        filenames = [attachment[0] for attachment in combined_student_email.attachments]
+        self.assertEqual(len(filenames), len(set(filenames)))
+        for filename, content, mimetype in combined_student_email.attachments:
+            self.assertTrue(filename.endswith(".ics"))
+            self.assertEqual(mimetype, "text/calendar")
+            self.assertIn("BEGIN:VCALENDAR", content)
+        self.assertTrue(
+            any("Second Library Event" in email.subject for email in student1_emails)
+        )
+
+        combined_mentor_email = mentor_emails[0]
+        self.assertIn("1:00 PM", combined_mentor_email.body)
+        self.assertIn("4:00 PM", combined_mentor_email.body)
+        self.assertIn("Mentor Support", combined_mentor_email.body)
+        self.assertIn("Jane Doe", combined_mentor_email.body)
+        self.assertIn("Alice Smith", combined_mentor_email.body)
+        self.assertEqual(len(combined_mentor_email.attachments), 2)
+
+    def test_grouped_reminders_respect_dry_run_and_email_filter(self):
+        second_shift = OutreachShift.objects.create(
+            organization=self.tomorrow_shift.organization,
+            event=self.tomorrow_event,
+            date=self.tomorrow,
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+        )
+        OutreachSignup.objects.create(
+            student=self.student1,
+            shift=second_shift,
+            role=OutreachSignup.HELPER,
+        )
+
+        dry_run_output = StringIO()
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            dry_run=True,
+            stdout=dry_run_output,
+        )
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(
+            dry_run_output.getvalue().count("Would send a student reminder."), 2
+        )
+        self.assertEqual(
+            dry_run_output.getvalue().count("Would send a mentor reminder."), 1
+        )
+
+        call_command(
+            "send_outreach_reminders",
+            date=self.tomorrow.isoformat(),
+            email="STUDENT1@example.com",
+            stdout=StringIO(),
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["student1@example.com"])
+        self.assertEqual(len(mail.outbox[0].attachments), 2)
+
     def test_dry_run_does_not_send_emails(self):
         out = StringIO()
         with self.assertLogs(
@@ -293,3 +405,6 @@ class SendOutreachRemindersCommandTest(TestCase):
             recipients,
             {"student1@example.com", "student2@example.com", "mentor@example.com"},
         )
+        for message in mail.outbox:
+            self.assertNotIn("Foreign Student", message.body)
+            self.assertNotIn("Foreign Mentor", message.body)

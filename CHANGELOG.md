@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-09
 
 ### Fixed
+- Daily outreach reminders now combine a recipient's same-event shifts into one email with shift-specific details and calendar invites.
 - Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
 - Fee-added and payment-recorded notices now use the owning organization's validated payment guidance and neutral fallback, with tenant-safe email branding instead of hard-coded GoS/CMU destinations.
 - Delivery issues now appear in tenant surfaces only when a provider event matches a trusted message-and-recipient mapping; unmatched and historical events remain hidden and are retained for restricted review.
