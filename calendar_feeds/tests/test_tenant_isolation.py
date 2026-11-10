@@ -368,7 +368,7 @@ class CalendarFeedTenantIsolationTests(TestCase):
         )
         self.assertEqual(ics_response.status_code, 200)
         self.assertNotIn(
-            f"EXDATE:{event.start_datetime.date():%Y%m%d}",
+            "EXDATE",
             ics_response.content.decode("utf-8"),
         )
         self.assertNotIn(

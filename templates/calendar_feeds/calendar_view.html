@@ -4,7 +4,6 @@
 {% block title %}Calendar - Girls of Steel Portal{% endblock %}
 
 {% block extra_head %}
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet">
 <style>
     #calendar { max-width: 100%; }
     .fc .fc-toolbar-title { font-size: 1.4rem; }
@@ -97,8 +96,14 @@
                         <i class="bi bi-google me-1"></i> Add to Google Calendar
                     </a>
                 </div>
-                <div>
-                    <a id="eventDetailEditBtn" href="#" class="btn btn-primary btn-sm">Edit</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a id="eventDetailOccurrenceEditBtn" href="#" class="btn btn-outline-primary btn-sm" style="display: none;">Edit this event</a>
+                    <a id="eventDetailOccurrenceDeleteBtn" href="#" class="btn btn-outline-danger btn-sm" style="display: none;">Delete this event</a>
+                    <a id="eventDetailEditBtn" href="#" class="btn btn-primary btn-sm" style="display: none;">Edit</a>
+                    <form id="eventDetailDeleteForm" method="post" style="display: none;">
+                        {% csrf_token %}
+                        <button id="eventDetailDeleteBtn" type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                    </form>
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
@@ -166,7 +171,7 @@
                         <span class="text-muted small">Need a public-only link?</span>
                         <a href="{% url 'calendar_feeds:ics_public' %}" class="small ms-1">Public Feed (.ics)</a>
                     </div>
-                    <form method="post" action="{% url 'calendar_feeds:regenerate_token' %}" onsubmit="return confirm('Regenerating your link will invalidate previous subscriptions on your devices. Continue?');">
+                    <form id="regenerateTokenForm" method="post" action="{% url 'calendar_feeds:regenerate_token' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline-danger btn-sm">
                             <i class="bi bi-arrow-repeat"></i> Regenerate Private Link
@@ -202,6 +207,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     var feedCbs = document.querySelectorAll('.feed-toggle-cb');
     var eventDetailModal = new bootstrap.Modal(document.getElementById('eventDetailModal'));
+    var regenerateForm = document.getElementById('regenerateTokenForm');
+    if (regenerateForm) {
+        regenerateForm.addEventListener('submit', function(event) {
+            if (!window.confirm('Regenerating your link will invalidate previous subscriptions on your devices. Continue?')) {
+                event.preventDefault();
+            }
+        });
+    }
 
     function getSelectedFeeds() {
         var selected = [];
@@ -250,8 +263,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (info.event.allDay) {
                 when = info.event.start.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
             } else {
-                when = info.event.start.toLocaleString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit'}) +
-                       ' - ' + info.event.end.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+                when = info.event.start.toLocaleString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit'});
+                if (info.event.end) {
+                    when += ' - ' + info.event.end.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+                }
             }
             document.getElementById('eventDetailWhen').textContent = when;
 
@@ -272,11 +287,33 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             var editBtn = document.getElementById('eventDetailEditBtn');
-            if (props.event_pk) {
+            var deleteForm = document.getElementById('eventDetailDeleteForm');
+            var occurrenceEdit = document.getElementById('eventDetailOccurrenceEditBtn');
+            var occurrenceDelete = document.getElementById('eventDetailOccurrenceDeleteBtn');
+            if (props.can_write && props.event_pk) {
                 editBtn.href = '{% url "calendar_feeds:event_edit" 0 %}'.replace('0', props.event_pk);
+                editBtn.textContent = props.is_recurring ? 'Edit entire series' : 'Edit event';
                 editBtn.style.display = '';
+                deleteForm.action = '{% url "calendar_feeds:event_delete" 0 %}'.replace('0', props.event_pk);
+                deleteForm.style.display = '';
+                document.getElementById('eventDetailDeleteBtn').textContent = props.is_recurring ? 'Delete entire series' : 'Delete event';
+                deleteForm.onsubmit = function() {
+                    return window.confirm(props.is_recurring ? 'Delete the entire series and its individual changes?' : 'Delete this event?');
+                };
+                if (props.is_recurring && props.original_date) {
+                    occurrenceEdit.href = '{% url "calendar_feeds:occurrence_edit" 0 "2000-01-01" %}'.replace('/0/', '/' + props.event_pk + '/').replace('2000-01-01', props.original_date);
+                    occurrenceDelete.href = '{% url "calendar_feeds:occurrence_delete" 0 "2000-01-01" %}'.replace('/0/', '/' + props.event_pk + '/').replace('2000-01-01', props.original_date);
+                    occurrenceEdit.style.display = '';
+                    occurrenceDelete.style.display = '';
+                } else {
+                    occurrenceEdit.style.display = 'none';
+                    occurrenceDelete.style.display = 'none';
+                }
             } else {
                 editBtn.style.display = 'none';
+                deleteForm.style.display = 'none';
+                occurrenceEdit.style.display = 'none';
+                occurrenceDelete.style.display = 'none';
             }
 
             // Build Google Calendar Add Link

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{% if deleting %}Delete{% else %}Edit{% endif %} occurrence{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>{% if deleting %}Delete{% else %}Edit{% endif %} occurrence: {{ event.title }}</h1>
+    <p>Original date: {{ original_date }}</p>
+    {% if deleting %}<p>Are you sure you want to delete this occurrence?</p>{% endif %}
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-primary">{% if deleting %}Delete occurrence{% else %}Save{% endif %}</button>
+        <a href="{% url 'calendar_feeds:calendar_view' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

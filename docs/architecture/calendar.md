@@ -30,6 +30,9 @@ Multi-feed calendars are served at `/calendar/`:
 ### Expansion & Override Engine (`calendar_feeds/utils.py`)
 - `expand_events_for_range()` evaluates recurrence patterns dynamically using `dateutil.rrule.rrulestr`.
 - Applies exclusion dates (`exdate_list`) and overlays `EventException` modifications for moved or deleted instances.
+- Individual changes use the original occurrence date as their identity, even after a move. Editing a series retains its exceptions on those dates; exceptions no longer matching its rule remain stored but do not appear in the calendar.
+- Single-occurrence edits inherit unchanged text from the series. The current exception model cannot clear a nonempty inherited location or description for just one occurrence; the editor rejects that request rather than silently discarding it.
+- Writers of manual feeds can edit or delete a series or one occurrence from the calendar. Source-managed feeds remain read-only, and the same tenant and feed checks apply to every action.
 
 ---
 
