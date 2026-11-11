@@ -675,6 +675,26 @@ class AttendanceHoursChartViewTests(TestCase):
             check_out=check_in + timedelta(minutes=90),
             duration_minutes=60,
         )
+        # The assertion below runs the chart with a date window of "today"
+        # (local), so student1 must have a *real* in-window session to appear
+        # at all. Anchor it to the local calendar date (not "now - N hours") so
+        # the student is reliably present at any time of day; this mirrors the
+        # local-date anchoring used elsewhere in this file. The outreach
+        # interval above is the previous day, so asserting a 1.0h overlap still
+        # proves the column is career-to-date (not clipped by the date filter).
+        today = timezone.localdate()
+        today_start = timezone.make_aware(
+            datetime.combine(today, time(12)),
+            timezone.get_current_timezone(),
+        )
+        AttendanceSession.objects.create(
+            program=self.program,
+            student=self.student1,
+            organization=self.program.organization,
+            check_in=today_start,
+            check_out=today_start + timedelta(hours=1),
+            duration_minutes=60,
+        )
 
         filtered_response = self.client.get(
             f"{self.program_url}&date_from={timezone.localdate().isoformat()}"

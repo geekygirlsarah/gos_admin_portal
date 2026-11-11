@@ -93,27 +93,27 @@ def _expand_recurring(event, start_date, end_date):
         rrule_str = normalize_rrule_until(event.rrule_ical)
         rrule = rrulestr(rrule_str, dtstart=event.start_datetime)
         occurrence_iter = rrule.between(range_start, range_end, inc=True)
+        excluded_dates = set(event.exdate_list)
+        exceptions = {
+            exc.original_date: exc
+            for exc in event.exceptions.filter(organization_id=event.organization_id)
+        }
 
         for occurrence in occurrence_iter:
             target_date = occurrence.date()
 
-            # Skip manually excluded dates (exdate_ical)
-            if target_date in event.exdate_list:
+            if not start_date <= target_date <= end_date:
                 continue
 
-            exc = event.get_exception_on_date(target_date)
+            # Skip manually excluded dates (exdate_ical)
+            if target_date in excluded_dates:
+                continue
+
+            exc = exceptions.get(target_date)
             if exc:
                 if exc.change_type == exc.CHANGE_DELETED:
                     continue
                 if exc.change_type == exc.CHANGE_MOVED:
-                    instances.append(
-                        _make_instance(
-                            event,
-                            exc.new_start_datetime.date(),
-                            start_override=exc.new_start_datetime,
-                            end_override=exc.new_end_datetime,
-                        )
-                    )
                     continue
                 if exc.change_type == exc.CHANGE_CHANGED:
                     instances.append(
@@ -123,11 +123,44 @@ def _expand_recurring(event, start_date, end_date):
                             title_override=exc.new_title or None,
                             location_override=exc.new_location or None,
                             description_override=exc.new_description or None,
+                            exception_pk=exc.pk,
                         )
                     )
                     continue
 
             instances.append(_make_instance(event, target_date))
+
+        for original_date, exc in exceptions.items():
+            if (
+                exc.change_type != exc.CHANGE_MOVED
+                or not exc.new_start_datetime
+                or original_date in excluded_dates
+                or not start_date <= exc.new_start_datetime.date() <= end_date
+            ):
+                continue
+            original_start = timezone.make_aware(
+                timezone.datetime.combine(original_date, timezone.datetime.min.time()),
+                timezone.UTC,
+            )
+            original_end = original_start + timedelta(days=1)
+            if not any(
+                occurrence.date() == original_date
+                for occurrence in rrule.between(original_start, original_end, inc=True)
+            ):
+                continue
+            instances.append(
+                _make_instance(
+                    event,
+                    exc.new_start_datetime.date(),
+                    start_override=exc.new_start_datetime,
+                    end_override=exc.new_end_datetime,
+                    title_override=exc.new_title or None,
+                    location_override=exc.new_location or None,
+                    description_override=exc.new_description or None,
+                    original_date=original_date,
+                    exception_pk=exc.pk,
+                )
+            )
 
     except Exception:
         logger.exception("Error expanding recurring event %s", event.pk)
@@ -143,6 +176,8 @@ def _make_instance(
     title_override=None,
     location_override=None,
     description_override=None,
+    original_date=None,
+    exception_pk=None,
 ):
     """Create a dict representing one instance of a calendar event."""
     if start_override:
@@ -163,9 +198,7 @@ def _make_instance(
             timezone.datetime.combine(target_date, timezone.datetime.max.time())
         )
     else:
-        end_dt = event.end_datetime.replace(
-            year=target_date.year, month=target_date.month, day=target_date.day
-        )
+        end_dt = event.end_datetime + (target_date - event.start_datetime.date())
 
     return {
         "event": event,
@@ -178,6 +211,8 @@ def _make_instance(
         "start_time": start_dt.time() if not event.all_day else None,
         "end_time": end_dt.time() if not event.all_day else None,
         "date": target_date,
+        "original_date": original_date or target_date,
+        "exception_pk": exception_pk,
         "all_day": event.all_day,
         "color": event.feed.color,
         "feed_name": event.feed.name,

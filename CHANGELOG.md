@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-09
 
 ### Fixed
+- Calendar event details open when an end time is missing, recurring events retain their duration across midnight, and private-link regeneration confirms without violating the security policy.
 - Scheduled outreach, weekly digest, and monthly balance messages now exclude inactive organizations and ineligible participants; monthly statements honor adult email opt-in, and weekly digest branding and portal links use organization settings.
 - Daily outreach reminders now combine a recipient's same-event shifts into one email with shift-specific details and calendar invites.
 - Sliding-scale reviewer emails now go only to active local Lead Mentors with usable account addresses and contain a generic notice without student or household financial details; no global address is used as a fallback.
@@ -13,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Program Mail Merge choices now include program years, default to active/upcoming programs, and let Lead Mentors opt into past or archived programs.
 
 ### Added
+- Calendar events can be edited or deleted from the calendar, either individually or as a whole recurring series; repeat options now use clearer controls.
 - Attendance kiosks have more sign-in and sign-out greetings for students, mentors, and visitors.
 - Attendance kiosk mentor sign-out messages now thank mentors and show their volunteer hours in the current program this week.
 - Added near-real-time `SECURITY_ALERT` audit events and tenant-scoped email alerts for unusual student-profile access and rate-limit breaches, with a configurable rolling threshold and six-hour per-user cooldown.

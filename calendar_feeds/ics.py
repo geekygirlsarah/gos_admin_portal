@@ -1,6 +1,8 @@
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from datetime import timezone as datetime_timezone
 
+from dateutil.rrule import rrulestr
 from django.conf import settings
 from django.http import HttpResponse
 from django.utils import timezone
@@ -9,6 +11,7 @@ from django.views import View
 from organizations.models import UserOrganizationMembership
 
 from .models import CalendarFeed, UserCalendarToken
+from .utils import normalize_rrule_until
 
 logger = logging.getLogger(__name__)
 
@@ -47,35 +50,84 @@ def _dt_lines(start, end):
     ]
 
 
-def _exdate_list(event):
+def _exdate_list(event, exceptions):
     """EXDATEs from the event's exdate_ical plus deleted exceptions."""
-    exdates = list(event.exdate_list)
-    for exc in _event_owned_exceptions(event).filter(change_type="deleted"):
-        if exc.original_date not in exdates:
-            exdates.append(exc.original_date)
+    exdates = set(event.exdate_list)
+    for exc in exceptions:
+        if exc.change_type == exc.CHANGE_DELETED:
+            exdates.add(exc.original_date)
     return sorted(exdates)
 
 
+def _utc_datetime(dt):
+    return _to_localtime(dt).astimezone(datetime_timezone.utc)
+
+
+def _occurrence_start(event, day):
+    start = _utc_datetime(event.start_datetime)
+    return start.replace(year=day.year, month=day.month, day=day.day)
+
+
+def _current_exceptions(event, exceptions):
+    if not event.rrule_ical or not exceptions:
+        return []
+    try:
+        rule = rrulestr(
+            normalize_rrule_until(event.rrule_ical),
+            dtstart=_utc_datetime(event.start_datetime),
+        )
+        current = []
+        for exc in exceptions:
+            start = datetime.combine(
+                exc.original_date, time.min, tzinfo=datetime_timezone.utc
+            )
+            occurrence = rule.after(start, inc=True)
+            if occurrence is not None and occurrence.date() == exc.original_date:
+                current.append(exc)
+        return current
+    except (ValueError, TypeError, OverflowError):
+        logger.warning(
+            "Cannot match calendar exceptions to recurrence rule for event %s", event.pk
+        )
+        return []
+
+
 def _exception_lines(event, exc):
-    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
+    local_start = _to_localtime(event.start_datetime)
+    local_end = _to_localtime(event.end_datetime)
     if event.all_day:
         lines.append(f"RECURRENCE-ID;VALUE=DATE:{exc.original_date.strftime('%Y%m%d')}")
     else:
-        local_start = _to_localtime(event.start_datetime)
-        time_str = local_start.strftime("%H%M%S")
-        lines.append(
-            f"RECURRENCE-ID;TZID={tz_name}:{exc.original_date.strftime('%Y%m%d')}T{time_str}"
+        occurrence = _occurrence_start(event, exc.original_date)
+        lines.append(f"RECURRENCE-ID:{occurrence:%Y%m%dT%H%M%SZ}")
+    if exc.change_type == exc.CHANGE_MOVED:
+        start, end = exc.new_start_datetime, exc.new_end_datetime
+    elif event.all_day:
+        delta = exc.original_date - local_start.date()
+        start, end = local_start + delta, local_end + delta
+    else:
+        start = occurrence
+        end = start + (
+            _utc_datetime(event.end_datetime) - _utc_datetime(event.start_datetime)
         )
-    lines.extend(_dt_lines(exc.new_start_datetime, exc.new_end_datetime))
+    if event.all_day:
+        start_date = _to_localtime(start).date()
+        end_date = _to_localtime(end).date() + timedelta(days=1)
+        lines.append(f"DTSTART;VALUE=DATE:{start_date:%Y%m%d}")
+        lines.append(f"DTEND;VALUE=DATE:{end_date:%Y%m%d}")
+    else:
+        lines.extend(_dt_lines(start, end))
     lines.append(f"SUMMARY:{_escape(exc.new_title or event.title)}")
+    if exc.new_description or event.description:
+        lines.append(f"DESCRIPTION:{_escape(exc.new_description or event.description)}")
     if exc.new_location or event.location:
         lines.append(f"LOCATION:{_escape(exc.new_location or event.location)}")
     lines.append("END:VEVENT")
     return lines
 
 
-def _vevent_lines(event):
+def _vevent_lines(event, exdates):
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
 
     if event.all_day:
@@ -85,6 +137,10 @@ def _vevent_lines(event):
         dtend = (local_end.date() + timedelta(days=1)).strftime("%Y%m%d")
         lines.append(f"DTSTART;VALUE=DATE:{dtstart}")
         lines.append(f"DTEND;VALUE=DATE:{dtend}")
+    elif event.rrule_ical:
+        start = _utc_datetime(event.start_datetime)
+        end = _utc_datetime(event.end_datetime)
+        lines.extend([f"DTSTART:{start:%Y%m%dT%H%M%SZ}", f"DTEND:{end:%Y%m%dT%H%M%SZ}"])
     else:
         lines.extend(_dt_lines(event.start_datetime, event.end_datetime))
 
@@ -96,13 +152,16 @@ def _vevent_lines(event):
     if event.rrule_ical:
         lines.append(f"RRULE:{event.rrule_ical}")
 
-    exdates = _exdate_list(event)
     if exdates:
-        lines.append(f"EXDATE:{','.join(d.strftime('%Y%m%d') for d in exdates)}")
-
-    for exc in _event_owned_exceptions(event):
-        if exc.change_type == exc.CHANGE_MOVED and exc.new_start_datetime:
-            lines.extend(_exception_lines(event, exc))
+        if event.all_day:
+            lines.append(
+                f"EXDATE;VALUE=DATE:{','.join(d.strftime('%Y%m%d') for d in exdates)}"
+            )
+        else:
+            values = ",".join(
+                f"{_occurrence_start(event, day):%Y%m%dT%H%M%SZ}" for day in exdates
+            )
+            lines.append(f"EXDATE:{values}")
 
     lines.append("END:VEVENT")
     return lines
@@ -122,7 +181,20 @@ def _build_ics_response(events, feed_name="GoS Calendar"):
     ]
 
     for event in events:
-        lines.extend(_vevent_lines(event))
+        exceptions = _current_exceptions(
+            event, list(_event_owned_exceptions(event).order_by("original_date"))
+        )
+        exdates = _exdate_list(event, exceptions)
+        lines.extend(_vevent_lines(event, exdates))
+        for exc in exceptions:
+            if exc.original_date in exdates:
+                continue
+            if exc.change_type == exc.CHANGE_CHANGED or (
+                exc.change_type == exc.CHANGE_MOVED
+                and exc.new_start_datetime
+                and exc.new_end_datetime
+            ):
+                lines.extend(_exception_lines(event, exc))
 
     lines.append("END:VCALENDAR")
 

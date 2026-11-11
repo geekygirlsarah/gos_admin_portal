@@ -167,7 +167,7 @@ class ICSEventFormatTests(TestCase):
             title="Weekly",
             start_datetime=start,
             end_datetime=start + timedelta(hours=1),
-            rrule_ical="FREQ=WEEKLY;BYDAY=TU",
+            rrule_ical="FREQ=WEEKLY",
         )
         # Delete the *second* weekly occurrence so the EXDATE lands inside the
         # feed's rolling window regardless of when the suite runs.
@@ -179,7 +179,7 @@ class ICSEventFormatTests(TestCase):
         )
         resp = self.client.get(f"/calendar/{feed.slug}/feed.ics")
         body = resp.content.decode("utf-8")
-        self.assertIn(f"EXDATE:{deleted_date.strftime('%Y%m%d')}", body)
+        self.assertIn(f"EXDATE:{deleted_date:%Y%m%d}T{start:%H%M%S}Z", body)
 
     def test_localtime_conversion_and_tzid_formatting(self):
         feed = make_feed(
@@ -219,7 +219,7 @@ class ICSEventFormatTests(TestCase):
             title="Weekly Study",
             start_datetime=start,
             end_datetime=start + timedelta(hours=1),
-            rrule_ical="FREQ=WEEKLY;BYDAY=TU",
+            rrule_ical="FREQ=WEEKLY",
         )
         target_date = (start + timedelta(days=7)).date()
         new_start = timezone.make_aware(
@@ -239,6 +239,6 @@ class ICSEventFormatTests(TestCase):
         )
         resp = self.client.get(f"/calendar/{feed.slug}/feed.ics")
         body = resp.content.decode("utf-8")
-        self.assertIn("RECURRENCE-ID;TZID=America/New_York:", body)
+        self.assertIn(f"RECURRENCE-ID:{target_date:%Y%m%d}T{start:%H%M%S}Z", body)
         self.assertIn("SUMMARY:Moved Study Session", body)
         self.assertIn("DTSTART;TZID=America/New_York:", body)

@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from django import forms
@@ -14,7 +15,7 @@ RECURRENCE_CHOICES = [
     ("daily", "Daily"),
     ("weekly", "Weekly"),
     ("monthly", "Monthly"),
-    ("custom", "Custom RFC-5545 RRULE"),
+    ("custom", "Advanced repeat rule"),
 ]
 
 REPEAT_END_CHOICES = [
@@ -239,6 +240,14 @@ class CalendarEventForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["rrule_ical"].label = "Advanced repeat rule"
+        self.fields["rrule_ical"].help_text = (
+            "Edit this rule only if you are familiar with iCalendar recurrence rules."
+        )
+        self.fields["exdate_ical"].label = "Excluded dates"
+        self.fields["exdate_ical"].help_text = (
+            "Dates to skip, separated by commas (YYYY-MM-DD)."
+        )
         rrule_str = self.initial.get("rrule_ical") or (
             self.instance.rrule_ical if self.instance and self.instance.pk else ""
         )
@@ -248,11 +257,51 @@ class CalendarEventForm(forms.ModelForm):
     def _parse_rrule_to_initial(self, rrule_str):
         parts = {}
         for item in rrule_str.split(";"):
-            if "=" in item:
-                k, v = item.split("=", 1)
-                parts[k.upper()] = v
+            if "=" not in item:
+                self.initial["recurrence_type"] = "custom"
+                return
+            k, v = item.split("=", 1)
+            if k in parts:
+                self.initial["recurrence_type"] = "custom"
+                return
+            parts[k] = v
 
         freq = parts.get("FREQ")
+        allowed = {"FREQ", "INTERVAL", "COUNT", "UNTIL"}
+        if freq == "WEEKLY":
+            allowed.add("BYDAY")
+        valid_days = {value for value, _ in DAY_CHOICES}
+        days = parts.get("BYDAY", "").split(",")
+        if (
+            freq not in {"DAILY", "WEEKLY", "MONTHLY"}
+            or set(parts) - allowed
+            or (
+                "BYDAY" in parts
+                and (not set(days) <= valid_days or len(days) != len(set(days)))
+            )
+            or (
+                "INTERVAL" in parts
+                and not re.fullmatch(r"[1-9][0-9]*", parts["INTERVAL"])
+            )
+            or ("COUNT" in parts and not re.fullmatch(r"[1-9][0-9]*", parts["COUNT"]))
+            or ("COUNT" in parts and "UNTIL" in parts)
+            or (
+                "UNTIL" in parts
+                and not re.fullmatch(r"[0-9]{8}T235959Z", parts["UNTIL"])
+            )
+        ):
+            self.initial["recurrence_type"] = "custom"
+            return
+        if "UNTIL" in parts:
+            try:
+                date(
+                    int(parts["UNTIL"][:4]),
+                    int(parts["UNTIL"][4:6]),
+                    int(parts["UNTIL"][6:8]),
+                )
+            except ValueError:
+                self.initial["recurrence_type"] = "custom"
+                return
         if freq == "DAILY":
             self.initial["recurrence_type"] = "daily"
         elif freq == "WEEKLY":
@@ -299,6 +348,9 @@ class CalendarEventForm(forms.ModelForm):
         rec_type = cleaned_data.get("recurrence_type")
         rrule_raw = cleaned_data.get("rrule_ical", "").strip()
 
+        if self.instance.pk and self.add_prefix("exdate_ical") not in self.data:
+            cleaned_data["exdate_ical"] = self.instance.exdate_ical
+
         if not rec_type or rec_type == "none":
             cleaned_data["rrule_ical"] = ""
         elif rec_type == "custom":
@@ -311,9 +363,16 @@ class CalendarEventForm(forms.ModelForm):
                     rrulestr(rrule_normalized, dtstart=start_dt)
                 except Exception as e:
                     self.add_error("rrule_ical", f"Invalid RFC-5545 RRULE: {e}")
-                cleaned_data["rrule_ical"] = rrule_normalized
+                cleaned_data["rrule_ical"] = (
+                    rrule_raw
+                    if self.instance.pk and rrule_raw == self.instance.rrule_ical
+                    else rrule_normalized
+                )
             else:
-                cleaned_data["rrule_ical"] = ""
+                self.add_error(
+                    "rrule_ical",
+                    "Enter an advanced repeat rule or choose another repeat option.",
+                )
         elif rec_type in ("daily", "weekly", "monthly"):
             freq_map = {
                 "daily": "DAILY",

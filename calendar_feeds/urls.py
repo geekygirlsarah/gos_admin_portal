@@ -40,6 +40,16 @@ urlpatterns = [
     ),
     # Event exceptions
     path(
+        "events/<int:pk>/occurrences/<str:original_date>/edit/",
+        views.OccurrenceEditView.as_view(),
+        name="occurrence_edit",
+    ),
+    path(
+        "events/<int:pk>/occurrences/<str:original_date>/delete/",
+        views.OccurrenceDeleteView.as_view(),
+        name="occurrence_delete",
+    ),
+    path(
         "events/<int:event_pk>/exceptions/",
         views.EventExceptionListView.as_view(),
         name="exception_list",

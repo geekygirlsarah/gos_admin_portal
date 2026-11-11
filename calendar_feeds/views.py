@@ -1,12 +1,13 @@
-from datetime import date
+from datetime import date, datetime, time
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, CharField, F, Value, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView
 
@@ -21,6 +22,8 @@ from .forms import (
 )
 from .ics import FeedICSView, PersonalICSFeedView, PublicICSFeedView  # noqa: F401
 from .models import CalendarEvent, CalendarFeed, EventException, UserCalendarToken
+from .occurrence_forms import OccurrenceForm
+from .utils import normalize_rrule_until
 
 
 def _tenant_calendar_events(organization):
@@ -150,9 +153,11 @@ class CalendarEventsAPIView(View):
             if not feed.user_can_read(request.user):
                 continue
             instances = feed.get_events_for_date_range(start_date, end_date)
+            can_write = feed.user_can_write(request.user)
             for inst in instances:
+                original_date = inst.get("original_date", inst["date"])
                 event_data = {
-                    "id": f"{inst['pk']}-{inst['date'].isoformat()}",
+                    "id": f"{inst['pk']}-{original_date.isoformat()}",
                     "title": inst["title"],
                     "start": inst["start_datetime"].isoformat(),
                     "end": inst["end_datetime"].isoformat(),
@@ -160,6 +165,10 @@ class CalendarEventsAPIView(View):
                     "color": inst["color"],
                     "extendedProps": {
                         "event_pk": inst["pk"],
+                        "original_date": original_date.isoformat(),
+                        "is_recurring": inst["event"].is_recurring,
+                        "can_write": can_write,
+                        "exception_pk": inst.get("exception_pk"),
                         "description": inst["description"],
                         "location": inst["location"],
                         "feed_name": inst["feed_name"],
@@ -176,6 +185,189 @@ class OrganizationRequiredMixin:
         if getattr(request, "organization", None) is None:
             raise Http404
         return super().dispatch(request, *args, **kwargs)
+
+
+def _occurrence(request, pk, original_date):
+    event = get_object_or_404(
+        _tenant_calendar_events(request.organization).select_related("feed"), pk=pk
+    )
+    if not event.feed.user_can_write(request.user):
+        return event, None, None
+    try:
+        day = date.fromisoformat(original_date)
+        if (
+            day.isoformat() != original_date
+            or not event.is_recurring
+            or day in event.exdate_list
+        ):
+            raise ValueError
+        from dateutil.rrule import rrulestr
+
+        rule = rrulestr(
+            normalize_rrule_until(event.rrule_ical), dtstart=event.start_datetime
+        )
+        start = timezone.make_aware(datetime.combine(day, time.min), timezone.UTC)
+        occurrence = rule.after(start, inc=True)
+        if occurrence is None or occurrence.date() != day:
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        raise Http404
+    exception = EventException.objects.filter(event=event, original_date=day).first()
+    if exception and (
+        exception.organization_id != event.organization_id
+        or exception.change_type == EventException.CHANGE_DELETED
+    ):
+        raise Http404
+    return event, occurrence, exception
+
+
+class OccurrenceEditView(OrganizationRequiredMixin, LoginRequiredMixin, View):
+    def handle(self, request, pk, original_date):
+        event, occurrence, exception = _occurrence(request, pk, original_date)
+        if occurrence is None:
+            messages.error(request, "You do not have permission to modify this event.")
+            return redirect("calendar_feeds:calendar_view")
+        start = (
+            exception.new_start_datetime
+            if exception and exception.new_start_datetime
+            else occurrence
+        )
+        end = (
+            exception.new_end_datetime
+            if exception and exception.new_end_datetime
+            else occurrence + (event.end_datetime - event.start_datetime)
+        )
+        initial = {
+            "title": exception.new_title or event.title if exception else event.title,
+            "location": (
+                exception.new_location or event.location
+                if exception
+                else event.location
+            ),
+            "description": (
+                exception.new_description or event.description
+                if exception
+                else event.description
+            ),
+            "start_datetime": start,
+            "end_datetime": end,
+        }
+        form = OccurrenceForm(
+            request.POST if request.method == "POST" else None,
+            event=event,
+            initial=initial,
+        )
+        if request.method == "POST" and form.is_valid():
+            try:
+                with transaction.atomic():
+                    locked = (
+                        _tenant_calendar_events(request.organization)
+                        .select_for_update()
+                        .get(pk=event.pk)
+                    )
+                    existing = EventException.objects.filter(
+                        event=locked, original_date=occurrence.date()
+                    ).first()
+                    if existing and (
+                        existing.organization_id != locked.organization_id
+                        or existing.change_type == EventException.CHANGE_DELETED
+                    ):
+                        raise Http404
+                    obj = existing or EventException(
+                        event=locked,
+                        organization=locked.organization,
+                        original_date=occurrence.date(),
+                        created_by=request.user,
+                    )
+                    new_start = form.cleaned_data["start_datetime"]
+                    new_end = form.cleaned_data["end_datetime"]
+                    original_end = occurrence + (
+                        locked.end_datetime - locked.start_datetime
+                    )
+                    moved = new_start != occurrence or new_end != original_end
+                    obj.change_type = (
+                        EventException.CHANGE_MOVED
+                        if moved
+                        else EventException.CHANGE_CHANGED
+                    )
+                    obj.new_start_datetime = new_start if moved else None
+                    obj.new_end_datetime = new_end if moved else None
+                    obj.new_title = (
+                        form.cleaned_data["title"]
+                        if form.cleaned_data["title"] != locked.title
+                        else ""
+                    )
+                    obj.new_location = (
+                        form.cleaned_data["location"]
+                        if form.cleaned_data["location"] != locked.location
+                        else ""
+                    )
+                    obj.new_description = (
+                        form.cleaned_data["description"]
+                        if form.cleaned_data["description"] != locked.description
+                        else ""
+                    )
+                    obj.save()
+            except IntegrityError:
+                form.add_error(
+                    None, "This occurrence was modified concurrently. Please try again."
+                )
+            else:
+                return redirect("calendar_feeds:calendar_view")
+        return render(
+            request,
+            "calendar_feeds/occurrence_form.html",
+            {"form": form, "event": event, "original_date": original_date},
+        )
+
+    get = handle
+    post = handle
+
+
+class OccurrenceDeleteView(OrganizationRequiredMixin, LoginRequiredMixin, View):
+    def handle(self, request, pk, original_date):
+        event, occurrence, exception = _occurrence(request, pk, original_date)
+        if occurrence is None:
+            messages.error(request, "You do not have permission to modify this event.")
+            return redirect("calendar_feeds:calendar_view")
+        if request.method == "POST":
+            try:
+                with transaction.atomic():
+                    locked = (
+                        _tenant_calendar_events(request.organization)
+                        .select_for_update()
+                        .get(pk=event.pk)
+                    )
+                    existing = EventException.objects.filter(
+                        event=locked, original_date=occurrence.date()
+                    ).first()
+                    if existing and (
+                        existing.organization_id != locked.organization_id
+                        or existing.change_type == EventException.CHANGE_DELETED
+                    ):
+                        raise Http404
+                    obj = existing or EventException(
+                        event=locked,
+                        organization=locked.organization,
+                        original_date=occurrence.date(),
+                        created_by=request.user,
+                    )
+                    obj.change_type = EventException.CHANGE_DELETED
+                    obj.save()
+            except IntegrityError:
+                messages.error(
+                    request,
+                    "This occurrence was modified concurrently. Please try again.",
+                )
+            return redirect("calendar_feeds:calendar_view")
+        return render(
+            request,
+            "calendar_feeds/occurrence_form.html",
+            {"event": event, "original_date": original_date, "deleting": True},
+        )
+
+    get = handle
+    post = handle
 
 
 class FeedListView(OrganizationRequiredMixin, LeadMentorRequiredMixin, ListView):

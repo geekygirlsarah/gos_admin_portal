@@ -27,6 +27,22 @@ class CalendarEventFormRecurrenceTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["rrule_ical"], "")
 
+    def test_timed_event_date_validation(self):
+        data = {
+            "title": "Meeting",
+            "start_datetime": "2026-10-01T18:00",
+            "recurrence_type": "daily",
+        }
+        for end in ("2026-10-01T17:00", "2026-10-01T18:00"):
+            with self.subTest(end=end):
+                form = CalendarEventForm(data={**data, "end_datetime": end})
+                self.assertFalse(form.is_valid())
+                self.assertIn(
+                    "End time must be after start time.", form.non_field_errors()
+                )
+        form = CalendarEventForm(data={**data, "end_datetime": "2026-10-02T01:00"})
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_daily_repeat_with_count(self):
         form_data = {
             "title": "Daily Standup",
