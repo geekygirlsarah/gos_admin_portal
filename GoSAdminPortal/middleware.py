@@ -263,6 +263,18 @@ class RootDomainGuardMiddleware:
         is_static_or_media = (
             settings.MEDIA_URL and path.startswith(settings.MEDIA_URL)
         ) or (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+        user = getattr(request, "user", None)
+        if (
+            getattr(request, "organization", None) is None
+            and getattr(request, "_is_platform_domain", False)
+            and path == reverse("notification_list")
+            and request.method in {"GET", "HEAD"}
+            and getattr(user, "is_authenticated", False)
+            and getattr(user, "is_active", False)
+            and getattr(user, "is_superuser", False)
+        ):
+            return redirect("platform_admin:notification_list")
+
         if (
             getattr(request, "organization", None) is None
             and not getattr(request, "_is_platform_domain", False)

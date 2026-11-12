@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-11
+
+### Changed
+- Removed Staff as a selectable notification audience. Active Staff members remain eligible for all-member organization updates, but role-targeted updates do not match them.
+- Updates now use a compact bell icon with a numeric unread badge; platform administrators can review and manage global updates from the root-domain platform admin area.
+- Root-domain platform superusers opening `/programs/notifications/` now go to the platform updates list, with a direct Updates link in platform navigation.
+- Portal updates now identify their publisher and show whether they came from an organization or the platform.
+
 ## 2026-11-09
 
 ### Fixed

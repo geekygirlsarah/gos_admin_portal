@@ -1,6 +1,7 @@
 from django.urls import Resolver404, resolve
 
 from programs.models import Enrollment, Program
+from programs.notification_utils import unread_notification_count
 from programs.permission_views import get_user_role
 
 
@@ -60,3 +61,18 @@ def active_program(request):
     return {
         "current_program": program,
     }
+
+
+def notification_context(request):
+    if not request.user.is_authenticated:
+        return {"unread_notification_count": 0}
+
+    if hasattr(request, "notification_unread_count"):
+        count = request.notification_unread_count
+    else:
+        count = unread_notification_count(
+            request.user,
+            getattr(request, "organization", None),
+        )
+        request.notification_unread_count = count
+    return {"unread_notification_count": count}

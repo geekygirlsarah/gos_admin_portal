@@ -44,6 +44,7 @@ from .finances import (
 )
 from .geocoding import AddressGeocode
 from .groups import Crew, SubTeam, Team
+from .notifications import Notification, UserNotificationStatus
 from .permissions import RolePermission
 from .programs import (
     Program,
@@ -83,6 +84,7 @@ __all__ = [
     "MentorAgreement",
     "MentorAgreementAcceptance",
     "MentorAgreementSubmission",
+    "Notification",
     "OrganizationManager",
     "OrganizationQuerySet",
     "Payment",
@@ -102,6 +104,7 @@ __all__ = [
     "SubTeam",
     "TaxForm",
     "Team",
+    "UserNotificationStatus",
     "_agreement_submission_upload_to",
     "_adult_photo_upload_to",
     "_get_legacy_fernet",

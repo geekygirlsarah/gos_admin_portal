@@ -111,12 +111,40 @@ from .views.email_issues import (
     EmailDeliveryIssueResolveView,
     tosend_webhook_view,
 )
+from .views.notifications import (
+    NotificationBadgeView,
+    NotificationCreateView,
+    NotificationListView,
+    NotificationMarkAsReadView,
+    NotificationUnreadCountView,
+)
 from .views.org_emails import (
     andrew_id_management_view,
     org_email_management_view,
 )
 
 urlpatterns = [
+    path("notifications/", NotificationListView.as_view(), name="notification_list"),
+    path(
+        "notifications/unread-count/",
+        NotificationUnreadCountView.as_view(),
+        name="notification_unread_count",
+    ),
+    path(
+        "notifications/badge/",
+        NotificationBadgeView.as_view(),
+        name="notification_badge",
+    ),
+    path(
+        "notifications/new/",
+        NotificationCreateView.as_view(),
+        name="notification_create",
+    ),
+    path(
+        "notifications/<int:pk>/read/",
+        NotificationMarkAsReadView.as_view(),
+        name="notification_mark_read",
+    ),
     # Programs
     path("", login_required(ProgramListView.as_view()), name="program_list"),
     path(

@@ -57,6 +57,12 @@
             {% user_role user as current_navbar_user_role %}
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-xl-0">
+                    <li class="nav-item">
+                        <a class="nav-link px-2{% if 'notifications' in request.path %} active{% endif %}" href="{% if is_platform_admin or not request.organization and request.user.is_authenticated and request.user.is_active and request.user.is_superuser %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}" aria-label="Updates{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}" title="Updates{% if unread_notification_count %} ({{ unread_notification_count }} unread){% endif %}">
+                            <i class="bi bi-bell" aria-hidden="true"></i>
+                            {% if unread_notification_count %}<span class="badge rounded-pill text-bg-warning" aria-hidden="true">{{ unread_notification_count }}</span>{% endif %}
+                        </a>
+                    </li>
                     {% if is_platform_admin %}
                     {# ── Platform Admin navigation items ── #}
                     <li class="nav-item">
@@ -91,6 +97,11 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:audit_logs' %} active{% endif %}" href="{% url 'platform_admin:audit_logs' %}">
                             <i class="bi bi-journal-text me-1"></i>Audit Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:notification_create' %} active{% endif %}" href="{% url 'platform_admin:notification_create' %}">
+                            <i class="bi bi-send me-1" aria-hidden="true"></i>Send platform update
                         </a>
                     </li>
                     <li class="nav-item">
@@ -313,6 +324,9 @@
                                 <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Message Programs</a></li>
                                 <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
                                 <li><a class="dropdown-item" href="{% url 'calendar_feeds:feed_list' %}">Calendar Feeds</a></li>
+                                {% if current_navbar_user_role == 'LeadMentor' %}
+                                <li><a class="dropdown-item" href="{% url 'notification_create' %}">Send organization update</a></li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="/admin/audit/auditlog/">Audit Logs</a></li>
                             </ul>

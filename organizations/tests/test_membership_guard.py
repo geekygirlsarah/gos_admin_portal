@@ -176,6 +176,24 @@ class TenantMembershipGuardTests(TestCase):
             404,
         )
 
+    def test_root_notification_alias_redirects_safe_superuser_requests(self):
+        admin = get_user_model().objects.create_superuser(username="guard-admin")
+        self.client.force_login(admin)
+
+        for request_method in (self.client.get, self.client.head):
+            with self.subTest(method=request_method.__name__):
+                response = request_method(
+                    "/programs/notifications/", HTTP_HOST="momentumteam.app"
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response["Location"], "/platform-admin/notifications/")
+
+        response = self.client.post(
+            "/programs/notifications/", HTTP_HOST="momentumteam.app"
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/")
+
     def test_middleware_order(self):
         login = settings.MIDDLEWARE.index(
             "GoSAdminPortal.middleware.LoginRequiredMiddleware"
