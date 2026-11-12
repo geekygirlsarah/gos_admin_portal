@@ -175,7 +175,7 @@ These settings take effect when `DEBUG=False`:
 | `TOSEND_API_KEY` | `""` | API key for toSend REST API v2 delivery (`https://api.tosend.com`). |
 | `TOSEND_API_URL` | `"https://api.tosend.com"` | Base URL for toSend REST endpoints. |
 | `TOSEND_TIMEOUT` | `30` | Request timeout in seconds for toSend HTTP requests. |
-| `TOSEND_WEBHOOK_SECRET` | `""` | Shared secret to verify incoming delivery/bounce webhook payloads. |
+| `TOSEND_WEBHOOK_SECRET` | `""` | Webhook signing secret; required for production toSend bounce and complaint tracking. See [operations](operations.md#tosend-delivery-webhook). |
 
 ### Health Check Throttling
 

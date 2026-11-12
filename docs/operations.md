@@ -224,6 +224,31 @@ configure that scheduler. Do not execute it against production or shared data
 without the required operational approval. Backups may retain copies beyond the
 application-level retention period.
 
+## toSend Delivery Webhook
+
+The application already accepts toSend bounce and complaint events at
+`https://<public-portal-host>/api/webhooks/tosend/`. To enable tracking, an
+authorized operator must configure that public HTTPS URL in toSend, enable both
+event types, and configure a webhook signing secret. Set the same secret as
+`TOSEND_WEBHOOK_SECRET` on every application instance through the deployment's
+secret-management mechanism; do not put it in source control. Restart or
+redeploy as required by the hosting platform. Production requests are rejected
+when the secret is missing or the signature is invalid. The send API key and
+webhook secret are separate credentials.
+
+After an approved deployment, verify the provider's test request reaches the
+endpoint and receives a successful JSON response. A test event alone does not
+prove tenant correlation: verify that separately in a safe test environment
+using an actual tracked send and matching signed event. Lead Mentors can review
+verified issues in Dashboard → Email Issues. Unmatched events are quarantined,
+not shown to a tenant; see [Email Architecture](architecture/email.md) for
+correlation restrictions. toSend does not retry failed or slow webhook requests,
+so monitor endpoint failures and consult provider logs for missed events. The
+webhook reports bounces and complaints, not proof of delivery or reading.
+
+Changing provider or deployment configuration requires the normal operational
+approval; documenting these steps does not configure the webhook or scheduler.
+
 ## Email Delivery Quarantine
 
 Signed provider events without a unique trusted outgoing-message mapping are
