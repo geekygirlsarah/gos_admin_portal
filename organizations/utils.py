@@ -481,6 +481,7 @@ def get_organization_email_settings(
 
     sender_display_name = (
         raw_cfg.get("sender_display_name")
+        or (dict.get(org.settings, "portal_title") if org else None)
         or (org.name if org else None)
         or default_name
         or "Platform Notifications"

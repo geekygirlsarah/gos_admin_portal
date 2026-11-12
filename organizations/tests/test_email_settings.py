@@ -2,6 +2,7 @@ import json
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -17,7 +18,7 @@ from organizations.utils import (
 )
 from programs.forms import ProgramEmailBalancesForm, ProgramEmailForm
 from programs.models import Adult, Program
-from programs.utils.notifications import get_sender_connection
+from programs.utils.notifications import get_sender_connection, send_otp_email
 
 
 class OrganizationEmailSettingsUtilsTests(TestCase):
@@ -39,6 +40,42 @@ class OrganizationEmailSettingsUtilsTests(TestCase):
                 "notifications@platform.example.com",
             )
             self.assertEqual(email_cfg["sender_accounts"], [])
+
+    @override_settings(NOTIFICATION_FROM_EMAIL="notifications@example.test")
+    def test_portal_titles_are_used_for_each_organizations_outgoing_email(self):
+        self.org.settings["portal_title"] = "First Portal"
+        self.org.save(update_fields=["settings"])
+        other = Organization.objects.create(
+            name="Other Robotics",
+            slug="other-robotics",
+            settings={"portal_title": "Second Portal"},
+        )
+
+        send_otp_email("first@example.test", "123456", organization=self.org)
+        send_otp_email("second@example.test", "123456", organization=other)
+
+        self.assertEqual(
+            mail.outbox[0].from_email, '"First Portal" <notifications@example.test>'
+        )
+        self.assertEqual(
+            mail.outbox[1].from_email, '"Second Portal" <notifications@example.test>'
+        )
+        self.assertEqual(
+            get_sender_connection("DEFAULT", organization=self.org)[1],
+            '"First Portal" <notifications@example.test>',
+        )
+
+    def test_explicit_sender_display_name_takes_precedence_over_portal_title(self):
+        self.org.settings["portal_title"] = "Team Portal"
+        self.org_settings.data = {
+            "email_settings": {"sender_display_name": "Team Leads"}
+        }
+        self.org_settings.save()
+
+        self.assertEqual(
+            get_organization_email_settings(self.org)["sender_display_name"],
+            "Team Leads",
+        )
 
     def test_get_organization_email_settings_customized(self):
         self.org_settings.data = {

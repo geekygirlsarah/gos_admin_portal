@@ -54,6 +54,8 @@ and tenant branding.
 
 Program Messaging offers the deployment-configured default sender and named identities saved by the current organization, not the legacy global named-account fallback. An organization's notification-from override replaces the default; otherwise `NOTIFICATION_FROM_EMAIL` or `DEFAULT_FROM_EMAIL` supplies it. Email Settings shows the saved override separately from the effective address and does not pin the fallback when saving other settings. Existing saved overrides are not changed automatically.
 
+For the default sender's display name, an explicitly saved email sender name takes precedence over the organization's saved portal title, followed by its organization name. Named sender identities retain their own display names. Organizations with an existing sender-name override must clear it to use the portal title instead.
+
 The operator must configure a verified shared Momentum sender with the delivery provider and DNS before relying on it; changing an address here does not configure or verify delivery. Existing deployment defaults may still be GoS-specific and should be reviewed during that transition.
 
 ---
