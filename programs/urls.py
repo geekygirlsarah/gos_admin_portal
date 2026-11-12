@@ -109,6 +109,8 @@ from .views import (
 from .views.email_issues import (
     EmailDeliveryIssueListView,
     EmailDeliveryIssueResolveView,
+    EmailHistoryDetailView,
+    EmailHistoryListView,
     tosend_webhook_view,
 )
 from .views.notifications import (
@@ -762,5 +764,11 @@ urlpatterns = [
         "email-issues/<int:pk>/resolve/",
         EmailDeliveryIssueResolveView.as_view(),
         name="email_delivery_issue_resolve",
+    ),
+    path("email-history/", EmailHistoryListView.as_view(), name="email_history_list"),
+    path(
+        "email-history/<int:pk>/",
+        EmailHistoryDetailView.as_view(),
+        name="email_history_detail",
     ),
 ]

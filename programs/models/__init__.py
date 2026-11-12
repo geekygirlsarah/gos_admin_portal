@@ -20,6 +20,9 @@ from .agreements import (
 from .communication import (
     EmailDeliveryEvent,
     EmailDeliveryQuarantine,
+    EmailHistory,
+    EmailHistoryAddress,
+    EmailHistoryBatch,
     TrustedOutgoingEmailRecipient,
 )
 from .enrollments import Enrollment
@@ -72,6 +75,9 @@ __all__ = [
     "Crew",
     "EmailDeliveryEvent",
     "EmailDeliveryQuarantine",
+    "EmailHistory",
+    "EmailHistoryAddress",
+    "EmailHistoryBatch",
     "TrustedOutgoingEmailRecipient",
     "EncryptedCharField",
     "EncryptedFieldFile",

@@ -877,6 +877,9 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
                 email,
                 self.organization,
                 enabled=action == "send",
+                history_category="mail_merge",
+                history_initiated_by=request.user,
+                retain_history_body=True,
             )
             messages_to_send.append(email)
 

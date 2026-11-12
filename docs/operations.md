@@ -207,6 +207,23 @@ Scheduled commands must be safe against accidental duplicate execution where
 practicable. Changes to recipient selection, message templates, scheduling, or
 delivery behavior require regression tests.
 
+## Email History Retention
+
+Email history is retained for 30 days. The cleanup command is dry-run by
+default:
+
+```bash
+python manage.py cleanup_email_history
+python manage.py cleanup_email_history --execute
+```
+
+The dry run reports the number of eligible records. `--execute` deletes history
+records older than 30 days, including their associated recipient addresses.
+Schedule a daily `--execute` run to enforce retention; the application does not
+configure that scheduler. Do not execute it against production or shared data
+without the required operational approval. Backups may retain copies beyond the
+application-level retention period.
+
 ## Email Delivery Quarantine
 
 Signed provider events without a unique trusted outgoing-message mapping are

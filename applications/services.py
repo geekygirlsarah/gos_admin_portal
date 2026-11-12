@@ -114,6 +114,9 @@ def _send_html_email(
     html_body: Optional[str],
     recipients: List[str],
     organization=None,
+    request=None,
+    history_category="application_notification",
+    retain_history_body=True,
 ) -> None:
     if not recipients:
         return
@@ -137,11 +140,21 @@ def _send_html_email(
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
+        from programs.utils.email_history import send_messages_with_history
         from programs.utils.notifications import _mark_delivery_tracking
 
-        _mark_delivery_tracking(msg, organization)
+        initiated_by = getattr(request, "user", None)
+        if not getattr(initiated_by, "is_authenticated", False):
+            initiated_by = None
+        _mark_delivery_tracking(
+            msg,
+            organization,
+            history_category=history_category,
+            history_initiated_by=initiated_by,
+            retain_history_body=retain_history_body,
+        )
         try:
-            msg.send()
+            send_messages_with_history([msg])
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Application email dispatch failed (%s).", type(exc).__name__)
         finally:
@@ -190,6 +203,9 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         html_body=html_body,
         recipients=[application.email],
         organization=application.organization,
+        request=request,
+        history_category="otp",
+        retain_history_body=False,
     )
 
 
@@ -562,6 +578,9 @@ def send_parent_handoff_email(
         html_body=html_body,
         recipients=[parent_email],
         organization=application.organization,
+        request=request,
+        history_category="application_handoff",
+        retain_history_body=False,
     )
 
 
@@ -652,6 +671,7 @@ def send_application_submitted_email(application: Application, request=None) -> 
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -689,6 +709,7 @@ def send_application_approved_email(application: Application, request=None) -> N
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -719,6 +740,7 @@ def send_application_declined_email(
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -741,6 +763,7 @@ def send_application_converted_email(application: Application, request=None) -> 
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -1341,4 +1364,5 @@ def send_lead_notification_email(application: Application, request=None) -> None
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )

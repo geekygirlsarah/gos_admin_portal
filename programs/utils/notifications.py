@@ -55,10 +55,29 @@ def get_local_lead_mentor_notification_emails(organization):
     return addresses
 
 
-def _mark_delivery_tracking(message, organization, enabled=True):
+def _mark_delivery_tracking(
+    message,
+    organization,
+    enabled=True,
+    *,
+    history_category=None,
+    history_initiated_by=None,
+    retain_history_body=False,
+):
     message._momentum_delivery_tracking = bool(enabled and organization is not None)
     if organization is not None:
         message._momentum_organization_id = getattr(organization, "pk", organization)
+    if history_category:
+        from programs.utils.email_history import mark_email_history
+
+        mark_email_history(
+            message,
+            organization,
+            category=history_category,
+            initiated_by=history_initiated_by,
+            retain_body=retain_history_body,
+            enabled=enabled,
+        )
 
 
 def generate_otp(length=6):
@@ -105,8 +124,15 @@ def send_otp_email(email, otp, organization=None):
         reply_to=reply_to_list,
     )
     msg.attach_alternative(html_message, "text/html")
-    _mark_delivery_tracking(msg, organization)
-    msg.send()
+    _mark_delivery_tracking(
+        msg,
+        organization,
+        history_category="otp",
+        retain_history_body=False,
+    )
+    from programs.utils.email_history import send_messages_with_history
+
+    send_messages_with_history([msg])
 
 
 def get_lead_mentor_notification_email():
@@ -187,6 +213,9 @@ def send_templated_notification(
     organization=None,
     attachments=None,
     track_delivery=True,
+    history_category="notification",
+    initiated_by=None,
+    retain_history_body=False,
 ):
     """
     Renders an HTML template and sends it as an email with a plain-text fallback
@@ -245,6 +274,7 @@ def send_templated_notification(
     # Normalize excessive whitespace/newlines
     plain_message = re.sub(r"\n\s*\n", "\n\n", plain_message)
 
+    messages = []
     for recipient in recipient_list:
         msg = EmailMultiAlternatives(
             subject=subject,
@@ -254,11 +284,22 @@ def send_templated_notification(
             reply_to=reply_to_list,
         )
         msg.attach_alternative(html_message, "text/html")
-        _mark_delivery_tracking(msg, organization, enabled=track_delivery)
+        _mark_delivery_tracking(
+            msg,
+            organization,
+            enabled=track_delivery,
+            history_category=history_category,
+            history_initiated_by=initiated_by,
+            retain_history_body=retain_history_body,
+        )
         if attachments:
             for attachment in attachments:
                 if isinstance(attachment, tuple):
                     msg.attach(*attachment)
                 else:
                     msg.attach(attachment)
-        msg.send()
+        messages.append(msg)
+
+    from programs.utils.email_history import send_messages_with_history
+
+    send_messages_with_history(messages)

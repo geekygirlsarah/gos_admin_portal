@@ -289,10 +289,47 @@ class AccountAdapter(DefaultAccountAdapter):
         def _send(close_connections: bool = False):
             from django.db import close_old_connections
 
+            history_message = None
+            organization = context.get("organization")
+            if organization is not None:
+                from django.core.mail import EmailMultiAlternatives
+
+                from programs.utils.email_history import (
+                    complete_email_history,
+                    mark_email_history_attempted,
+                    queue_email_history,
+                )
+                from programs.utils.notifications import _mark_delivery_tracking
+
+                history_message = EmailMultiAlternatives(
+                    subject="",
+                    body="",
+                    from_email=self.get_from_email(),
+                    to=[email],
+                )
+                history_category = (
+                    "otp"
+                    if template_prefix.startswith("account/email/login_code")
+                    else "account_notification"
+                )
+                _mark_delivery_tracking(
+                    history_message,
+                    organization,
+                    history_category=history_category,
+                    retain_history_body=False,
+                )
+                queue_email_history([history_message])
+                mark_email_history_attempted([history_message])
+
             try:
                 super(AccountAdapter, self).send_mail(template_prefix, email, context)
             except Exception as e:
+                if history_message is not None:
+                    complete_email_history([history_message], 0, e)
                 logging.error(f"Failed to send email {template_prefix} to {email}: {e}")
+            else:
+                if history_message is not None:
+                    complete_email_history([history_message], 0)
             finally:
                 # Only close connections from a background thread. The thread-local
                 # connection must be released before the thread exits, but closing

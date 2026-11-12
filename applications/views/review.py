@@ -1396,7 +1396,14 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
                 msg.attach_alternative(inlined_html_body, "text/html")
                 for inline_img in inline_images:
                     msg.attach(inline_img.to_mime())
-                _mark_delivery_tracking(msg, organization, enabled=not test_email)
+                _mark_delivery_tracking(
+                    msg,
+                    organization,
+                    enabled=not test_email,
+                    history_category="application_message",
+                    history_initiated_by=request.user,
+                    retain_history_body=True,
+                )
                 messages_to_send.append(msg)
 
             try:

@@ -1500,7 +1500,12 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 for inline_img in inline_images:
                     email.attach(inline_img.to_mime())
                 _mark_delivery_tracking(
-                    email, delivery_organization, enabled=not test_email
+                    email,
+                    delivery_organization,
+                    enabled=not test_email,
+                    history_category="program_message",
+                    history_initiated_by=request.user,
+                    retain_history_body=True,
                 )
                 messages_to_send.append(email)
 

@@ -107,3 +107,26 @@ After signature verification, the handler matches both provider message ID and e
 Profile and application resolution is limited to unique, ownership-consistent records in the verified organization; shared email addresses do not select a first match. Verified critical alerts go only to active local Lead Mentors with valid account email addresses and contain a generic notice, not recipient, profile, or provider diagnostic data. Audit records likewise omit addresses, payloads, and raw provider reasons.
 
 Existing delivery events default to unverified and remain unchanged; they are hidden from tenant issue lists, profile badges, counts, resolution actions, and audit summaries until separately reviewed. New unmatched, ambiguous, malformed, or early events are retained in an encrypted quarantine available only to platform superusers on the root domain. Review is read-only. `cleanup_email_delivery_quarantine` is dry-run by default; `--execute` deletes only records received at least 30 days earlier. A separately approved scheduled execution is a release prerequisite; this implementation does not configure a scheduler, and retention is not operationally guaranteed until one is configured.
+
+---
+
+## Organization Email History
+
+Outgoing messages recorded by the history integration are retained per recipient
+for 30 days. Lead Mentors can view history only for their current organization;
+recipient addresses, subjects, and retained bodies are encrypted in the database.
+Exact recipient lookup uses a keyed fingerprint, not a plaintext address index.
+
+Ordinary messages and reviewed bulk categories retain the final rendered body so
+personalized values remain available after source data changes. OTP and other
+credential messages keep only generic category/status metadata and recipient
+address; their subject and body are not retained. Attachments and embedded image
+bytes are not included. Saved HTML is displayed as escaped source, not rendered.
+Each access to a history entry is audited without including message content or
+addresses in audit metadata.
+
+History status distinguishes a recorded attempt, backend acceptance, failure,
+and unknown outcome. Acceptance is not proof of delivery or reading, and a
+multi-message backend count cannot identify individual outcomes reliably. The
+history integration applies only to send paths that provide trusted organization
+context; unscoped messages are not assigned to a tenant by guessing.

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-12
+
+### Changed
+- Added a direct Email History link to the Lead Mentor Admin menu.
+
 ## 2026-11-11
 
 ### Changed
@@ -9,6 +14,9 @@ All notable changes to this project will be documented in this file.
 - Updates now use a compact bell icon with a numeric unread badge; platform administrators can review and manage global updates from the root-domain platform admin area.
 - Root-domain platform superusers opening `/programs/notifications/` now go to the platform updates list, with a direct Updates link in platform navigation.
 - Portal updates now identify their publisher and show whether they came from an organization or the platform.
+
+### Added
+- Added organization-scoped outgoing email history for Lead Mentors, with encrypted per-recipient content and 30-day retention.
 
 ## 2026-11-09
 
