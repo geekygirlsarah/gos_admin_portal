@@ -507,6 +507,14 @@ def get_organization_email_settings(
         base_url = get_site_base_url()
         if base_url:
             logo_url = f"{base_url}{logo_url}"
+
+    def resolve_logo(key):
+        value = raw_cfg.get(key) or ""
+        base_url = get_site_base_url() if value.startswith("/") else ""
+        return f"{base_url}{value}" if base_url else value
+
+    wordmark_url = resolve_logo("wordmark_url")
+    host_logo_url = resolve_logo("host_logo_url")
     organization_name = raw_cfg.get("organization_name") or (
         org.name if org else "Momentum"
     )
@@ -530,6 +538,8 @@ def get_organization_email_settings(
         "secondary_color": secondary_color,
         "header_text_color": header_text_color,
         "logo_url": logo_url,
+        "wordmark_url": wordmark_url,
+        "host_logo_url": host_logo_url,
         "organization_name": organization_name,
         "address_line1": address_line1,
         "address_line2": address_line2,

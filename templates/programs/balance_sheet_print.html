@@ -45,7 +45,7 @@
     <div class="row">
     <div class="col-lg-10 col-xl-8 mb-3">
         <div class="org-header text-end">
-            {% if organization_logo_url %}<img src="{{ organization_logo_url }}" alt="{{ organization_email_name }} logo" class="img-fluid" style="max-width: 250px;">{% endif %}
+            {% if organization_host_logo_url %}<img src="{{ organization_host_logo_url }}" alt="{{ organization_email_name }} logo" class="img-fluid" style="max-width: 250px;">{% endif %}
             <div class="fw-bold">{{ organization_email_name }}</div>
             {% if organization_address_line1 %}<div>{{ organization_address_line1 }}</div>{% endif %}
             {% if organization_tax_id %}<div class="mb-2">Tax ID: {{ organization_tax_id }}</div>{% endif %}

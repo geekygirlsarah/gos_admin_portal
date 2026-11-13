@@ -892,55 +892,55 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             contact_name = request.POST.get("contact_name", "").strip()
             contact_email = request.POST.get("contact_email", "").strip()
 
-            logo_url = request.POST.get("logo_url", "").strip()
-            remove_logo = request.POST.get("remove_logo") in (
-                "1",
-                "true",
-                "on",
-                True,
-            )
+            for role in ("logo", "wordmark", "host_logo"):
+                url_key = f"{role}_url"
+                logo_url = request.POST.get(url_key, "").strip()
+                remove_logo = request.POST.get(f"remove_{role}") in (
+                    "1",
+                    "true",
+                    "on",
+                    True,
+                )
+                logo_file = request.FILES.get(f"{role}_file")
+                if remove_logo:
+                    logo_url = ""
+                elif logo_file:
+                    try:
+                        from django.utils.text import slugify
+                        from PIL import Image
 
-            if remove_logo:
-                logo_url = ""
-            elif "logo_file" in request.FILES and request.FILES["logo_file"]:
-                logo_file = request.FILES["logo_file"]
-                try:
-                    from django.utils.text import slugify
-                    from PIL import Image
+                        img = Image.open(logo_file)
+                        img.verify()
+                        logo_file.seek(0)
 
-                    # Open and verify image with Pillow
-                    img = Image.open(logo_file)
-                    img.verify()
-                    logo_file.seek(0)
+                        fmt = (getattr(img, "format", "") or "").upper()
+                        allowed_formats = {
+                            "PNG": ".png",
+                            "JPEG": ".jpg",
+                            "GIF": ".gif",
+                            "WEBP": ".webp",
+                        }
+                        if fmt not in allowed_formats:
+                            raise ValueError(
+                                f"Unsupported image format: {fmt or 'unknown'}"
+                            )
 
-                    # Strictly validate image format against allowlist
-                    fmt = (getattr(img, "format", "") or "").upper()
-                    allowed_formats = {
-                        "PNG": ".png",
-                        "JPEG": ".jpg",
-                        "GIF": ".gif",
-                        "WEBP": ".webp",
-                    }
-                    if fmt not in allowed_formats:
-                        raise ValueError(
-                            f"Unsupported image format: {fmt or 'unknown'}"
+                        ext = allowed_formats[fmt]
+                        safe_slug = slugify(org.slug) or "org"
+                        filename = (
+                            f"org_logos/{safe_slug}_{role}_{uuid.uuid4().hex[:8]}{ext}"
                         )
-
-                    ext = allowed_formats[fmt]
-                    safe_slug = slugify(org.slug) or "org"
-                    filename = f"org_logos/{safe_slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
-                    saved_path = default_storage.save(filename, logo_file)
-                    raw_url = default_storage.url(saved_path)
-                    logo_url = (
-                        request.build_absolute_uri(raw_url) if request else raw_url
-                    )
-                except Exception as e:
-                    messages.error(request, f"Invalid logo image file: {e}")
-                    return redirect("/programs/settings/?tab=branding")
-            elif not logo_url and "logo_url" not in request.POST:
-                logo_url = email_cfg.get("logo_url", "")
-            elif logo_url and logo_url.startswith("/") and request:
-                logo_url = request.build_absolute_uri(logo_url)
+                        saved_path = default_storage.save(filename, logo_file)
+                        raw_url = default_storage.url(saved_path)
+                        logo_url = request.build_absolute_uri(raw_url)
+                    except Exception as e:
+                        messages.error(request, f"Invalid logo image file: {e}")
+                        return redirect("/programs/settings/?tab=branding")
+                elif url_key not in request.POST:
+                    logo_url = email_cfg.get(url_key, "")
+                elif logo_url.startswith("/"):
+                    logo_url = request.build_absolute_uri(logo_url)
+                email_cfg[url_key] = logo_url
 
             email_cfg["primary_color"] = primary_color
             email_cfg["secondary_color"] = secondary_color
@@ -951,7 +951,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             email_cfg["footer_text"] = footer_text
             email_cfg["contact_name"] = contact_name
             email_cfg["contact_email"] = contact_email
-            email_cfg["logo_url"] = logo_url
 
             update_organization_email_settings(org, email_cfg)
             messages.success(

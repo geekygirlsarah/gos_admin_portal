@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-13
+
+### Added
+- Organization branding supports a team icon, an optional wide account-screen wordmark, and an optional host organization logo for receipts.
+
 ## 2026-11-12
 
 ### Changed

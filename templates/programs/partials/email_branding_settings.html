@@ -1,8 +1,8 @@
 <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
-            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-palette text-primary me-2"></i>Email Branding &amp; Template Customization</h5>
-            <p class="text-muted small mb-0">Customize your organization's master email template. Set your brand colors, upload your team logo, and configure header, footer, and address details.</p>
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-palette text-primary me-2"></i>Organization Branding</h5>
+            <p class="text-muted small mb-0">Choose logos for your portal, emails, and receipts, and customize your email template.</p>
         </div>
     </div>
     <div class="card-body p-4">
@@ -38,7 +38,8 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">Organization Logo</label>
+                        <label for="branding_logo_file" class="form-label fw-semibold small">Team Icon</label>
+                        <div class="form-text small mb-2">Square logo used in email, the navigation bar, and favicon.</div>
                         {% if email_settings.logo_url %}
                         <div class="d-flex align-items-center gap-3 p-2 bg-light border rounded mb-2">
                             <img src="{{ email_settings.logo_url }}" alt="Current Logo" style="max-height: 48px; max-width: 150px;" class="bg-white p-1 border rounded">
@@ -55,12 +56,41 @@
                         <div class="row g-2">
                             <div class="col-sm-6">
                                 <input type="file" name="logo_file" id="branding_logo_file" class="form-control form-control-sm" accept="image/*">
-                                <div class="form-text small">Upload image file (PNG, JPG, SVG, WebP).</div>
+                                <div class="form-text small">Upload PNG, JPEG, GIF, or WebP.</div>
                             </div>
                             <div class="col-sm-6">
                                 <input type="url" name="logo_url" id="branding_logo_url" class="form-control form-control-sm" value="{{ email_settings.logo_url }}" placeholder="Or paste image URL">
                                 <div class="form-text small">Or specify a public image web address.</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="branding_wordmark_file" class="form-label fw-semibold small">Team Wordmark</label>
+                        <div class="form-text small mb-2">Wide logo for login and account screens. Falls back to the team icon.</div>
+                        {% if email_settings.wordmark_url %}
+                        <div class="d-flex align-items-center gap-3 p-2 bg-light border rounded mb-2">
+                            <img src="{{ email_settings.wordmark_url }}" alt="Current team wordmark" style="max-height: 48px; max-width: 150px;" class="bg-white p-1 border rounded">
+                            <div class="form-check ms-auto"><input class="form-check-input" type="checkbox" name="remove_wordmark" id="remove_wordmark" value="1"><label class="form-check-label text-danger small" for="remove_wordmark">Remove</label></div>
+                        </div>
+                        {% endif %}
+                        <div class="row g-2">
+                            <div class="col-sm-6"><input type="file" name="wordmark_file" id="branding_wordmark_file" class="form-control form-control-sm" accept="image/png,image/jpeg,image/gif,image/webp"></div>
+                            <div class="col-sm-6"><label class="visually-hidden" for="branding_wordmark_url">Team wordmark URL</label><input type="url" name="wordmark_url" id="branding_wordmark_url" class="form-control form-control-sm" value="{{ email_settings.wordmark_url }}" placeholder="Or paste image URL"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="branding_host_logo_file" class="form-label fw-semibold small">Host Organization Logo</label>
+                        <div class="form-text small mb-2">Optional logo for receipts. Falls back to the team icon.</div>
+                        {% if email_settings.host_logo_url %}
+                        <div class="d-flex align-items-center gap-3 p-2 bg-light border rounded mb-2">
+                            <img src="{{ email_settings.host_logo_url }}" alt="Current host organization logo" style="max-height: 48px; max-width: 150px;" class="bg-white p-1 border rounded">
+                            <div class="form-check ms-auto"><input class="form-check-input" type="checkbox" name="remove_host_logo" id="remove_host_logo" value="1"><label class="form-check-label text-danger small" for="remove_host_logo">Remove</label></div>
+                        </div>
+                        {% endif %}
+                        <div class="row g-2">
+                            <div class="col-sm-6"><input type="file" name="host_logo_file" id="branding_host_logo_file" class="form-control form-control-sm" accept="image/png,image/jpeg,image/gif,image/webp"></div>
+                            <div class="col-sm-6"><label class="visually-hidden" for="branding_host_logo_url">Host organization logo URL</label><input type="url" name="host_logo_url" id="branding_host_logo_url" class="form-control form-control-sm" value="{{ email_settings.host_logo_url }}" placeholder="Or paste image URL"></div>
                         </div>
                     </div>
 

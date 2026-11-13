@@ -421,6 +421,10 @@ def organization_context(request):
         "organization_name": org.name if org else "Momentum",
         "organization_email_name": email_cfg.get("organization_name", "Momentum"),
         "organization_logo_url": email_cfg.get("logo_url", ""),
+        "organization_wordmark_url": email_cfg.get("wordmark_url")
+        or email_cfg.get("logo_url", ""),
+        "organization_host_logo_url": email_cfg.get("host_logo_url")
+        or email_cfg.get("logo_url", ""),
         "organization_address_line1": email_cfg.get("address_line1", ""),
         "organization_address_line2": email_cfg.get("address_line2", ""),
         "organization_tax_id": email_cfg.get("tax_id", ""),
