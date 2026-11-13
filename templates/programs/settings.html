@@ -19,56 +19,6 @@
         <div class="card-body p-2">
             <ul class="nav nav-pills nav-fill gap-1" id="settingsTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="pill" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-shield-lock me-1"></i> Permissions
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'lead_mentors' %}active{% endif %}" id="lead_mentors-tab" data-bs-toggle="pill" data-bs-target="#lead_mentors" type="button" role="tab" aria-controls="lead_mentors" aria-selected="{% if active_tab == 'lead_mentors' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-person-badge me-1"></i> Lead Mentors
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="pill" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-file-earmark-check me-1"></i> Agreements
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'background_checks' %}active{% endif %}" id="background_checks-tab" data-bs-toggle="pill" data-bs-target="#background_checks" type="button" role="tab" aria-controls="background_checks" aria-selected="{% if active_tab == 'background_checks' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-shield-check me-1"></i> Clearances
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'portal_address' %}active{% endif %}" id="portal_address-tab" data-bs-toggle="pill" data-bs-target="#portal_address" type="button" role="tab" aria-controls="portal_address" aria-selected="{% if active_tab == 'portal_address' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-globe2 me-1"></i> Portal Address
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'payment_instructions' %}active{% endif %}" id="payment_instructions-tab" data-bs-toggle="pill" data-bs-target="#payment_instructions" type="button" role="tab" aria-controls="payment_instructions" aria-selected="{% if active_tab == 'payment_instructions' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-credit-card me-1"></i> Payment Instructions
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'email' %}active{% endif %}" id="email-tab" data-bs-toggle="pill" data-bs-target="#email" type="button" role="tab" aria-controls="email" aria-selected="{% if active_tab == 'email' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-envelope-at me-1"></i> Email Settings
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'branding' %}active{% endif %}" id="branding-tab" data-bs-toggle="pill" data-bs-target="#branding" type="button" role="tab" aria-controls="branding" aria-selected="{% if active_tab == 'branding' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-palette me-1"></i> Branding
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'org_accounts' %}active{% endif %}" id="org_accounts-tab" data-bs-toggle="pill" data-bs-target="#org_accounts" type="button" role="tab" aria-controls="org_accounts" aria-selected="{% if active_tab == 'org_accounts' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-person-badge-fill me-1"></i> Org Accounts
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="pill" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">
                         <i class="bi bi-people me-1"></i> Teams
                     </button>
@@ -84,14 +34,64 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'lead_mentors' %}active{% endif %}" id="lead_mentors-tab" data-bs-toggle="pill" data-bs-target="#lead_mentors" type="button" role="tab" aria-controls="lead_mentors" aria-selected="{% if active_tab == 'lead_mentors' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-person-badge me-1"></i> Lead Mentors
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="pill" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-cloud-upload me-1"></i> Imports
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="pill" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
                         <i class="bi bi-percent me-1"></i> Sliding Scale
                         {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="pill" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-cloud-upload me-1"></i> Imports
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'payment_instructions' %}active{% endif %}" id="payment_instructions-tab" data-bs-toggle="pill" data-bs-target="#payment_instructions" type="button" role="tab" aria-controls="payment_instructions" aria-selected="{% if active_tab == 'payment_instructions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-credit-card me-1"></i> Payment Instructions
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="pill" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-file-earmark-check me-1"></i> Agreements
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'background_checks' %}active{% endif %}" id="background_checks-tab" data-bs-toggle="pill" data-bs-target="#background_checks" type="button" role="tab" aria-controls="background_checks" aria-selected="{% if active_tab == 'background_checks' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-shield-check me-1"></i> Clearances
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'org_accounts' %}active{% endif %}" id="org_accounts-tab" data-bs-toggle="pill" data-bs-target="#org_accounts" type="button" role="tab" aria-controls="org_accounts" aria-selected="{% if active_tab == 'org_accounts' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-person-badge-fill me-1"></i> Org Accounts
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'portal_address' %}active{% endif %}" id="portal_address-tab" data-bs-toggle="pill" data-bs-target="#portal_address" type="button" role="tab" aria-controls="portal_address" aria-selected="{% if active_tab == 'portal_address' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-globe2 me-1"></i> Portal Address
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'branding' %}active{% endif %}" id="branding-tab" data-bs-toggle="pill" data-bs-target="#branding" type="button" role="tab" aria-controls="branding" aria-selected="{% if active_tab == 'branding' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-palette me-1"></i> Branding
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'email' %}active{% endif %}" id="email-tab" data-bs-toggle="pill" data-bs-target="#email" type="button" role="tab" aria-controls="email" aria-selected="{% if active_tab == 'email' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-envelope-at me-1"></i> Email Settings
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="pill" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-shield-lock me-1"></i> Permissions
                     </button>
                 </li>
             </ul>

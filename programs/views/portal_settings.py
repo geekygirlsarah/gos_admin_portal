@@ -284,7 +284,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "notification_from_override": _stored_notification_sender(org),
             "payment_settings": get_organization_payment_settings(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
-            "active_tab": request.GET.get("tab", "permissions"),
+            "active_tab": request.GET.get("tab", "teams"),
             "sections": sections,
         }
         return render(request, self.template_name, context)

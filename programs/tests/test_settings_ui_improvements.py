@@ -87,6 +87,7 @@ class SettingsUIImprovementsTests(TestCase):
         url = reverse("portal_settings")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["active_tab"], "teams")
 
         # Verify page header and title
         self.assertContains(response, "Portal Settings")
@@ -102,6 +103,31 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, 'id="kiosk_configs-tab"')
         self.assertContains(response, 'id="sliding_scale_settings-tab"')
         self.assertContains(response, 'id="agreements-tab"')
+        tab_order = [
+            "teams",
+            "crews",
+            "subteams",
+            "lead_mentors",
+            "kiosk_configs",
+            "imports",
+            "sliding_scale_settings",
+            "payment_instructions",
+            "agreements",
+            "background_checks",
+            "org_accounts",
+            "portal_address",
+            "branding",
+            "email",
+            "permissions",
+        ]
+        tab_positions = [
+            response.content.index(f'id="{tab_id}-tab"'.encode())
+            for tab_id in tab_order
+        ]
+        self.assertEqual(tab_positions, sorted(tab_positions))
+
+        permissions_response = self.client.get(url, {"tab": "permissions"})
+        self.assertEqual(permissions_response.context["active_tab"], "permissions")
 
         # Verify role headers and permission controls
         self.assertContains(response, "Lead Mentor")
