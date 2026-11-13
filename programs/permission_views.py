@@ -67,8 +67,8 @@ def get_user_role(user, org=None):
     """Determines the role of a user for permission purposes.
 
     Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', 'Alumni', or None.
-    If org is provided (or a default organization can be resolved), the role
-    is resolved within that organization only.
+    The role is resolved within the supplied organization only; non-superusers
+    without organization context have no role.
 
     Scoping rules:
 
@@ -87,12 +87,7 @@ def get_user_role(user, org=None):
         return "LeadMentor"
 
     if org is None:
-        try:
-            from organizations.utils import get_default_organization
-
-            org = get_default_organization()
-        except Exception:
-            org = None
+        return None
 
     roles_in_org, has_rows = _user_membership_state(user, org)
     if has_rows:
@@ -155,21 +150,16 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
     ``role_name`` in ``org``.
 
     When the user has any membership rows, only the target organization is
-    consulted: no active membership with ``role_name`` there, or an unresolved
-    default organization, returns ``False`` rather than falling through to
+    consulted: no active membership with ``role_name`` there, or missing
+    organization context, returns ``False`` rather than falling through to
     global profile/group checks. Users with no membership rows anywhere keep
-    the legacy profile/group resolution.
+    the legacy profile/group resolution only when an organization is supplied.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return False
 
-    if org is None and role_name:
-        try:
-            from organizations.utils import get_default_organization
-
-            org = get_default_organization()
-        except Exception:
-            org = None
+    if org is None:
+        return False
 
     if role_name:
         roles_in_org, has_rows = _user_membership_state(user, org)
@@ -199,12 +189,7 @@ def user_is_lead_mentor(user, org=None):
     if user.is_superuser:
         return True
     if org is None:
-        try:
-            from organizations.utils import get_default_organization
-
-            org = get_default_organization()
-        except Exception:
-            org = None
+        return False
     roles_in_org, has_rows = _user_membership_state(user, org)
     if has_rows:
         # Member of at least one organization — lead only when an active

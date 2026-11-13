@@ -21,15 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 def _default_organization():
-    """Return the organization from the DEFAULT_ORGANIZATION_SLUG setting, or ``None``.
-
-    Resolved per-request (not memoized) so the default can be configured
-    per deployment via the ``DEFAULT_ORGANIZATION_SLUG`` setting.
-    Defaults to ``"gos"`` for backward compatibility.
-    """
+    """Return the configured default organization, or ``None`` when unset."""
     from organizations.models import Organization
 
-    slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "")
+    if not slug:
+        return None
     return Organization.objects.filter(slug=slug).first()
 
 

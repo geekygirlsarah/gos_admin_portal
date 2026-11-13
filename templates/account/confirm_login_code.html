@@ -1,9 +1,8 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% load account %}
-{% load static %}
 
-{% block title %}Enter Code | GoS Portal{% endblock %}
+{% block title %}Enter Code | {{ organization_name }} Portal{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -20,8 +19,8 @@
 {% block content %}
 <div class="login-card">
   <div class="text-center mb-4">
-    <img src="{% static 'img/gos_logo.png' %}" alt="Girls of Steel logo" class="img-fluid mb-2" style="max-width: 80%;">
-    <h1 class="h3 mb-0">Girls of Steel Portal</h1>
+    {% if organization_logo_url %}<img src="{{ organization_logo_url }}" alt="{{ organization_name }} logo" class="img-fluid mb-2" style="max-width: 80%;">{% endif %}
+    <h1 class="h3 mb-0">{{ organization_name }} Portal</h1>
   </div>
 
   <div class="card shadow-sm border-0">
@@ -73,7 +72,7 @@
           </form>
         </div>
         <div class="small text-muted">
-          Issues with your account? Please email <a href="mailto:leads@girlsofsteelrobotics.org" class="text-secondary small text-decoration-none">leads@girlsofsteelrobotics.org</a>.
+          {% if org_contact_email %}Issues with your account? Please email <a href="mailto:{{ org_contact_email }}" class="text-secondary small text-decoration-none">{{ org_contact_email }}</a>.{% endif %}
         </div>
       </div>
     </div>

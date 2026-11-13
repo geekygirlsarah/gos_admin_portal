@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load static %}
 {% load tz %}
 {% load permission_tags %}
 {% block title %}Balance Sheet — {{ student.display_name }} —
@@ -46,14 +45,12 @@
     <div class="row">
     <div class="col-lg-10 col-xl-8 mb-3">
         <div class="org-header text-end">
-            <img src="{% static 'img/cmu-text-logo.png' %}" alt="Carnegie Mellon University logo" class="img-fluid"
-                 style="max-width: 250px;">
-            <div class="fw-bold">Girls of Steel Robotics</div>
-            <div>Carnegie Mellon University</div>
-            <div class="mb-2">EIN: 25-0969449</div>
-            <div>5000 Forbes Ave</div>
-            <div class="mb-2">Pittsburgh, PA 15213-3890</div>
-            <div>cmu.edu</div>
+            {% if organization_logo_url %}<img src="{{ organization_logo_url }}" alt="{{ organization_email_name }} logo" class="img-fluid" style="max-width: 250px;">{% endif %}
+            <div class="fw-bold">{{ organization_email_name }}</div>
+            {% if organization_address_line1 %}<div>{{ organization_address_line1 }}</div>{% endif %}
+            {% if organization_tax_id %}<div class="mb-2">Tax ID: {{ organization_tax_id }}</div>{% endif %}
+            {% if organization_address_line2 %}<div class="mb-2">{{ organization_address_line2 }}</div>{% endif %}
+            {% if organization_website %}<div>{{ organization_website }}</div>{% endif %}
         </div>
 
         <div class="d-flex justify-content-between align-items-start receipt-header">
@@ -159,8 +156,8 @@
                 <div class="alert alert-info">No financial entries yet for this student and program.</div>
             {% endif %}
 
-            <div class=""><span class="fw-semibold">Program Contacts:</span> Elizabeth Kysel, Sarah Withee</div>
-            <div class=""><span class="fw-semibold">Email address:</span> leads@girlsofsteelrobotics.org</div>
+            {% if organization_email_name %}<div><span class="fw-semibold">Program Contacts:</span> {{ organization_email_name }}</div>{% endif %}
+            {% if org_contact_email %}<div><span class="fw-semibold">Email address:</span> <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a></div>{% endif %}
 
 
             <div class="mt-4 small text-muted">

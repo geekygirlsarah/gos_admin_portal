@@ -1,6 +1,6 @@
 Hi {{ application.secondary_parent_name|default:"" }},
 
-{{ application.student_name|default:"A student" }} has started a Girls of Steel Robotics application and needs
+{{ application.student_name|default:"A student" }} has started a {{ org_email_settings.organization_name|default:"Momentum" }} application and needs
 an adult contact to finish it.
 
 Application ID: {{ application.application_id }}

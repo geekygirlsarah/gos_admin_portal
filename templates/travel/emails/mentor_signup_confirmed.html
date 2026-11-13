@@ -9,5 +9,5 @@
     <p>Departure: <strong>{{ departure.display_label }}</strong>.</p>
     {% endif %}
 </div>
-<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} to see trip details.</p>
+<p class="small text-muted">Log in to the {{ organization.name|default:"Momentum" }} Portal and open the Travel page for {{ program.name }} to see trip details.</p>
 {% endblock %}

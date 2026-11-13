@@ -1,1 +1,1 @@
-{% if application %}Your Girls of Steel application verification code{% elif subject %}{{ subject }}{% else %}Login code for GoS Portal: {{ code }}{% endif %}
+{% if application %}Your {{ org_email_settings.organization_name|default:"Momentum" }} application verification code{% elif subject %}{{ subject }}{% else %}Login code for {{ org_email_settings.organization_name|default:"Momentum" }}: {{ code }}{% endif %}

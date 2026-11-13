@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Settings | GoS Portal{% endblock %}
+{% block title %}Settings | {{ organization_name }} Portal{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -581,7 +581,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="name" class="form-label fw-semibold small">Team Name</label>
-                            <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Girls of Steel">
+                            <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Robotics Team">
                         </div>
                         <div class="col-md-2">
                             <label for="color" class="form-label fw-semibold small">Color</label>
@@ -2042,12 +2042,12 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="email_sender_display_name" class="form-label fw-semibold small">Sender Display Name</label>
-                                <input type="text" name="sender_display_name" id="email_sender_display_name" class="form-control" value="{{ email_settings.sender_display_name }}" placeholder="e.g. Girls of Steel Robotics" required>
-                                <div class="form-text">The name people see in their inbox when they receive an email from the portal (e.g. "Girls of Steel Robotics").</div>
+                                <input type="text" name="sender_display_name" id="email_sender_display_name" class="form-control" value="{{ email_settings.sender_display_name }}" placeholder="e.g. Your organization" required>
+                                <div class="form-text">The name people see in their inbox when they receive an email from the portal.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="email_reply_to_email" class="form-label fw-semibold small">Primary Reply-To Email</label>
-                                <input type="email" name="reply_to_email" id="email_reply_to_email" class="form-control" value="{{ email_settings.reply_to_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                <input type="email" name="reply_to_email" id="email_reply_to_email" class="form-control" value="{{ email_settings.reply_to_email }}" placeholder="e.g. contact@example.org" required>
                                 <div class="form-text">Where replies will be sent when someone replies to an automated email or notification.</div>
                             </div>
                             <div class="col-md-12">
@@ -2074,11 +2074,11 @@
                                         <div class="row g-3">
                                             <div class="col-md-6">
                                                 <label for="custom_domain_domain" class="form-label fw-semibold small">Domain Name</label>
-                                                <input type="text" name="custom_domain_domain" id="custom_domain_domain" class="form-control form-control-sm" value="{{ email_settings.custom_domain.domain }}" placeholder="e.g. girlsofsteelrobotics.org">
+                                                <input type="text" name="custom_domain_domain" id="custom_domain_domain" class="form-control form-control-sm" value="{{ email_settings.custom_domain.domain }}" placeholder="e.g. example.org">
                                             </div>
                                             <div class="col-md-6">
                                                 <label for="custom_domain_from_email" class="form-label fw-semibold small">Custom From Address</label>
-                                                <input type="email" name="custom_domain_from_email" id="custom_domain_from_email" class="form-control form-control-sm" value="{{ email_settings.custom_domain.from_email }}" placeholder="e.g. notifications@girlsofsteelrobotics.org">
+                                                <input type="email" name="custom_domain_from_email" id="custom_domain_from_email" class="form-control form-control-sm" value="{{ email_settings.custom_domain.from_email }}" placeholder="e.g. notifications@example.org">
                                             </div>
                                         </div>
                                     </div>
@@ -2121,11 +2121,11 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_display_name" class="form-label fw-semibold small">Display Name</label>
-                                    <input type="text" name="display_name" id="new_identity_display_name" class="form-control form-control-sm" placeholder="e.g. Girls of Steel Lead Mentors" required>
+                                    <input type="text" name="display_name" id="new_identity_display_name" class="form-control form-control-sm" placeholder="e.g. Program Leadership Team" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_email" class="form-label fw-semibold small">Sender Email Address</label>
-                                    <input type="email" name="email" id="new_identity_email" class="form-control form-control-sm" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                    <input type="email" name="email" id="new_identity_email" class="form-control form-control-sm" placeholder="e.g. team@example.org" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_reply_to" class="form-label fw-semibold small">Reply-To Address</label>
@@ -2274,12 +2274,12 @@
                             </div>
                             <div class="col-md-6">
                                 <label for="id_org_account_name" class="form-label fw-semibold">Account / Identifier Name</label>
-                                <input type="text" class="form-control" id="id_org_account_name" name="org_account_name" value="{{ org_account_name|default:'Andrew ID' }}" placeholder="e.g. Andrew ID, School Account, Sciencey SSO">
-                                <div class="form-text">The label displayed across the portal and member profiles (e.g., "Andrew ID", "School Account", "Student ID Email").</div>
+                                <input type="text" class="form-control" id="id_org_account_name" name="org_account_name" value="{{ org_account_name|default:'Organization account' }}" placeholder="e.g. School Account, Membership ID, Organization SSO">
+                                <div class="form-text">The label displayed across the portal and member profiles (e.g., "School Account", "Membership ID", "Organization Email").</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="id_org_email_domain" class="form-label fw-semibold">Organization / School Email Domain</label>
-                                <input type="text" class="form-control" id="id_org_email_domain" name="org_email_domain" value="{{ org_email_domain|default:'' }}" placeholder="e.g. andrew.cmu.edu, somewhere.pa.k12.us, scienceyrobotics.org">
+                                <input type="text" class="form-control" id="id_org_email_domain" name="org_email_domain" value="{{ org_email_domain|default:'' }}" placeholder="e.g. school.example.org, robotics.example.org">
                                 <div class="form-text">Allowed domain(s) for organization accounts. Separate multiple domains with commas.</div>
                             </div>
                         </div>
@@ -2428,7 +2428,7 @@
 
         if (orgNameInput) {
             orgNameInput.addEventListener('input', function() {
-                var val = orgNameInput.value || 'Girls of Steel Robotics';
+                var val = orgNameInput.value || '{{ organization_email_name|escapejs }}';
                 if (previewOrgTitle) previewOrgTitle.textContent = val;
                 if (previewOrgSub) previewOrgSub.textContent = val;
                 if (previewOrgAutomated) previewOrgAutomated.textContent = val;

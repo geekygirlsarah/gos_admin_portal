@@ -1101,7 +1101,7 @@ class StudentDocumentDownloadView(LoginRequiredMixin, View):
                 has_access = True
         elif hasattr(user, "student_profile") and user.student_profile == student:
             has_access = True
-        elif user_is_mentor_or_lead(user):
+        elif user_is_mentor_or_lead(user, org=organization):
             if can_user_read(
                 user, "students", student, org=organization
             ) or can_user_read(

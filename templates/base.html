@@ -47,8 +47,12 @@
             {% if is_platform_admin %}
             <span class="fw-bold"><i class="bi bi-shield-lock-fill me-2 text-danger"></i>Momentum <span class="badge bg-danger ms-1">Platform Admin</span></span>
             {% elif request.organization %}
-            <img src="{% static 'img/rosie_icon.png' %}" alt="Rosie Icon" width="30" height="30" class="d-inline-block align-text-top me-2">
-            {{ request.organization.name }} Portal
+            {% if organization_logo_url %}
+            <img src="{{ organization_logo_url }}" alt="{{ organization_name }} logo" width="30" height="30" class="d-inline-block align-text-top me-2">
+            {% else %}
+            <i class="bi bi-buildings me-2" aria-hidden="true"></i>
+            {% endif %}
+            {{ organization_name }} Portal
             {% else %}
             <span class="fw-bold"><i class="bi bi-rocket-takeoff me-2 text-primary"></i>Momentum</span>
             {% endif %}
@@ -311,7 +315,7 @@
                                     <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
                                 {% endif %}
                                 {% if org_account_enabled %}
-                                <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Andrew ID" }}s</a></li>
+                                <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Organization account" }}s</a></li>
                                 {% endif %}
                             </ul>
                         </li>
@@ -420,7 +424,7 @@
         <div class="row">
             <div class="col-md-6 text-center text-md-start">
                 {% if request.organization %}
-                <span class="text-white-50 me-3">{{ request.organization.name }} {% if request.organization.settings.footer_tagline %}{{ request.organization.settings.footer_tagline }}{% else %}is an outreach program of Carnegie Mellon University.{% endif %}</span>
+                {% if organization_footer_tagline %}<span class="text-white-50 me-3">{{ organization_name }} {{ organization_footer_tagline }}</span>{% endif %}
                 {% else %}
                 <span class="text-white-50 me-3">Momentum &mdash; The operations platform for FIRST&reg; robotics teams.</span>
                 {% endif %}

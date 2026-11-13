@@ -319,7 +319,7 @@ class EmailDeliveryQuarantine(models.Model):
 class EmailHistoryBatch(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="email_history_batches",
     )
     initiated_by = models.ForeignKey(
@@ -363,7 +363,7 @@ class EmailHistory(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="email_history_entries",
     )
     batch = models.ForeignKey(
@@ -411,7 +411,7 @@ class EmailHistoryAddress(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="email_history_addresses",
     )
     history = models.ForeignKey(

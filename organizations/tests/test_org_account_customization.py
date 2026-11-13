@@ -23,13 +23,15 @@ class OrganizationAccountModelMethodTests(TestCase):
         )
 
     def test_default_organization_settings(self):
-        self.assertTrue(self.org.get_setting("org_account_enabled", True))
-        self.assertEqual(self.org.get_setting("org_account_name"), "Andrew ID")
-        self.assertEqual(self.org.get_setting("org_email_domain"), "andrew.cmu.edu")
-        self.assertTrue(self.org.get_setting("force_mentor_org_email"))
+        self.assertFalse(self.org.get_setting("org_account_enabled"))
+        self.assertEqual(self.org.get_setting("org_account_name"), "")
+        self.assertEqual(self.org.get_setting("org_email_domain"), "")
+        self.assertFalse(self.org.get_setting("force_mentor_org_email"))
         self.assertFalse(self.org.get_setting("force_student_org_email"))
+        self.assertFalse(self.org.is_org_email("mentor@andrew.cmu.edu"))
 
     def test_is_org_email_matching(self):
+        self.org.set_setting("org_account_enabled", True)
         self.org.set_setting(
             "org_email_domain", "scienceyrobotics.org, somewhere.pa.k12.us"
         )
@@ -46,6 +48,8 @@ class OrganizationAccountModelMethodTests(TestCase):
         self.assertFalse(self.org.is_org_email("mentor@scienceyrobotics.org"))
 
     def test_is_role_forced_org_email(self):
+        self.org.set_setting("org_account_enabled", True)
+        self.org.set_setting("org_email_domain", "scienceyrobotics.org")
         self.org.set_setting("force_mentor_org_email", True)
         self.org.set_setting("force_student_org_email", True)
         self.org.set_setting("force_parent_org_email", False)

@@ -58,9 +58,7 @@ def _find_or_provision_user_for_email(email):
 
     adult_allowed = False
     if adult:
-        from organizations.utils import get_default_organization
-
-        adult_org = adult.organization or get_default_organization()
+        adult_org = adult.organization
         is_personal = bool(
             adult.personal_email and adult.personal_email.lower() == email_lower
         )
@@ -93,9 +91,7 @@ def _find_or_provision_user_for_email(email):
     student = student_qs.filter(user__isnull=False).first() or student_qs.first()
     student_allowed = False
     if student:
-        from organizations.utils import get_default_organization
-
-        student_org = student.organization or get_default_organization()
+        student_org = student.organization
         is_student_personal = bool(
             student.personal_email and student.personal_email.lower() == email_lower
         )
@@ -355,18 +351,20 @@ class AccountAdapter(DefaultAccountAdapter):
         from allauth.core import context as allauth_context
 
         from organizations.utils import (
-            get_default_organization,
             get_organization_email_settings,
         )
 
-        org = context.get("organization")
-        if "organization" not in context:
-            request = getattr(allauth_context, "request", None) or getattr(
-                self, "request", None
-            )
-            org = getattr(request, "organization", None) or get_default_organization()
-        if "organization" not in context:
-            context["organization"] = org
+        request = getattr(allauth_context, "request", None) or getattr(
+            self, "request", None
+        )
+        application = context.get("application")
+        if application is not None and getattr(application, "organization_id", None):
+            org = application.organization
+        elif "organization" in context:
+            org = context["organization"]
+        else:
+            org = getattr(request, "organization", None)
+        context["organization"] = org
         if "org_email_settings" not in context:
             context["org_email_settings"] = get_organization_email_settings(org)
 

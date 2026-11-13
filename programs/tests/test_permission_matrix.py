@@ -66,6 +66,7 @@ class PermissionMatrixTests(TestCase):
 
         # Create a test program and link student to parent
         cls.program = Program.objects.create(name="Test Program", active=True)
+        cls.organization = cls.program.organization
         cls.student.adults.add(cls.parent)
 
         # All sections from RolePermission.SECTION_CHOICES
@@ -121,7 +122,7 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self.assertTrue(
-                    can_user_read(self.lead_mentor, section),
+                    can_user_read(self.lead_mentor, section, org=self.organization),
                     f"LeadMentor should read {section}",
                 )
 
@@ -131,7 +132,7 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self.assertTrue(
-                    can_user_write(self.lead_mentor, section),
+                    can_user_write(self.lead_mentor, section, org=self.organization),
                     f"LeadMentor should write {section}",
                 )
 
@@ -149,7 +150,7 @@ class PermissionMatrixTests(TestCase):
                         "Mentor", section, can_read=True, can_write=False
                     )
                     self.assertFalse(
-                        can_user_read(self.mentor_user, section),
+                        can_user_read(self.mentor_user, section, org=self.organization),
                         f"Mentor should NOT read {section} (finance restricted)",
                     )
                 else:
@@ -158,7 +159,7 @@ class PermissionMatrixTests(TestCase):
                         "Mentor", section, can_read=True, can_write=False
                     )
                     self.assertTrue(
-                        can_user_read(self.mentor_user, section),
+                        can_user_read(self.mentor_user, section, org=self.organization),
                         f"Mentor should read {section} when can_read=True",
                     )
 
@@ -166,7 +167,7 @@ class PermissionMatrixTests(TestCase):
                     self._clear_permissions()
                     expected = section not in self.mentor_default_no_read
                     self.assertEqual(
-                        can_user_read(self.mentor_user, section),
+                        can_user_read(self.mentor_user, section, org=self.organization),
                         expected,
                         f"Mentor default read for {section} should be {expected}",
                     )
@@ -177,7 +178,9 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self._set_permission("Mentor", section, can_read=True, can_write=True)
-                can_write = can_user_write(self.mentor_user, section)
+                can_write = can_user_write(
+                    self.mentor_user, section, org=self.organization
+                )
 
                 # Hard-coded no-write sections
                 if section in self.no_write_except_lead:
@@ -204,30 +207,30 @@ class PermissionMatrixTests(TestCase):
                 # Finance sections: parents can read if can_read=True
                 if section in self.finance_sections:
                     self.assertTrue(
-                        can_user_read(self.parent_user, section),
+                        can_user_read(self.parent_user, section, org=self.organization),
                         f"Parent should read {section} when can_read=True",
                     )
                 # Mentor-only sections: parents cannot read
                 elif section in self.mentor_only_sections:
                     self.assertFalse(
-                        can_user_read(self.parent_user, section),
+                        can_user_read(self.parent_user, section, org=self.organization),
                         f"Parent should NOT read {section} (mentor-only)",
                     )
                 # Orders: parents never read, even when a Lead flips the toggle on
                 elif section in self.orders_denied:
                     self.assertFalse(
-                        can_user_read(self.parent_user, section),
+                        can_user_read(self.parent_user, section, org=self.organization),
                         f"Parent should NOT read {section} (orders restricted)",
                     )
                 else:
                     self.assertTrue(
-                        can_user_read(self.parent_user, section),
+                        can_user_read(self.parent_user, section, org=self.organization),
                         f"Parent should read {section} when can_read=True",
                     )
 
                 # Test can_read=False
                 self._set_permission("Parent", section, can_read=False, can_write=False)
-                result = can_user_read(self.parent_user, section)
+                result = can_user_read(self.parent_user, section, org=self.organization)
                 if section in self.finance_sections:
                     # Finance sections default True for parent even without permission?
                     # Actually defaults to True per can_user_read logic
@@ -244,7 +247,9 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self._set_permission("Parent", section, can_read=True, can_write=True)
-                can_write = can_user_write(self.parent_user, section)
+                can_write = can_user_write(
+                    self.parent_user, section, org=self.organization
+                )
 
                 # Hard-coded no-write sections for non-LeadMentor
                 if section in self.no_write_except_lead:
@@ -277,19 +282,25 @@ class PermissionMatrixTests(TestCase):
                 # Finance sections: students cannot read
                 if section in self.finance_sections:
                     self.assertFalse(
-                        can_user_read(self.student_user, section),
+                        can_user_read(
+                            self.student_user, section, org=self.organization
+                        ),
                         f"Student should NOT read {section} (finance restricted)",
                     )
                 # Mentor-only sections: students cannot read
                 elif section in self.mentor_only_sections:
                     self.assertFalse(
-                        can_user_read(self.student_user, section),
+                        can_user_read(
+                            self.student_user, section, org=self.organization
+                        ),
                         f"Student should NOT read {section} (mentor-only)",
                     )
                 else:
                     # Default read is True for students
                     self.assertTrue(
-                        can_user_read(self.student_user, section),
+                        can_user_read(
+                            self.student_user, section, org=self.organization
+                        ),
                         f"Student should read {section} when can_read=True",
                     )
 
@@ -299,7 +310,9 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self._set_permission("Student", section, can_read=True, can_write=True)
-                can_write = can_user_write(self.student_user, section)
+                can_write = can_user_write(
+                    self.student_user, section, org=self.organization
+                )
 
                 # Without object, students can write:
                 # - outreach (special case)
@@ -349,25 +362,25 @@ class PermissionMatrixTests(TestCase):
                 # Finance sections: alumni cannot read
                 if section in self.finance_sections:
                     self.assertFalse(
-                        can_user_read(self.alumni_user, section),
+                        can_user_read(self.alumni_user, section, org=self.organization),
                         f"Alumni should NOT read {section} (finance restricted)",
                     )
                 # Mentor-only sections: alumni cannot read
                 elif section in self.mentor_only_sections:
                     self.assertFalse(
-                        can_user_read(self.alumni_user, section),
+                        can_user_read(self.alumni_user, section, org=self.organization),
                         f"Alumni should NOT read {section} (mentor-only)",
                     )
                 # Orders: alumni never read, even when a Lead flips the toggle on
                 elif section in self.orders_denied:
                     self.assertFalse(
-                        can_user_read(self.alumni_user, section),
+                        can_user_read(self.alumni_user, section, org=self.organization),
                         f"Alumni should NOT read {section} (orders restricted)",
                     )
                 else:
                     # Default read is True for alumni
                     self.assertTrue(
-                        can_user_read(self.alumni_user, section),
+                        can_user_read(self.alumni_user, section, org=self.organization),
                         f"Alumni should read {section} when can_read=True",
                     )
 
@@ -377,7 +390,9 @@ class PermissionMatrixTests(TestCase):
         for section in self.sections:
             with self.subTest(section=section):
                 self._set_permission("Alumni", section, can_read=True, can_write=True)
-                can_write = can_user_write(self.alumni_user, section)
+                can_write = can_user_write(
+                    self.alumni_user, section, org=self.organization
+                )
 
                 if section in self.no_write_except_lead:
                     self.assertFalse(
@@ -460,11 +475,21 @@ class PermissionMatrixTests(TestCase):
 
     def test_get_user_role_matrix(self):
         """Verify get_user_role returns correct role for each user type."""
-        self.assertEqual(get_user_role(self.lead_mentor), "LeadMentor")
-        self.assertEqual(get_user_role(self.mentor_user), "Mentor")
-        self.assertEqual(get_user_role(self.parent_user), "Parent")
-        self.assertEqual(get_user_role(self.student_user), "Student")
-        self.assertEqual(get_user_role(self.alumni_user), "Alumni")
+        self.assertEqual(
+            get_user_role(self.lead_mentor, org=self.organization), "LeadMentor"
+        )
+        self.assertEqual(
+            get_user_role(self.mentor_user, org=self.organization), "Mentor"
+        )
+        self.assertEqual(
+            get_user_role(self.parent_user, org=self.organization), "Parent"
+        )
+        self.assertEqual(
+            get_user_role(self.student_user, org=self.organization), "Student"
+        )
+        self.assertEqual(
+            get_user_role(self.alumni_user, org=self.organization), "Alumni"
+        )
 
         # User with no profile
         nobody = User.objects.create_user(
@@ -531,6 +556,7 @@ class PermissionEdgeCaseTests(TestCase):
             is_alumni=True,
         )
         cls.program = Program.objects.create(name="Test Program", active=True)
+        cls.organization = cls.program.organization
         cls.student.adults.add(cls.parent)
 
     def setUp(self):
@@ -551,19 +577,21 @@ class PermissionEdgeCaseTests(TestCase):
                     defaults={"can_read": True, "can_write": True},
                 )
                 self.assertFalse(
-                    can_user_write(user, "background_checks"),
+                    can_user_write(user, "background_checks", org=self.organization),
                     f"{role_name} should never write background_checks",
                 )
 
         # Lead mentor CAN write
-        self.assertTrue(can_user_write(self.lead_mentor, "background_checks"))
+        self.assertTrue(
+            can_user_write(self.lead_mentor, "background_checks", org=self.organization)
+        )
 
     def test_finance_sections_parent_read_only(self):
         """Parent can READ finance sections but cannot WRITE (only LeadMentor writes)."""
         from programs.permission_views import user_is_parent
 
-        self.assertTrue(user_is_parent(self.parent_user))
-        self.assertFalse(user_is_parent(self.mentor_user))
+        self.assertTrue(user_is_parent(self.parent_user, org=self.organization))
+        self.assertFalse(user_is_parent(self.mentor_user, org=self.organization))
 
         # Parent can READ finance
         RolePermission.objects.update_or_create(
@@ -576,13 +604,23 @@ class PermissionEdgeCaseTests(TestCase):
             section="sliding_scale",
             defaults={"can_read": True, "can_write": True},
         )
-        self.assertTrue(can_user_read(self.parent_user, "payments"))
-        self.assertTrue(can_user_read(self.parent_user, "sliding_scale"))
+        self.assertTrue(
+            can_user_read(self.parent_user, "payments", org=self.organization)
+        )
+        self.assertTrue(
+            can_user_read(self.parent_user, "sliding_scale", org=self.organization)
+        )
 
         # But Parent CANNOT write finance (hardcoded to LeadMentor only)
-        self.assertFalse(can_user_write(self.parent_user, "payments"))
-        self.assertFalse(can_user_write(self.parent_user, "sliding_scale"))
-        self.assertFalse(can_user_write(self.parent_user, "fees"))
+        self.assertFalse(
+            can_user_write(self.parent_user, "payments", org=self.organization)
+        )
+        self.assertFalse(
+            can_user_write(self.parent_user, "sliding_scale", org=self.organization)
+        )
+        self.assertFalse(
+            can_user_write(self.parent_user, "fees", org=self.organization)
+        )
 
     def test_attendance_mentor_default_write(self):
         """Mentor has default write access to attendance."""
@@ -591,14 +629,20 @@ class PermissionEdgeCaseTests(TestCase):
             section="attendance",
             defaults={"can_read": True, "can_write": True},
         )
-        self.assertTrue(can_user_read(self.mentor_user, "attendance"))
-        self.assertTrue(can_user_write(self.mentor_user, "attendance"))
+        self.assertTrue(
+            can_user_read(self.mentor_user, "attendance", org=self.organization)
+        )
+        self.assertTrue(
+            can_user_write(self.mentor_user, "attendance", org=self.organization)
+        )
 
     def test_student_outreach_write(self):
         """Students can write outreach if they are champion."""
         self._set_permission("Student", "outreach", can_read=True, can_write=True)
         # Base permission allows write
-        self.assertTrue(can_user_write(self.student_user, "outreach"))
+        self.assertTrue(
+            can_user_write(self.student_user, "outreach", org=self.organization)
+        )
 
     def _set_permission(self, role, section, can_read=True, can_write=False):
         RolePermission.objects.update_or_create(

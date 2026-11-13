@@ -604,9 +604,9 @@
 
                 {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
                   <div class="col-md-6">
-                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Andrew Account" }}</div>
-                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Andrew ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
-                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Andrew" }} Email:</span> {{ student.org_email|default:'—' }}</div>
+                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Organization account" }}</div>
+                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Organization account ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
+                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Organization" }} Email:</span> {{ student.org_email|default:'—' }}</div>
                   </div>
                 {% endif %}
               </div>

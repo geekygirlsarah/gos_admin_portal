@@ -4,7 +4,7 @@ This document defines the roles, dynamic permissions system, and access control 
 
 ## Roles Hierarchy & Resolution
 
-User roles are evaluated dynamically by `get_user_role(user)` in `programs/permission_views.py`. 
+User roles are evaluated dynamically by `get_user_role(user, org=None)` in `programs/permission_views.py`.
 
 For accounts with memberships, the priority order of active roles in the
 requested organization is:
@@ -17,9 +17,10 @@ requested organization is:
 
 ### Organization Scoping and the Transitional Legacy Fallback
 
-Role and boolean-helper checks (`get_user_role`, `user_is_*`) resolve within an
-organization: the `org` argument when passed, otherwise the default
-organization (`DEFAULT_ORGANIZATION_SLUG`).
+Role and boolean-helper checks (`get_user_role`, `user_is_*`) resolve only
+within an explicitly supplied organization. Non-superusers without organization
+context receive no role and fail boolean checks; authorization never resolves
+`DEFAULT_ORGANIZATION_SLUG` as a fallback. Superusers remain organization-agnostic.
 
 Scoping rules:
 
@@ -52,11 +53,12 @@ legacy, inactive, and group-only accounts before rollout to avoid lockouts.
 `programs/signals.py` keeps `UserOrganizationMembership` rows in sync with
 profiles, mirroring the backfill in organizations migration 0003:
 
-- Saving an `Adult` creates `Mentor` (active follows `mentor_active`),
-  `Parent`, and `Alumni` memberships in the Adult's organization (or the
-  default organization when unset).
-- Saving a `Student` creates a `Student` membership (active follows
-  `graduated`).
+- Saving an `Adult` with an organization creates `Mentor` (active follows
+  `mentor_active`), `Parent`, and `Alumni` memberships in that organization.
+- Saving a `Student` with an organization creates a `Student` membership
+  (active follows `graduated`).
+- Profiles without an organization create no memberships; they are not assigned
+  to a default tenant.
 - Flipping a flag **off** (e.g. `mentor_active`) deactivates the matching
   membership; profile saves **never re-activate** a deactivated membership.
   Reactivation is an explicit platform-admin or invitation action.

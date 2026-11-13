@@ -6,8 +6,9 @@ from programs.permission_views import get_user_role
 
 
 def active_program(request):
-    if not request.user.is_authenticated:
-        return {}
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return {"current_program": None}
 
     program = None
     program_id = None
@@ -30,18 +31,16 @@ def active_program(request):
 
     # 3. If still no program_id, check if user has only one program
     if not program_id:
-        role = get_user_role(request.user, org=request.organization)
+        role = get_user_role(user, org=getattr(request, "organization", None))
         if role == "Parent":
             enrollments = Enrollment.objects.filter(
-                student__adults__user=request.user
+                student__adults__user=user
             ).distinct()
             programs = Program.objects.filter(enrollment__in=enrollments).distinct()
             if programs.count() == 1:
                 program = programs.first()
         elif role == "Student":
-            programs = Program.objects.filter(
-                enrollment__student__user=request.user
-            ).distinct()
+            programs = Program.objects.filter(enrollment__student__user=user).distinct()
             if programs.count() == 1:
                 program = programs.first()
         elif role == "LeadMentor":
@@ -64,14 +63,15 @@ def active_program(request):
 
 
 def notification_context(request):
-    if not request.user.is_authenticated:
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
         return {"unread_notification_count": 0}
 
     if hasattr(request, "notification_unread_count"):
         count = request.notification_unread_count
     else:
         count = unread_notification_count(
-            request.user,
+            user,
             getattr(request, "organization", None),
         )
         request.notification_unread_count = count

@@ -568,7 +568,9 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["bg_checks_needed_count"] = 0
 
         # Health & Medical Alert Count
-        ctx["can_view_medical"] = can_user_read(self.request.user, "health_medical")
+        ctx["can_view_medical"] = can_user_read(
+            self.request.user, "health_medical", org=org
+        )
         if ctx["can_view_medical"]:
             ctx["medical_alerts_count"] = sum(
                 1

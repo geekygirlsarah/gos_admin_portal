@@ -11,9 +11,9 @@
         back to <strong>awaiting parent approval</strong>.
     </p>
     <p>
-        Parents/guardians, please log in to the Girls of Steel Portal and review this sign-up
+        Parents/guardians, please log in to the {{ organization.name|default:"Momentum" }} Portal and review this sign-up
         again from the Travel page.
     </p>
 </div>
-<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} for more detail.</p>
+<p class="small text-muted">Log in to the {{ organization.name|default:"Momentum" }} Portal and open the Travel page for {{ program.name }} for more detail.</p>
 {% endblock %}

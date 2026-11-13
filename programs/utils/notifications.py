@@ -13,8 +13,6 @@ from django.core.mail import EmailMultiAlternatives, mailers
 
 logger = logging.getLogger(__name__)
 
-LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
-
 
 def get_local_lead_mentor_notification_emails(organization):
     """Return distinct, usable account addresses for active local Lead Mentors."""
@@ -135,13 +133,6 @@ def send_otp_email(email, otp, organization=None):
     send_messages_with_history([msg])
 
 
-def get_lead_mentor_notification_email():
-    """Email address that should receive Lead Mentor notifications (e.g. new
-    sliding scale applications). Configurable via LEAD_MENTOR_NOTIFICATION_EMAIL.
-    """
-    return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
-
-
 def get_sender_connection(from_account, organization=None):
     """Return an ``(email_backend, from_email, reply_to)`` tuple for the messaging UI.
 
@@ -254,12 +245,7 @@ def send_templated_notification(
     if "org_email_settings" not in ctx:
         ctx["org_email_settings"] = org_cfg
     if "organization" not in ctx:
-        if organization is not None:
-            ctx["organization"] = organization
-        else:
-            from organizations.utils import get_default_organization
-
-            ctx["organization"] = get_default_organization()
+        ctx["organization"] = organization
 
     html_message = render_to_string(template_name, ctx)
     try:

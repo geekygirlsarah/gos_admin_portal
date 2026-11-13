@@ -235,6 +235,15 @@ Audit records must:
 - Be retained and protected according to the project’s approved retention and
   backup policy.
 
+`EmailHistoryBatch`, `EmailHistory`, and `EmailHistoryAddress` are protected
+from cascading organization deletion. Resolve email-history retention through
+the approved retention process before deleting an organization. Notifications
+with `organization=None` are platform-wide messages and remain supported.
+
+`AuditLog` rows do not carry an organization identifier. The global Django Admin
+audit view therefore permits platform superusers only; tenant Lead Mentors use
+the organization-scoped audit views instead.
+
 Audit logging is not a substitute for authorization checks. A valid audit event
 must never make an otherwise unauthorized action permissible.
 

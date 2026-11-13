@@ -145,7 +145,7 @@ class ProfilePermissionsTests(TestCase):
             response,
             "To add, remove, or modify parent/guardian relationships and emergency contacts, please reach out to team leadership",
         )
-        self.assertContains(response, f"mailto:{settings.DEFAULT_REPLY_TO_EMAIL}")
+        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
 
     def test_student_editing_own_profile_cannot_remove_parents(self):
         self.student.primary_contact = self.parent
@@ -198,7 +198,7 @@ class ProfilePermissionsTests(TestCase):
             response,
             "To link or unlink students from your profile, please reach out to team leadership",
         )
-        self.assertContains(response, f"mailto:{settings.DEFAULT_REPLY_TO_EMAIL}")
+        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
 
     def test_lead_mentor_editing_student_sees_editable_parents_fields(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
@@ -923,8 +923,10 @@ class FinancePermissionTests(TestCase):
             is_parent=True,
             is_mentor=True,
         )
-        self.assertTrue(can_user_read(user, "sliding_scale"))
-        self.assertTrue(can_user_read(user, "payments"))
+        self.assertTrue(
+            can_user_read(user, "sliding_scale", org=self.program.organization)
+        )
+        self.assertTrue(can_user_read(user, "payments", org=self.program.organization))
 
     def test_mentor_cannot_view_payments_create(self):
         self.client.login(username="mentor_user", password="password123")  # nosec B106
@@ -1252,6 +1254,9 @@ class PortalPermissionsUpdateTests(TestCase):
 
 
 class GetUserRoleTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.get(slug="gos")
+
     def test_superuser_is_lead_mentor(self):
         from programs.permission_views import get_user_role
 
@@ -1268,7 +1273,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         user.groups.add(lm_group)
-        self.assertEqual(get_user_role(user), "LeadMentor")
+        self.assertEqual(get_user_role(user, org=self.organization), "LeadMentor")
 
     def test_mentor_priority_over_parent_and_alumni(self):
         from programs.permission_views import get_user_role
@@ -1284,7 +1289,7 @@ class GetUserRoleTests(TestCase):
             is_parent=True,
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(user), "Mentor")
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
 
     def test_parent_priority_over_alumni(self):
         from programs.permission_views import get_user_role
@@ -1300,7 +1305,7 @@ class GetUserRoleTests(TestCase):
             is_parent=True,
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(user), "Parent")
+        self.assertEqual(get_user_role(user, org=self.organization), "Parent")
 
     def test_alumni_role(self):
         from programs.permission_views import get_user_role
@@ -1316,7 +1321,7 @@ class GetUserRoleTests(TestCase):
             is_parent=False,
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(user), "Alumni")
+        self.assertEqual(get_user_role(user, org=self.organization), "Alumni")
 
     def test_student_profile_role(self):
         from programs.permission_views import get_user_role
@@ -1327,7 +1332,7 @@ class GetUserRoleTests(TestCase):
         Student.objects.create(
             user=user, preferred_first_name="Student", last_name="User"
         )
-        self.assertEqual(get_user_role(user), "Student")
+        self.assertEqual(get_user_role(user, org=self.organization), "Student")
 
     def test_lead_mentor_group_overrides_profiles(self):
         # A legacy group no longer overrides an active organization membership.
@@ -1347,7 +1352,7 @@ class GetUserRoleTests(TestCase):
                 user=user, role="Mentor", is_active=True
             ).exists()
         )
-        self.assertEqual(get_user_role(user), "Mentor")
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
 
     def test_no_profile_or_group_returns_none(self):
         from programs.permission_views import get_user_role
@@ -1355,7 +1360,7 @@ class GetUserRoleTests(TestCase):
         user = User.objects.create_user(
             username="nobody", password="password123"
         )  # nosec B106
-        self.assertIsNone(get_user_role(user))
+        self.assertIsNone(get_user_role(user, org=self.organization))
 
     def test_group_fallback_mentor(self):
         from programs.permission_views import get_user_role
@@ -1365,7 +1370,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="Mentor")
         user.groups.add(group)
-        self.assertEqual(get_user_role(user), "Mentor")
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
 
     def test_group_fallback_parent(self):
         from programs.permission_views import get_user_role
@@ -1375,7 +1380,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="Parent")
         user.groups.add(group)
-        self.assertEqual(get_user_role(user), "Parent")
+        self.assertEqual(get_user_role(user, org=self.organization), "Parent")
 
     def test_group_fallback_student(self):
         from programs.permission_views import get_user_role
@@ -1385,7 +1390,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="Student")
         user.groups.add(group)
-        self.assertEqual(get_user_role(user), "Student")
+        self.assertEqual(get_user_role(user, org=self.organization), "Student")
 
 
 class UserRoleFlagTests(TestCase):
@@ -1394,6 +1399,9 @@ class UserRoleFlagTests(TestCase):
     These check a single Adult role flag independently of role priority, so a
     parent who also mentors (or is an alumni) is still recognized as a parent.
     """
+
+    def setUp(self):
+        self.organization = Organization.objects.get(slug="gos")
 
     def test_parent_only(self):
         from programs.permission_views import (
@@ -1408,9 +1416,9 @@ class UserRoleFlagTests(TestCase):
         Adult.objects.create(
             user=user, legal_first_name="Test", last_name="User", is_parent=True
         )
-        self.assertTrue(user_is_parent(user))
-        self.assertFalse(user_is_mentor(user))
-        self.assertFalse(user_is_alumni(user))
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertFalse(user_is_mentor(user, org=self.organization))
+        self.assertFalse(user_is_alumni(user, org=self.organization))
 
     def test_parent_and_mentor(self):
         from programs.permission_views import (
@@ -1429,9 +1437,9 @@ class UserRoleFlagTests(TestCase):
             is_parent=True,
             is_mentor=True,
         )
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_mentor(user))
-        self.assertFalse(user_is_alumni(user))
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertTrue(user_is_mentor(user, org=self.organization))
+        self.assertFalse(user_is_alumni(user, org=self.organization))
 
     def test_all_three_flags(self):
         from programs.permission_views import (
@@ -1451,9 +1459,9 @@ class UserRoleFlagTests(TestCase):
             is_mentor=True,
             is_alumni=True,
         )
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_mentor(user))
-        self.assertTrue(user_is_alumni(user))
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertTrue(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
 
     def test_mentor_only(self):
         from programs.permission_views import user_is_parent
@@ -1464,7 +1472,7 @@ class UserRoleFlagTests(TestCase):
         Adult.objects.create(
             user=user, legal_first_name="Test", last_name="User", is_mentor=True
         )
-        self.assertFalse(user_is_parent(user))
+        self.assertFalse(user_is_parent(user, org=self.organization))
 
     def test_anonymous_and_unlinked_users(self):
         from django.contrib.auth.models import AnonymousUser
@@ -1494,7 +1502,7 @@ class UserRoleFlagTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="Parent")
         user.groups.add(group)
-        self.assertTrue(user_is_parent(user))
+        self.assertTrue(user_is_parent(user, org=self.organization))
 
     def test_mentor_group_fallback(self):
         from programs.permission_views import user_is_mentor
@@ -1504,7 +1512,7 @@ class UserRoleFlagTests(TestCase):
         )  # nosec B106
         group, _ = Group.objects.get_or_create(name="Mentor")
         user.groups.add(group)
-        self.assertTrue(user_is_mentor(user))
+        self.assertTrue(user_is_mentor(user, org=self.organization))
 
 
 class SignalGroupAssignmentTests(TestCase):

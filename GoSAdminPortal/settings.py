@@ -137,12 +137,6 @@ if os.getenv("ALLOWED_HOSTS"):
 
 MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "localhost")
 
-# Default organization slug for when no org context exists.
-# Defaults to "gos" for backward compatibility; set to any other value or
-# leave unset to return None when no organization matches the request.
-DEFAULT_ORGANIZATION_SLUG = os.getenv("DEFAULT_ORGANIZATION_SLUG", "gos")
-
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -493,6 +487,12 @@ TESTING = (
     or any("pytest" in arg for arg in sys.argv)
     or os.getenv("DJANGO_TESTING", "").lower() in ("1", "true", "yes")
 )
+
+# No organization is implicitly selected in normal operation. Tests retain the
+# legacy GoS tenant unless they explicitly override this setting.
+DEFAULT_ORGANIZATION_SLUG = os.getenv("DEFAULT_ORGANIZATION_SLUG", "").strip()
+if TESTING and not DEFAULT_ORGANIZATION_SLUG:
+    DEFAULT_ORGANIZATION_SLUG = "gos"
 
 # Use fast MD5 hasher during test runs to significantly reduce test execution time.
 if TESTING:

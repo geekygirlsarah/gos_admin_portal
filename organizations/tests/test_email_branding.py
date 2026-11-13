@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import render_to_string
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
@@ -56,15 +56,19 @@ class OrganizationEmailBrandingTests(TestCase):
         self.url = reverse("portal_email_settings")
 
     def test_default_branding_settings(self):
-        cfg = get_organization_email_settings(self.org)
+        organization = Organization.objects.create(
+            name="Nova Robotics", slug="nova-branding-defaults"
+        )
+        cfg = get_organization_email_settings(organization)
         self.assertEqual(cfg["primary_color"], "#334155")
         self.assertEqual(cfg["header_text_color"], "#ffffff")
-        self.assertEqual(cfg["organization_name"], self.org.name)
+        self.assertEqual(cfg["organization_name"], organization.name)
         self.assertEqual(cfg["address_line1"], "")
         self.assertEqual(cfg["address_line2"], "")
         self.assertEqual(cfg["footer_text"], "")
         self.assertEqual(cfg["contact_name"], "")
         self.assertEqual(cfg["contact_email"], settings.DEFAULT_REPLY_TO_EMAIL)
+        self.assertEqual(cfg["reply_to_email"], settings.DEFAULT_REPLY_TO_EMAIL)
         self.assertIn("portal_url", cfg)
 
     def test_custom_branding_settings(self):
@@ -405,6 +409,8 @@ class OrganizationEmailBrandingTests(TestCase):
         self.org_settings.save()
 
         adapter = get_adapter()
+        adapter.request = RequestFactory().get("/")
+        adapter.request.organization = self.org
         adapter.send_mail(
             "account/email/login_code",
             "student@example.com",

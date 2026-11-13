@@ -220,7 +220,7 @@ _EXPERIENCE_FIELDS = [
     },
     {
         "name": "referral_source",
-        "label": "How did you hear about Girls of Steel Robotics?",
+        "label": "How did you hear about this program?",
         "kind": "textarea",
     },
 ]
@@ -292,7 +292,11 @@ _MENTOR_FIELDS = [
         "kind": "checkbox",
         "initial": True,
     },
-    {"name": "andrew_id", "label": "Andrew ID (if you have one)", "kind": "text"},
+    {
+        "name": "andrew_id",
+        "label": "Organization account ID (if you have one)",
+        "kind": "text",
+    },
     {"name": "employer", "label": "Employer / affiliation", "kind": "text"},
     {
         "name": "notes",

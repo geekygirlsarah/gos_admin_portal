@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Added a direct Email History link to the Lead Mentor Admin menu.
+- Tenant resolution and role/membership helpers no longer silently choose GoS when organization context is missing; new organization account and branding defaults are neutral, and the global Django Admin audit view is platform-superuser-only.
+- Legacy GoS portal, contact, clearance, and email-branding values are stored on the `gos` organization by migration, and tenant-facing email, calendar, and financial print branding now uses organization settings.
+- Downloadable import samples use generic organization account/email headers and reserved example domains. The existing PA/CMU application clearance flow remains unchanged pending its planned redesign.
+- Tenant email-history records now protect their organization from deletion while the records exist; platform-wide notifications remain organization-less by design.
 
 ## 2026-11-11
 

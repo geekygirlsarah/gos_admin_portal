@@ -51,10 +51,31 @@ class OrganizationRequiredTests(TestCase):
                     self.assertTrue(field.null)
                     self.assertIs(field.remote_field.on_delete, SET_NULL)
                     continue
+                if model._meta.label == "programs.Notification":
+                    # Null organization means this is an intentional platform-wide message.
+                    self.assertTrue(field.null)
+                    self.assertIs(field.remote_field.on_delete, SET_NULL)
+                    continue
                 self.assertFalse(field.null)
                 if model._meta.label in NON_PROTECT_MODELS:
                     continue
                 self.assertIs(field.remote_field.on_delete, PROTECT)
+
+    def test_org_with_email_history_cannot_be_deleted(self):
+        from django.db.models import ProtectedError
+
+        from programs.models.communication import EmailHistory, EmailHistoryBatch
+
+        organization = Organization.objects.create(
+            name="History Org", slug="history-org"
+        )
+        batch = EmailHistoryBatch.objects.create(
+            organization=organization, category="test"
+        )
+        EmailHistory.objects.create(organization=organization, batch=batch)
+
+        with self.assertRaises(ProtectedError):
+            organization.delete()
 
     def test_order_without_organization_rejected(self):
         from orders.models import Order

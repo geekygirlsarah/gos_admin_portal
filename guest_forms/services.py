@@ -97,12 +97,9 @@ def send_submission_confirmation_email(submission) -> None:
         )
         return
 
-    from organizations.utils import (
-        get_default_organization,
-        get_organization_email_settings,
-    )
+    from organizations.utils import get_organization_email_settings
 
-    org = get_default_organization()
+    org = submission.guest_form.organization
     org_settings = get_organization_email_settings(org)
 
     ctx = {

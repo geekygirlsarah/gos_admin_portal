@@ -50,7 +50,7 @@
     <div class="container">
         <div class="row justify-content-center mb-2">
             <div class="col-auto">
-                <img src="{% static 'img/gos_logo.png' %}" class="img-fluid" style="max-height: 80px;" alt="Girls of Steel Logo">
+                {% if organization_logo_url %}<img src="{{ organization_logo_url }}" class="img-fluid" style="max-height: 80px;" alt="{{ organization_name }} logo">{% else %}<h2>{{ organization_name }}</h2>{% endif %}
             </div>
         </div>
         <h1>{{ config.label }}</h1>

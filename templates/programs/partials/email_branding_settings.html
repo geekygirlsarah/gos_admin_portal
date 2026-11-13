@@ -16,8 +16,8 @@
                         <div class="col-sm-6">
                             <label for="branding_primary_color" class="form-label fw-semibold small">Primary Brand Color</label>
                             <div class="input-group input-group-sm">
-                                <input type="color" class="form-control form-control-color" id="branding_primary_picker" value="{{ email_settings.primary_color|default:'#4a154b' }}" title="Choose primary color">
-                                <input type="text" name="primary_color" id="branding_primary_color" class="form-control font-monospace" value="{{ email_settings.primary_color|default:'#4a154b' }}" placeholder="#4a154b" required>
+                                <input type="color" class="form-control form-control-color" id="branding_primary_picker" value="{{ email_settings.primary_color|default:'#334155' }}" title="Choose primary color">
+                                <input type="text" name="primary_color" id="branding_primary_color" class="form-control font-monospace" value="{{ email_settings.primary_color|default:'#334155' }}" placeholder="#334155" required>
                             </div>
                             <div class="form-text small">Used for header background, accents, and buttons.</div>
                         </div>
@@ -33,7 +33,7 @@
 
                     <div class="mb-3">
                         <label for="branding_organization_name" class="form-label fw-semibold small">Organization Header Title</label>
-                        <input type="text" name="organization_name" id="branding_organization_name" class="form-control" value="{{ email_settings.organization_name }}" placeholder="e.g. Girls of Steel Robotics" required>
+                        <input type="text" name="organization_name" id="branding_organization_name" class="form-control" value="{{ email_settings.organization_name }}" placeholder="e.g. Your organization" required>
                         <div class="form-text small">Main organization title displayed in the email banner.</div>
                     </div>
 
@@ -70,23 +70,23 @@
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">
                             <label for="branding_address_line1" class="form-label fw-semibold small">Address Line 1</label>
-                            <input type="text" name="address_line1" id="branding_address_line1" class="form-control form-control-sm" value="{{ email_settings.address_line1 }}" placeholder="e.g. Carnegie Mellon University">
+                            <input type="text" name="address_line1" id="branding_address_line1" class="form-control form-control-sm" value="{{ email_settings.address_line1 }}" placeholder="Organization or address">
                         </div>
                         <div class="col-sm-6">
                             <label for="branding_address_line2" class="form-label fw-semibold small">Address Line 2 (City, State, Zip)</label>
-                            <input type="text" name="address_line2" id="branding_address_line2" class="form-control form-control-sm" value="{{ email_settings.address_line2 }}" placeholder="e.g. 5000 Forbes Ave, Pittsburgh, PA 15213">
+                            <input type="text" name="address_line2" id="branding_address_line2" class="form-control form-control-sm" value="{{ email_settings.address_line2 }}" placeholder="Street, city, region, postal code">
                         </div>
                         <div class="col-sm-6">
                             <label for="branding_contact_name" class="form-label fw-semibold small">Program Contacts Display Name</label>
-                            <input type="text" name="contact_name" id="branding_contact_name" class="form-control form-control-sm" value="{{ email_settings.contact_name }}" placeholder="e.g. Elizabeth Kysel, Sarah Withee">
+                            <input type="text" name="contact_name" id="branding_contact_name" class="form-control form-control-sm" value="{{ email_settings.contact_name }}" placeholder="e.g. Program Leadership Team">
                         </div>
                         <div class="col-sm-6">
                             <label for="branding_contact_email" class="form-label fw-semibold small">Program Contact Email</label>
-                            <input type="email" name="contact_email" id="branding_contact_email" class="form-control form-control-sm" value="{{ email_settings.contact_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org">
+                            <input type="email" name="contact_email" id="branding_contact_email" class="form-control form-control-sm" value="{{ email_settings.contact_email }}" placeholder="e.g. contact@example.org">
                         </div>
                         <div class="col-12">
                             <label for="branding_footer_text" class="form-label fw-semibold small">Footer Tagline / Disclaimer</label>
-                            <input type="text" name="footer_text" id="branding_footer_text" class="form-control form-control-sm" value="{{ email_settings.footer_text }}" placeholder="e.g. Thank you for being part of Girls of Steel Robotics!">
+                            <input type="text" name="footer_text" id="branding_footer_text" class="form-control form-control-sm" value="{{ email_settings.footer_text }}" placeholder="e.g. Thank you for being part of our organization!">
                         </div>
                     </div>
 
@@ -104,13 +104,13 @@
                     </div>
                     <div class="border rounded-3 shadow-sm overflow-hidden" style="background-color: #f4f6f8; padding: 12px;">
                         <div class="bg-white border rounded shadow-sm overflow-hidden" style="font-size: 13px;">
-                            <div id="preview_header" style="background-color: {{ email_settings.primary_color|default:'#4a154b' }}; color: {{ email_settings.header_text_color|default:'#ffffff' }}; padding: 16px; text-align: center;">
+                            <div id="preview_header" style="background-color: {{ email_settings.primary_color|default:'#334155' }}; color: {{ email_settings.header_text_color|default:'#ffffff' }}; padding: 16px; text-align: center;">
                                 {% if email_settings.logo_url %}
                                 <img id="preview_logo" src="{{ email_settings.logo_url }}" alt="Logo" style="max-height: 40px; max-width: 160px; display: block; margin: 0 auto 6px auto;">
                                 {% else %}
                                 <img id="preview_logo" src="" alt="Logo" style="max-height: 40px; max-width: 160px; display: none; margin: 0 auto 6px auto;">
                                 {% endif %}
-                                <h5 id="preview_org_title" class="mb-0 fw-bold" style="color: {{ email_settings.header_text_color|default:'#ffffff' }}; font-size: 16px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</h5>
+                                <h5 id="preview_org_title" class="mb-0 fw-bold" style="color: {{ email_settings.header_text_color|default:'#ffffff' }}; font-size: 16px;">{{ email_settings.organization_name|default:'Momentum' }}</h5>
                             </div>
                             <div style="padding: 16px;">
                                 <p class="mb-2 text-dark">Hi Jane,</p>
@@ -119,14 +119,14 @@
                             </div>
                             <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 16px; font-size: 11px; color: #64748b;">
                                 <div class="mb-1">
-                                    <div id="preview_org_sub" class="fw-bold text-dark" style="font-size: 11px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</div>
+                                    <div id="preview_org_sub" class="fw-bold text-dark" style="font-size: 11px;">{{ email_settings.organization_name|default:'Momentum' }}</div>
                                     <div id="preview_addr1" style="font-size: 11px;">{{ email_settings.address_line1 }}</div>
                                     <div id="preview_addr2" style="font-size: 11px;">{{ email_settings.address_line2 }}</div>
                                 </div>
-                                <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Elizabeth Kysel, Sarah Withee' }}</span></div>
-                                <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</span></div>
+                                <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Program Leadership Team' }}</span></div>
+                                <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'contact@example.org' }}</span></div>
                                 <div class="mt-2 text-muted" style="font-size: 10px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
-                                    This is an automated notification from the <a href="{{ email_settings.portal_url|default:'#' }}" id="preview_portal_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; text-decoration: underline;"><span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal</a> &bull; Sent on Today
+                                    This is an automated notification from the <a href="{{ email_settings.portal_url|default:'#' }}" id="preview_portal_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; text-decoration: underline;"><span id="preview_org_automated">{{ email_settings.organization_name|default:'Momentum' }}</span> Portal</a> &bull; Sent on Today
                                 </div>
                                 <div class="mt-1" id="preview_footer_text">{{ email_settings.footer_text }}</div>
                             </div>

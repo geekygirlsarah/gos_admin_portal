@@ -21,7 +21,6 @@ from organizations.domain_forms import OrganizationDomainRequestForm
 from organizations.domain_verification import verify_domain_txt
 from organizations.models import Organization, OrganizationDomain, OrganizationSettings
 from organizations.utils import (
-    get_default_organization,
     get_organization_email_settings,
     get_organization_momentum_url,
     get_organization_payment_settings,
@@ -357,7 +356,10 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     """Handles the 'update_permissions' action from the settings page."""
 
     def post(self, request):
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=permissions")
         permissions = RolePermission.objects.for_organization(org)
         for perm in permissions:
             perm_key = f"perm_{perm.id}"
@@ -854,13 +856,10 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
     """Handles updating organization email settings and sender identities from Portal Settings."""
 
     def post(self, request):
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
         if not org:
-            org = Organization.objects.filter(is_active=True).first()
-            if not org:
-                org, _ = Organization.objects.get_or_create(
-                    slug="gos", defaults={"name": "Girls of Steel"}
-                )
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=branding")
 
         action = request.POST.get("action")
         email_cfg = get_organization_email_settings(org)
@@ -870,7 +869,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             primary_color = (
                 request.POST.get("primary_color", "").strip()
                 or email_cfg.get("primary_color")
-                or "#4a154b"
+                or "#334155"
             )
             secondary_color = (
                 request.POST.get("secondary_color", "").strip()
@@ -1113,27 +1112,16 @@ class PortalOrgAccountSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, 
 
     def post(self, request):
         from organizations.utils import (
-            get_default_organization,
             update_organization_settings,
         )
 
         org = getattr(request, "organization", None)
-        if not org and request.user.is_authenticated:
-            membership = getattr(request.user, "organization_memberships", None)
-            if membership:
-                active_mem = membership.filter(is_active=True).first()
-                if active_mem:
-                    org = active_mem.organization
-        if not org:
-            org = get_default_organization()
         if not org:
             messages.error(request, "No active organization found.")
             return redirect("/programs/settings/?tab=org_accounts")
 
         org_account_enabled = request.POST.get("org_account_enabled") == "on"
-        org_account_name = (
-            request.POST.get("org_account_name", "").strip() or "Andrew ID"
-        )
+        org_account_name = request.POST.get("org_account_name", "").strip()
         org_email_domain = (
             request.POST.get("org_email_domain", "").strip().lower().lstrip("@")
         )
@@ -1184,7 +1172,10 @@ class PortalBackgroundCheckTypeView(LoginRequiredMixin, LeadMentorRequiredMixin,
 
     def post(self, request):
         action = request.POST.get("action")
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=background_checks")
 
         if action == "add_type":
             name = request.POST.get("name", "").strip()
@@ -1418,7 +1409,10 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         from organizations.services import send_invitation_email
 
         User = get_user_model()
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=lead_mentors")
         action = request.POST.get("action")
 
         def report_failed_invitation(invitation, change):
