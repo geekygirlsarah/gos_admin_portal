@@ -234,11 +234,13 @@ class OrgScopedPermissionTests(TestCase):
             can_user_write(self.mentor_user, "team_assignments", obj=prog_other)
         )
 
-    def test_get_user_role_stays_global(self):
-        """get_user_role determines user's role globally regardless of org."""
-        self.assertEqual(get_user_role(self.mentor_user), "Mentor")
-        self.assertEqual(get_user_role(self.parent_user), "Parent")
-        self.assertEqual(get_user_role(self.student_user), "Student")
+    def test_get_user_role_requires_organization_context(self):
+        """Non-superuser roles are denied without context and scoped when supplied."""
+        self.assertIsNone(get_user_role(self.mentor_user))
+        self.assertEqual(get_user_role(self.mentor_user, org=self.gos), "Mentor")
+        self.assertIsNone(get_user_role(self.mentor_user, org=self.other_org))
+        self.assertEqual(get_user_role(self.parent_user, org=self.gos), "Parent")
+        self.assertEqual(get_user_role(self.student_user, org=self.gos), "Student")
 
     def test_dynamic_permission_mixin_uses_request_organization(self):
         """DynamicPermissionMixin extracts request.organization and passes it to check."""

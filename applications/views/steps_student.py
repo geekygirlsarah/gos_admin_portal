@@ -1296,7 +1296,7 @@ class Step8SecondaryParentView(View):
             form.add_error(
                 None,
                 "At least one adult contact must opt in to receiving email "
-                "updates from Girls of Steel. Please check the box on this page or "
+                "updates from this organization. Please check the box on this page or "
                 "go back and check it on the primary contact page.",
             )
             return self._render(request, application, form)
@@ -1428,7 +1428,7 @@ class Step9ConfirmView(View):
             form.add_error(
                 None,
                 "At least one parent or guardian must opt in to receiving email "
-                "updates from Girls of Steel.",
+                "updates from this organization.",
             )
             return self._render(request, application, form)
 

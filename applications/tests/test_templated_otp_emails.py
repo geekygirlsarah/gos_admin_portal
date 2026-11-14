@@ -29,7 +29,7 @@ class TemplatedOtpEmailsTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         sent = mail.outbox[0]
         self.assertEqual(
-            sent.subject, "Your Girls of Steel application verification code"
+            sent.subject, "Your Girls of Steel Robotics application verification code"
         )
         self.assertIn("applicant@example.com", sent.to)
         self.assertIn("123456", sent.body)
@@ -50,10 +50,10 @@ class TemplatedOtpEmailsTests(TestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         sent = mail.outbox[0]
-        self.assertEqual(sent.subject, "Login code for GoS Portal: 654321")
+        self.assertEqual(sent.subject, "Login code for Momentum: 654321")
         self.assertIn("user@example.com", sent.to)
         self.assertIn("654321", sent.body)
-        self.assertIn("requested a login code for the Girls of Steel Portal", sent.body)
+        self.assertIn("requested a login code for the Momentum Portal", sent.body)
 
         # Check HTML message was included
         # send_mail with html_message attaches it to alternatives in EmailMultiAlternatives
@@ -61,7 +61,7 @@ class TemplatedOtpEmailsTests(TestCase):
         html_body, mime = sent.alternatives[0]
         self.assertEqual(mime, "text/html")
         self.assertIn("654321", html_body)
-        self.assertIn("requested a login code for the Girls of Steel Portal", html_body)
+        self.assertIn("requested a login code for the Momentum Portal", html_body)
 
     def test_allauth_login_code_adapter_rendering(self):
         adapter = get_adapter()
@@ -71,10 +71,10 @@ class TemplatedOtpEmailsTests(TestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         sent = mail.outbox[0]
-        self.assertEqual(sent.subject, "Login code for GoS Portal: 789012")
+        self.assertEqual(sent.subject, "Login code for Momentum: 789012")
         self.assertIn("portaluser@example.com", sent.to)
         self.assertIn("789012", sent.body)
-        self.assertIn("requested a login code for the Girls of Steel Portal", sent.body)
+        self.assertIn("requested a login code for the Momentum Portal", sent.body)
 
         self.assertEqual(len(sent.alternatives), 1)
         html_body, mime = sent.alternatives[0]

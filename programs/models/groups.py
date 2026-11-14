@@ -30,6 +30,31 @@ class Team(models.Model):
         return f"{self.team_type} {self.number}"
 
 
+class Group(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="program_groups",
+        help_text="Organization that owns this group.",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(max_length=100)
+    program = models.ForeignKey(
+        "Program", on_delete=models.CASCADE, related_name="groups"
+    )
+    color = models.CharField(
+        max_length=7, default="#0000ff", help_text="Hex color code (e.g. #0000ff)"
+    )
+
+    class Meta:
+        unique_together = ("organization", "name", "program")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.program.name})"
+
+
 class Crew(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",

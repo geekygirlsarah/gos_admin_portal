@@ -174,10 +174,10 @@
             </div>
         </div>
 
-        <p class="text-center text-muted small mt-3 mb-0">
+        {% if org_contact_email %}<p class="text-center text-muted small mt-3 mb-0">
             <strong>Need help?</strong> Contact
-            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
-        </p>
+            <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>.
+        </p>{% endif %}
     </div>
 </div>
 

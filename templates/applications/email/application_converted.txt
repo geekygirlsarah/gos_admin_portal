@@ -1,7 +1,7 @@
 Hi {{ application.applicant_name|default:"" }},
 
-Great news - your Girls of Steel application has been finalized!
-{% if application.is_mentor %}You are now officially a Girls of Steel mentor!
+Great news - your {{ org_email_settings.organization_name|default:"Momentum" }} application has been finalized!
+{% if application.is_mentor %}You are now officially a {{ org_email_settings.organization_name|default:"Momentum" }} mentor!
 
 Mentor:         {{ application.mentor_name|default:"(not specified)" }}
 {% else %}You are now officially enrolled in the program.
@@ -14,4 +14,4 @@ You will receive more information about next steps via email soon.
 
 If you have any questions, just reply to this email.
 
-- Girls of Steel Robotics
+- {{ org_email_settings.organization_name|default:"Momentum" }}

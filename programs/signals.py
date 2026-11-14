@@ -130,7 +130,7 @@ def sync_adult_memberships(adult):
 
     Mirrors the profile sections of organizations migration 0003: Mentor
     (``is_active`` follows ``mentor_active``), Parent, and Alumni, in the
-    Adult's organization or the default organization when unset.
+    Adult's organization.
 
     Existing rows are never re-activated here: a profile flag flipped off
     (e.g. ``mentor_active``) deactivates the matching membership so legacy
@@ -141,15 +141,11 @@ def sync_adult_memberships(adult):
     if not adult.user_id:
         return 0
 
-    from organizations.models import UserOrganizationMembership
-    from organizations.utils import get_default_organization
-
     org_id = adult.organization_id
     if org_id is None:
-        default_org = get_default_organization()
-        if default_org is None:
-            return 0
-        org_id = default_org.pk
+        return 0
+
+    from organizations.models import UserOrganizationMembership
 
     specs = []
     if adult.is_mentor:
@@ -185,15 +181,11 @@ def sync_student_memberships(student):
     if not student.user_id:
         return 0
 
-    from organizations.models import UserOrganizationMembership
-    from organizations.utils import get_default_organization
-
     org_id = student.organization_id
     if org_id is None:
-        default_org = get_default_organization()
-        if default_org is None:
-            return 0
-        org_id = default_org.pk
+        return 0
+
+    from organizations.models import UserOrganizationMembership
 
     is_active = not student.graduated
     membership, was_created = UserOrganizationMembership.objects.get_or_create(

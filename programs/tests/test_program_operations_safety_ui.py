@@ -1,5 +1,6 @@
 from cryptography.fernet import Fernet
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group as AuthGroup
+from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -7,14 +8,15 @@ from django.urls import reverse
 from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
-    Crew,
     Enrollment,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     ProgramDocument,
     School,
     Student,
     StudentDocument,
-    SubTeam,
     Team,
 )
 
@@ -27,7 +29,7 @@ class ProgramOperationsSafetyUITests(TestCase):
         self.lead_mentor_user = User.objects.create_user(
             username="lead_mentor", password="password123"
         )  # nosec B106
-        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        lm_group, _ = AuthGroup.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lm_group)
 
         self.mentor_user = User.objects.create_user(
@@ -94,17 +96,19 @@ class ProgramOperationsSafetyUITests(TestCase):
             student=self.student3, program=self.program, active=True
         )
 
-        # Teams / Crews / Subteams
+        # Team and program groups
         self.team = Team.objects.create(
             team_type="FRC", number=3504, name="Girls of Steel"
         )
-        self.crew = Crew.objects.create(name="Chassis Build", program=self.program)
-        self.subteam = SubTeam.objects.create(name="Mechanical", program=self.program)
+        self.group = ProgramGroup.objects.create(
+            name="Chassis Build",
+            program=self.program,
+            organization=self.program.organization,
+        )
 
         self.e1.team = self.team
-        self.e1.crew = self.crew
-        self.e1.subteam = self.subteam
         self.e1.save()
+        self.e1.groups.add(self.group)
 
         # Documents
         self.doc = ProgramDocument.objects.create(
@@ -160,20 +164,16 @@ class ProgramOperationsSafetyUITests(TestCase):
         self.assertEqual(response.context["active_students_count"], 3)
         self.assertEqual(response.context["assigned_team_count"], 1)
         self.assertEqual(response.context["unassigned_team_count"], 2)
-        self.assertEqual(response.context["assigned_crew_count"], 1)
-        self.assertEqual(response.context["unassigned_crew_count"], 2)
-        self.assertEqual(response.context["assigned_subteam_count"], 1)
-        self.assertEqual(response.context["unassigned_subteam_count"], 2)
+        self.assertEqual(response.context["assigned_group_count"], 1)
+        self.assertEqual(response.context["unassigned_group_count"], 2)
 
         # Check rendered UI elements
-        self.assertContains(response, "Team/Crew Assignment")
+        self.assertContains(response, "Team and Group Assignment")
         self.assertContains(response, "Team Assignments")
-        self.assertContains(response, "Crew / Project")
-        self.assertContains(response, "Subteam Assignments")
+        self.assertContains(response, "Groups")
         self.assertContains(response, "Filter students by name...")
         self.assertContains(response, "Needs Team")
-        self.assertContains(response, "Needs Crew")
-        self.assertContains(response, "Needs Subteam")
+        self.assertContains(response, "Needs Group")
         self.assertContains(response, "js-confirm")
         self.assertNotContains(response, "onsubmit=")
 

@@ -16,7 +16,7 @@ from .models import AuditLog
 
 
 def _is_lead_mentor(user) -> bool:
-    """Lead mentors are superusers, members of the 'LeadMentor' group, or org Lead Mentors."""
+    """Check lead access without inferring an organization on the global admin site."""
     if not user or not user.is_active:
         return False
     from programs.permission_views import user_is_lead_mentor
@@ -30,7 +30,7 @@ def _is_lead_mentor(user) -> bool:
 
 
 class _LeadMentorOnly:
-    """Restricts all admin operations to lead mentors; disables mutations."""
+    """Restricts global audit admin access and disables mutations."""
 
     def has_module_perms(self, request):
         return _is_lead_mentor(request.user)

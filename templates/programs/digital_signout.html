@@ -51,8 +51,8 @@
             <span>
               {{ s.display_name }}
               {% with e=s.program_enrollment %}
-                {% if e.team or e.crew or e.subteam %}
-                  <span class="ms-1 me-1 d-inline-flex flex-wrap gap-1 align-items-center">{% include 'students/_group_badges.html' with team=e.team crew=e.crew subteam=e.subteam %}</span>
+                {% if e.team or e.groups.all %}
+                  <span class="ms-1 me-1 d-inline-flex flex-wrap gap-1 align-items-center">{% include 'students/_group_badges.html' with team=e.team groups=e.groups.all %}</span>
                 {% endif %}
               {% endwith %}
               {% if s.today_presence.status == 'present' %}

@@ -11,8 +11,8 @@
 </p>
 <p>
     Since you've already been onboarded, you don't need to reapply. Please
-    contact a lead mentor at
-    <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>
+    {% if org_contact_email %}contact an organization lead at
+    <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>{% else %}contact an organization lead{% endif %}
     if you'd like to discuss returning or updating your information.
 </p>
 <p class="text-muted">

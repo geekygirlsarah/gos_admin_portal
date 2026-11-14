@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView
 
-from programs.models import EmailDeliveryEvent
+from audit.events import AuditEvent
+from audit.models import AuditLog
+from programs.models import EmailDeliveryEvent, EmailHistory, EmailHistoryAddress
 from programs.permission_views import LeadMentorRequiredMixin
 from programs.utils.tosend_webhooks import (
+    _email_fingerprint,
     process_tosend_event,
     quarantine_malformed_tosend_payload,
     verify_tosend_signature,
@@ -25,6 +29,45 @@ from programs.utils.tosend_webhooks import (
 from programs.utils.urls import get_safe_url
 
 logger = logging.getLogger(__name__)
+
+
+def _audit_email_history_access(request, entry):
+    try:
+        AuditLog.objects.create(
+            actor=request.user,
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            resource_type="EmailHistory",
+            resource_id=str(entry.pk),
+            resource_repr=f"Email history entry {entry.pk}",
+            after={"viewed": True},
+            notes="Organization email history viewed.",
+            outcome=AuditLog.SUCCESS,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Email history access audit record could not be created (%s).",
+            type(exc).__name__,
+        )
+
+
+def _organization_email_history_queryset(organization):
+    if organization is None:
+        return EmailHistory.objects.none()
+
+    addresses = EmailHistoryAddress.objects.for_organization(organization).filter(
+        organization=organization
+    )
+    cutoff = timezone.now() - timedelta(days=30)
+    return (
+        EmailHistory.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            batch__organization=organization,
+            created_at__gte=cutoff,
+        )
+        .select_related("batch", "batch__initiated_by")
+        .prefetch_related(Prefetch("addresses", queryset=addresses))
+    )
 
 
 @csrf_exempt
@@ -124,6 +167,53 @@ class EmailDeliveryIssueListView(LeadMentorRequiredMixin, ListView):
             .count()
         )
         return context
+
+
+class EmailHistoryListView(LeadMentorRequiredMixin, ListView):
+    """List retained outgoing email for the current organization."""
+
+    model = EmailHistory
+    template_name = "programs/email_history_list.html"
+    context_object_name = "history_entries"
+    paginate_by = 50
+
+    def get_queryset(self):
+        organization = getattr(self.request, "organization", None)
+        queryset = _organization_email_history_queryset(organization)
+        search = self.request.GET.get("q", "").strip()
+        if search:
+            matching_history_ids = (
+                EmailHistoryAddress.objects.for_organization(organization)
+                .filter(
+                    organization=organization,
+                    email_fingerprint=_email_fingerprint(search),
+                )
+                .values("history_id")
+            )
+            queryset = queryset.filter(pk__in=matching_history_ids)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["search_query"] = self.request.GET.get("q", "")
+        for entry in context["history_entries"]:
+            _audit_email_history_access(self.request, entry)
+        return context
+
+
+class EmailHistoryDetailView(LeadMentorRequiredMixin, View):
+    """Show a retained message as escaped text for its owning organization."""
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        organization = getattr(request, "organization", None)
+        queryset = _organization_email_history_queryset(organization)
+        entry = get_object_or_404(queryset, pk=pk)
+        _audit_email_history_access(request, entry)
+        return render(
+            request,
+            "programs/email_history_detail.html",
+            {"history": entry},
+        )
 
 
 class EmailDeliveryIssueResolveView(LeadMentorRequiredMixin, View):

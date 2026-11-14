@@ -45,7 +45,7 @@
 
         {% if org_account_enabled %}
         <div class="card mb-4">
-          <div class="card-header">{{ org_account_name|default:"Andrew ID" }}</div>
+          <div class="card-header">{{ org_account_name|default:"Organization account" }}</div>
           <div class="card-body">
             <div class="row g-3">
               <div class="col-md-3">{% render_field form.org_account_id %}</div>

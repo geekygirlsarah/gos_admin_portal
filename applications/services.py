@@ -44,7 +44,7 @@ def _from_email(organization=None) -> str:
         org_cfg.get("notification_from_email")
         or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
         or getattr(settings, "DEFAULT_FROM_EMAIL", "")
-        or "notifications@girlsofsteelrobotics.org"
+        or "no-reply@example.com"
     )
     name = org_cfg.get("sender_display_name") or getattr(
         settings, "DEFAULT_FROM_NAME", None
@@ -57,16 +57,9 @@ def _from_email(organization=None) -> str:
 def _build_app_email_ctx(
     application: Optional[Application] = None, extra_ctx: Optional[dict] = None
 ) -> dict:
-    from organizations.utils import (
-        get_default_organization,
-        get_organization_email_settings,
-    )
+    from organizations.utils import get_organization_email_settings
 
-    org = (
-        application.organization
-        if (application and application.organization)
-        else get_default_organization()
-    )
+    org = application.organization if application else None
     org_cfg = get_organization_email_settings(org)
     ctx = {
         "org_email_settings": org_cfg,
@@ -114,6 +107,9 @@ def _send_html_email(
     html_body: Optional[str],
     recipients: List[str],
     organization=None,
+    request=None,
+    history_category="application_notification",
+    retain_history_body=True,
 ) -> None:
     if not recipients:
         return
@@ -137,11 +133,21 @@ def _send_html_email(
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
+        from programs.utils.email_history import send_messages_with_history
         from programs.utils.notifications import _mark_delivery_tracking
 
-        _mark_delivery_tracking(msg, organization)
+        initiated_by = getattr(request, "user", None)
+        if not getattr(initiated_by, "is_authenticated", False):
+            initiated_by = None
+        _mark_delivery_tracking(
+            msg,
+            organization,
+            history_category=history_category,
+            history_initiated_by=initiated_by,
+            retain_history_body=retain_history_body,
+        )
         try:
-            msg.send()
+            send_messages_with_history([msg])
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Application email dispatch failed (%s).", type(exc).__name__)
         finally:
@@ -190,6 +196,9 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         html_body=html_body,
         recipients=[application.email],
         organization=application.organization,
+        request=request,
+        history_category="otp",
+        retain_history_body=False,
     )
 
 
@@ -547,6 +556,9 @@ def send_parent_handoff_email(
             kwargs={"app_id": application.application_id},
         )
     resume_url = _application_email_url(application, path)
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
 
     ctx = _build_app_email_ctx(
         application,
@@ -557,11 +569,14 @@ def send_parent_handoff_email(
     text_body = render_to_string("applications/email/parent_handoff.txt", ctx)
     html_body = render_to_string("applications/email/parent_handoff.html", ctx)
     _send_html_email(
-        subject="A Girls of Steel application is waiting for you",
+        subject=f"A {organization_name} application is waiting for you",
         text_body=text_body,
         html_body=html_body,
         recipients=[parent_email],
         organization=application.organization,
+        request=request,
+        history_category="application_handoff",
+        retain_history_body=False,
     )
 
 
@@ -637,6 +652,9 @@ def send_application_submitted_email(application: Application, request=None) -> 
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
     resume_url = _absolute_apply_url(request, application)
     ctx = _build_app_email_ctx(
         application,
@@ -647,11 +665,12 @@ def send_application_submitted_email(application: Application, request=None) -> 
     text_body = render_to_string("applications/email/application_submitted.txt", ctx)
     html_body = render_to_string("applications/email/application_submitted.html", ctx)
     _send_html_email(
-        subject="Your Girls of Steel application has been submitted",
+        subject=f"Your {organization_name} application has been submitted",
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -667,6 +686,9 @@ def send_application_approved_email(application: Application, request=None) -> N
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
     # Link the applicant straight into Step 9 via the resume link, which
     # will redirect to /apply/<id>/step9/ for APPROVED applications.
 
@@ -680,15 +702,18 @@ def send_application_approved_email(application: Application, request=None) -> N
     text_body = render_to_string("applications/email/application_approved.txt", ctx)
     html_body = render_to_string("applications/email/application_approved.html", ctx)
     if application.is_mentor:
-        subject = "Your Girls of Steel application has been approved"
+        subject = f"Your {organization_name} application has been approved"
     else:
-        subject = "Approved: action needed to finish your Girls of Steel enrollment"
+        subject = (
+            f"Approved: action needed to finish your {organization_name} enrollment"
+        )
     _send_html_email(
         subject=subject,
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -705,6 +730,9 @@ def send_application_declined_email(
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
     ctx = _build_app_email_ctx(
         application,
         {
@@ -714,11 +742,12 @@ def send_application_declined_email(
     text_body = render_to_string("applications/email/application_declined.txt", ctx)
     html_body = render_to_string("applications/email/application_declined.html", ctx)
     _send_html_email(
-        subject="An update on your Girls of Steel application",
+        subject=f"An update on your {organization_name} application",
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -732,15 +761,19 @@ def send_application_converted_email(application: Application, request=None) -> 
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
     ctx = _build_app_email_ctx(application)
     text_body = render_to_string("applications/email/application_converted.txt", ctx)
     html_body = render_to_string("applications/email/application_converted.html", ctx)
     _send_html_email(
-        subject="Welcome to Girls of Steel Robotics!",
+        subject=f"Welcome to {organization_name}!",
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )
 
 
@@ -787,7 +820,14 @@ def _adult_from_data(parent_data: dict, organization, is_parent: bool = True):
         if "@" in org_account_id:
             org_email = org_account_id
         else:
-            org_email = f"{org_account_id}@andrew.cmu.edu"
+            from organizations.utils import get_organization_setting
+
+            domain = str(
+                get_organization_setting(organization, "org_email_domain", "") or ""
+            )
+            domain = domain.replace(";", ",").split(",")[0].strip().lstrip("@")
+            if domain:
+                org_email = f"{org_account_id}@{domain}"
 
     if not email and not org_email and not (legal_first and last_name):
         return None
@@ -1127,10 +1167,9 @@ def convert_application_to_student(application: Application, request=None):
             if not mentor_data.get("email"):
                 mentor_data["email"] = application.email
 
-            # If the verified email is an organization/Andrew email, also use it as org_email fallback
-            if organization.is_org_email(
-                application.email
-            ) or application.email.lower().endswith("@andrew.cmu.edu"):
+            # If the verified email belongs to this organization, retain it as
+            # the organization email fallback.
+            if organization.is_org_email(application.email):
                 mentor_data["org_email_fallback"] = application.email
 
             adult = _adult_from_data(
@@ -1341,4 +1380,5 @@ def send_lead_notification_email(application: Application, request=None) -> None
         html_body=html_body,
         recipients=recipients,
         organization=application.organization,
+        request=request,
     )

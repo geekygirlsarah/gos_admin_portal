@@ -26,7 +26,7 @@
 {% if sliding_scale.decline_reason %}
 <p><strong>Reason:</strong> {{ sliding_scale.decline_reason }}</p>
 {% endif %}
-<p>If you have questions or would like to discuss your situation further, please reach out to <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.</p>
+{% if org_email_settings.contact_email %}<p>If you have questions or would like to discuss your situation further, please reach out to <a href="mailto:{{ org_email_settings.contact_email }}">{{ org_email_settings.contact_email }}</a>.</p>{% endif %}
 {% endif %}
 <p>Any documents you uploaded as part of this application have now been deleted from our systems.</p>
 {% endblock %}

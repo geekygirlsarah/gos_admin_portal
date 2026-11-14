@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ org_account_name|default:"Andrew ID" }} Management{% endblock %}
+{% block title %}{{ org_account_name|default:"Organization account" }} Management{% endblock %}
 
 {% block content %}
 <div class="row mb-3">
     <div class="col">
-        <h1 class="h3">{{ org_account_name|default:"Andrew ID" }} Management</h1>
-        <p class="text-muted">Assign and manage {{ org_account_name|default:"Andrew ID" }}s for students and adults.</p>
+        <h1 class="h3">{{ org_account_name|default:"Organization account" }} Management</h1>
+        <p class="text-muted">Assign and manage {{ org_account_name|default:"Organization account" }}s for students and adults.</p>
     </div>
 </div>
 
@@ -34,7 +34,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Type</th>
-                    <th>{{ org_account_name|default:"Andrew ID" }}</th>
+                    <th>{{ org_account_name|default:"Organization account ID" }}</th>
                     <th>Email</th>
                     <th>Expiration</th>
                     <th>Actions</th>
@@ -124,7 +124,7 @@
 {% else %}
 <div class="card shadow-sm">
     <div class="card-header bg-light">
-        <h5 class="card-title mb-0">Currently Assigned {{ org_account_name|default:"Andrew ID" }}s</h5>
+        <h5 class="card-title mb-0">Currently Assigned {{ org_account_name|default:"Organization account" }}s</h5>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -132,7 +132,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Type</th>
-                    <th>{{ org_account_name|default:"Andrew ID" }}</th>
+                    <th>{{ org_account_name|default:"Organization account ID" }}</th>
                     <th>Email</th>
                     <th>Expiration</th>
                     <th>Actions</th>
@@ -213,7 +213,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center py-4 text-muted">No {{ org_account_name|default:"Andrew ID" }}s have been assigned yet.</td>
+                    <td colspan="6" class="text-center py-4 text-muted">No {{ org_account_name|default:"Organization account" }}s have been assigned yet.</td>
                 </tr>
                 {% endfor %}
             </tbody>

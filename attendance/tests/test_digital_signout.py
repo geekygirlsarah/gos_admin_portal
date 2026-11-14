@@ -20,9 +20,8 @@ from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
-    Crew,
     Enrollment,
-    SubTeam,
+    Group,
     Team,
 )
 
@@ -276,7 +275,7 @@ class AttendancePresenceTests(TestCase):
 
 
 class SignoutGroupBadgeTests(TestCase):
-    """Who's Here Today shows team/crew/subteam badges like other program pages."""
+    """Who's Here Today shows team and group badges like other program pages."""
 
     def setUp(self):
         self.program = make_program()
@@ -286,20 +285,25 @@ class SignoutGroupBadgeTests(TestCase):
         self.team = Team.objects.create(
             team_type="FRC", number=1, name="Steel", color="#c1121f"
         )
-        self.crew = Crew.objects.create(
-            name="Build Crew", program=self.program, color="#2a9d8f"
+        self.build_group = Group.objects.create(
+            name="Build Crew",
+            organization=self.program.organization,
+            program=self.program,
+            color="#2a9d8f",
         )
-        self.subteam = SubTeam.objects.create(
-            name="Drivetrain", program=self.program, color="#3a86ff"
+        self.drivetrain_group = Group.objects.create(
+            name="Drivetrain",
+            organization=self.program.organization,
+            program=self.program,
+            color="#3a86ff",
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
-        Enrollment.objects.create(
+        enrollment = Enrollment.objects.create(
             student=self.student,
             program=self.program,
             team=self.team,
-            crew=self.crew,
-            subteam=self.subteam,
         )
+        enrollment.groups.add(self.build_group, self.drivetrain_group)
 
     def test_badges_render_next_to_student_name(self):
         response = self.client.get(self.url)
@@ -308,8 +312,7 @@ class SignoutGroupBadgeTests(TestCase):
         self.assertContains(response, "Build Crew")
         self.assertContains(response, "Drivetrain")
         self.assertContains(response, "team-badge")
-        self.assertContains(response, "crew-badge")
-        self.assertContains(response, "subteam-badge")
+        self.assertContains(response, "group-badge")
         # Group colors are applied inline (as on the program detail/photo pages).
         self.assertContains(response, "background-color: #c1121f")
         self.assertContains(response, "background-color: #2a9d8f")

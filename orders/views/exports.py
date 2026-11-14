@@ -27,8 +27,7 @@ def _item_export_row(item):
         ),
         "notes": item.notes,
         "team": str(item.team) if item.team_id else "",
-        "crew": item.crew.name if item.crew_id else "",
-        "subteam": item.subteam.name if item.subteam_id else "",
+        "groups": ", ".join(group.name for group in item.groups.all()),
         "status": item.get_status_display(),
         "ordered_on": (
             timezone.localtime(order.ordered_at).strftime("%Y-%m-%d %H:%M")
@@ -52,8 +51,7 @@ _ORDER_ITEMS_EXPORT_HEADERS = [
     "Requested On",
     "Notes",
     "Team",
-    "Crew",
-    "Subteam",
+    "Groups",
     "Status",
     "Ordered On",
 ]
@@ -77,8 +75,7 @@ def _order_item_export_values(item):
         row["requested_on"],
         row["notes"],
         row["team"],
-        row["crew"],
-        row["subteam"],
+        row["groups"],
         row["status"],
         row["ordered_on"],
     ]

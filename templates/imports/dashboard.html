@@ -144,7 +144,7 @@
               </h2>
               <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
             </div>
-            <p class="text-muted small mb-3">Import mentors, alumni, and volunteers with emails, phone numbers, Andrew IDs, and mentor roles.</p>
+            <p class="text-muted small mb-3">Import mentors, alumni, and volunteers with emails, phone numbers, organization account IDs, and mentor roles.</p>
             <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
               {% csrf_token %}
               <div class="input-group mb-2">

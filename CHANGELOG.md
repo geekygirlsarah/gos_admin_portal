@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-14
+
+### Added
+- Added program-specific Groups as flexible student labels, with multiple assignments per enrollment and order item, multi-group email targeting, and migration of existing Crew/SubTeam assignments.
+
+## 2026-11-13
+
+### Added
+- Organization branding supports a team icon, an optional wide account-screen wordmark, and an optional host organization logo for receipts.
+
+## 2026-11-12
+
+### Changed
+- Added a direct Email History link to the Lead Mentor Admin menu.
+- Tenant resolution and role/membership helpers no longer silently choose GoS when organization context is missing; new organization account and branding defaults are neutral, and the global Django Admin audit view is platform-superuser-only.
+- Legacy GoS portal, contact, clearance, and email-branding values are stored on the `gos` organization by migration, and tenant-facing email, calendar, and financial print branding now uses organization settings.
+- Downloadable import samples use generic organization account/email headers and reserved example domains. The existing PA/CMU application clearance flow remains unchanged pending its planned redesign.
+- Tenant email-history records now protect their organization from deletion while the records exist; platform-wide notifications remain organization-less by design.
+
+## 2026-11-11
+
+### Changed
+- Removed Staff as a selectable notification audience. Active Staff members remain eligible for all-member organization updates, but role-targeted updates do not match them.
+- Updates now use a compact bell icon with a numeric unread badge; platform administrators can review and manage global updates from the root-domain platform admin area.
+- Root-domain platform superusers opening `/programs/notifications/` now go to the platform updates list, with a direct Updates link in platform navigation.
+- Portal updates now identify their publisher and show whether they came from an organization or the platform.
+
+### Added
+- Added organization-scoped outgoing email history for Lead Mentors, with encrypted per-recipient content and 30-day retention.
+
 ## 2026-11-09
 
 ### Fixed

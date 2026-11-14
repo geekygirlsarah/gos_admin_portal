@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}{% block wizard_title %}Apply{% endblock %} – Girls of Steel{% endblock %}
+{% block title %}{% block wizard_title %}Apply{% endblock %} – {{ organization_name }}{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -46,8 +46,8 @@
         </div>
 
         <p class="text-center text-muted small mt-3 mb-0">
-            <strong>Need help?</strong> Contact
-            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.<br>
+            {% if org_contact_email %}<strong>Need help?</strong> Contact
+            <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>.<br>{% endif %}
             Be sure to include your application ID if you have one and what issue you are experiencing.
         </p>
     </div>

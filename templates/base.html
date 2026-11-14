@@ -6,11 +6,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{% if request.organization %}{{ request.organization.name }} Portal{% else %}Momentum | Operations Platform for FIRST® Robotics Teams{% endif %}{% endblock %}</title>
+    {% if organization_logo_url %}
+    <link rel="icon" href="{{ organization_logo_url }}">
+    <link rel="apple-touch-icon" href="{{ organization_logo_url }}">
+    {% else %}
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
     <link rel="manifest" href="{% static 'img/site.webmanifest' %}">
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}">
+    {% endif %}
     <!-- Include your CSS framework if you use one -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
@@ -47,8 +52,12 @@
             {% if is_platform_admin %}
             <span class="fw-bold"><i class="bi bi-shield-lock-fill me-2 text-danger"></i>Momentum <span class="badge bg-danger ms-1">Platform Admin</span></span>
             {% elif request.organization %}
-            <img src="{% static 'img/rosie_icon.png' %}" alt="Rosie Icon" width="30" height="30" class="d-inline-block align-text-top me-2">
-            {{ request.organization.name }} Portal
+            {% if organization_logo_url %}
+            <img src="{{ organization_logo_url }}" alt="{{ organization_name }} logo" width="30" height="30" class="d-inline-block align-text-top me-2">
+            {% else %}
+            <i class="bi bi-buildings me-2" aria-hidden="true"></i>
+            {% endif %}
+            {{ organization_name }} Portal
             {% else %}
             <span class="fw-bold"><i class="bi bi-rocket-takeoff me-2 text-primary"></i>Momentum</span>
             {% endif %}
@@ -57,6 +66,12 @@
             {% user_role user as current_navbar_user_role %}
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-xl-0">
+                    <li class="nav-item">
+                        <a class="nav-link px-2{% if 'notifications' in request.path %} active{% endif %}" href="{% if is_platform_admin or not request.organization and request.user.is_authenticated and request.user.is_active and request.user.is_superuser %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}" aria-label="Updates{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}" title="Updates{% if unread_notification_count %} ({{ unread_notification_count }} unread){% endif %}">
+                            <i class="bi bi-bell" aria-hidden="true"></i>
+                            {% if unread_notification_count %}<span class="badge rounded-pill text-bg-warning" aria-hidden="true">{{ unread_notification_count }}</span>{% endif %}
+                        </a>
+                    </li>
                     {% if is_platform_admin %}
                     {# ── Platform Admin navigation items ── #}
                     <li class="nav-item">
@@ -91,6 +106,11 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:audit_logs' %} active{% endif %}" href="{% url 'platform_admin:audit_logs' %}">
                             <i class="bi bi-journal-text me-1"></i>Audit Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:notification_create' %} active{% endif %}" href="{% url 'platform_admin:notification_create' %}">
+                            <i class="bi bi-send me-1" aria-hidden="true"></i>Send platform update
                         </a>
                     </li>
                     <li class="nav-item">
@@ -300,7 +320,7 @@
                                     <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
                                 {% endif %}
                                 {% if org_account_enabled %}
-                                <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Andrew ID" }}s</a></li>
+                                <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Organization account" }}s</a></li>
                                 {% endif %}
                             </ul>
                         </li>
@@ -311,8 +331,12 @@
                                 <li><a class="dropdown-item" href="{% url 'import_dashboard' %}">Import Data</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Message Programs</a></li>
+                                <li><a class="dropdown-item" href="{% url 'email_history_list' %}">Email History</a></li>
                                 <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
                                 <li><a class="dropdown-item" href="{% url 'calendar_feeds:feed_list' %}">Calendar Feeds</a></li>
+                                {% if current_navbar_user_role == 'LeadMentor' %}
+                                <li><a class="dropdown-item" href="{% url 'notification_create' %}">Send organization update</a></li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="/admin/audit/auditlog/">Audit Logs</a></li>
                             </ul>
@@ -405,7 +429,7 @@
         <div class="row">
             <div class="col-md-6 text-center text-md-start">
                 {% if request.organization %}
-                <span class="text-white-50 me-3">{{ request.organization.name }} {% if request.organization.settings.footer_tagline %}{{ request.organization.settings.footer_tagline }}{% else %}is an outreach program of Carnegie Mellon University.{% endif %}</span>
+                {% if organization_footer_tagline %}<span class="text-white-50 me-3">{{ organization_name }} {{ organization_footer_tagline }}</span>{% endif %}
                 {% else %}
                 <span class="text-white-50 me-3">Momentum &mdash; The operations platform for FIRST&reg; robotics teams.</span>
                 {% endif %}

@@ -38,17 +38,18 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
 
     def setUp(self):
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.organization = Organization.objects.get(slug="gos")
 
     def test_single_role_resolutions(self):
         # LeadMentor superuser
         u_lead = User.objects.create_superuser(
             username="u_lead", password="password123"  # nosec B106
         )
-        self.assertEqual(get_user_role(u_lead), "LeadMentor")
-        self.assertTrue(user_is_mentor_or_lead(u_lead))
-        self.assertFalse(user_is_parent(u_lead))
-        self.assertFalse(user_is_mentor(u_lead))
-        self.assertFalse(user_is_alumni(u_lead))
+        self.assertEqual(get_user_role(u_lead, org=self.organization), "LeadMentor")
+        self.assertTrue(user_is_mentor_or_lead(u_lead, org=self.organization))
+        self.assertFalse(user_is_parent(u_lead, org=self.organization))
+        self.assertFalse(user_is_mentor(u_lead, org=self.organization))
+        self.assertFalse(user_is_alumni(u_lead, org=self.organization))
 
         # Active Mentor
         u_mentor = User.objects.create_user(
@@ -61,11 +62,11 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             is_mentor=True,
             mentor_active=True,
         )
-        self.assertEqual(get_user_role(u_mentor), "Mentor")
-        self.assertTrue(user_is_mentor(u_mentor))
-        self.assertTrue(user_is_mentor_or_lead(u_mentor))
-        self.assertFalse(user_is_parent(u_mentor))
-        self.assertFalse(user_is_alumni(u_mentor))
+        self.assertEqual(get_user_role(u_mentor, org=self.organization), "Mentor")
+        self.assertTrue(user_is_mentor(u_mentor, org=self.organization))
+        self.assertTrue(user_is_mentor_or_lead(u_mentor, org=self.organization))
+        self.assertFalse(user_is_parent(u_mentor, org=self.organization))
+        self.assertFalse(user_is_alumni(u_mentor, org=self.organization))
 
         # Parent
         u_parent = User.objects.create_user(
@@ -77,11 +78,11 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             last_name="Parent",
             is_parent=True,
         )
-        self.assertEqual(get_user_role(u_parent), "Parent")
-        self.assertTrue(user_is_parent(u_parent))
-        self.assertFalse(user_is_mentor(u_parent))
-        self.assertFalse(user_is_alumni(u_parent))
-        self.assertFalse(user_is_mentor_or_lead(u_parent))
+        self.assertEqual(get_user_role(u_parent, org=self.organization), "Parent")
+        self.assertTrue(user_is_parent(u_parent, org=self.organization))
+        self.assertFalse(user_is_mentor(u_parent, org=self.organization))
+        self.assertFalse(user_is_alumni(u_parent, org=self.organization))
+        self.assertFalse(user_is_mentor_or_lead(u_parent, org=self.organization))
 
         # Alumni
         u_alumni = User.objects.create_user(
@@ -93,10 +94,10 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             last_name="Alumni",
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(u_alumni), "Alumni")
-        self.assertTrue(user_is_alumni(u_alumni))
-        self.assertFalse(user_is_parent(u_alumni))
-        self.assertFalse(user_is_mentor(u_alumni))
+        self.assertEqual(get_user_role(u_alumni, org=self.organization), "Alumni")
+        self.assertTrue(user_is_alumni(u_alumni, org=self.organization))
+        self.assertFalse(user_is_parent(u_alumni, org=self.organization))
+        self.assertFalse(user_is_mentor(u_alumni, org=self.organization))
 
         # Student
         u_student = User.objects.create_user(
@@ -107,9 +108,9 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             legal_first_name="Sole",
             last_name="Student",
         )
-        self.assertEqual(get_user_role(u_student), "Student")
-        self.assertFalse(user_is_parent(u_student))
-        self.assertFalse(user_is_mentor(u_student))
+        self.assertEqual(get_user_role(u_student, org=self.organization), "Student")
+        self.assertFalse(user_is_parent(u_student, org=self.organization))
+        self.assertFalse(user_is_mentor(u_student, org=self.organization))
 
     def test_parent_and_active_mentor_dual_role(self):
         """When an adult is both a Parent and an active Mentor, get_user_role returns
@@ -126,19 +127,19 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             is_mentor=True,
             mentor_active=True,
         )
-        self.assertEqual(get_user_role(user), "Mentor")
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_mentor(user))
-        self.assertTrue(user_is_mentor_or_lead(user))
-        self.assertFalse(user_is_alumni(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertTrue(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_mentor_or_lead(user, org=self.organization))
+        self.assertFalse(user_is_alumni(user, org=self.organization))
 
         # When deactivated as a mentor, get_user_role falls back to Parent
         adult.mentor_active = False
         adult.save()
-        self.assertEqual(get_user_role(user), "Parent")
-        self.assertTrue(user_is_parent(user))
-        self.assertFalse(user_is_mentor(user))
-        self.assertFalse(user_is_mentor_or_lead(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Parent")
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertFalse(user_is_mentor(user, org=self.organization))
+        self.assertFalse(user_is_mentor_or_lead(user, org=self.organization))
 
     def test_parent_and_alumni_dual_role(self):
         """When an adult is both a Parent and Alumni, get_user_role returns 'Parent'."""
@@ -152,11 +153,11 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             is_parent=True,
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(user), "Parent")
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_alumni(user))
-        self.assertFalse(user_is_mentor(user))
-        self.assertFalse(user_is_mentor_or_lead(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Parent")
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
+        self.assertFalse(user_is_mentor(user, org=self.organization))
+        self.assertFalse(user_is_mentor_or_lead(user, org=self.organization))
 
     def test_mentor_and_alumni_dual_role(self):
         """When an adult is Mentor and Alumni, Mentor takes priority if active."""
@@ -171,17 +172,17 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             mentor_active=True,
             is_alumni=True,
         )
-        self.assertEqual(get_user_role(user), "Mentor")
-        self.assertTrue(user_is_mentor(user))
-        self.assertTrue(user_is_alumni(user))
-        self.assertFalse(user_is_parent(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
+        self.assertTrue(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
+        self.assertFalse(user_is_parent(user, org=self.organization))
 
         # Deactivating mentor status falls back to Alumni
         adult.mentor_active = False
         adult.save()
-        self.assertEqual(get_user_role(user), "Alumni")
-        self.assertFalse(user_is_mentor(user))
-        self.assertTrue(user_is_alumni(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Alumni")
+        self.assertFalse(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
 
     def test_triple_role_parent_mentor_alumni(self):
         """An adult with all three roles."""
@@ -198,18 +199,18 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             is_alumni=True,
         )
         # Priority: Mentor -> Parent -> Alumni
-        self.assertEqual(get_user_role(user), "Mentor")
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_mentor(user))
-        self.assertTrue(user_is_alumni(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Mentor")
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertTrue(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
 
         # Deactivate mentor -> becomes Parent
         adult.mentor_active = False
         adult.save()
-        self.assertEqual(get_user_role(user), "Parent")
-        self.assertTrue(user_is_parent(user))
-        self.assertFalse(user_is_mentor(user))
-        self.assertTrue(user_is_alumni(user))
+        self.assertEqual(get_user_role(user, org=self.organization), "Parent")
+        self.assertTrue(user_is_parent(user, org=self.organization))
+        self.assertFalse(user_is_mentor(user, org=self.organization))
+        self.assertTrue(user_is_alumni(user, org=self.organization))
 
     def test_lead_mentor_group_with_adult_profile(self):
         """An active lead with parent and mentor memberships retains all roles."""
@@ -231,10 +232,10 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
             role="LeadMentor",
             is_active=True,
         )
-        self.assertEqual(get_user_role(user), "LeadMentor")
-        self.assertTrue(user_is_mentor_or_lead(user))
-        self.assertTrue(user_is_parent(user))
-        self.assertTrue(user_is_mentor(user))
+        self.assertEqual(get_user_role(user, org=adult.organization), "LeadMentor")
+        self.assertTrue(user_is_mentor_or_lead(user, org=adult.organization))
+        self.assertTrue(user_is_parent(user, org=adult.organization))
+        self.assertTrue(user_is_mentor(user, org=adult.organization))
         self.assertTrue(user_is_lead_mentor(user, org=adult.organization))
 
     def test_legacy_lead_group_cannot_override_scoped_memberships(self):

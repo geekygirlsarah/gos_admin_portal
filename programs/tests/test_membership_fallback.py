@@ -171,10 +171,8 @@ class ScopedFallbackTests(TestCase):
         self.assertEqual(get_user_role(user, org=self.gos), None)
         self.assertFalse(user_is_mentor(user, org=self.gos))
 
-    def test_org_none_resolves_membership_roles(self):
-        """Regression: the org=None path must consult memberships (it
-        previously referenced UserOrganizationMembership without importing it,
-        so the NameError silently forced the legacy fallback)."""
+    def test_missing_org_denies_membership_role_but_explicit_org_resolves(self):
+        """Membership roles are not inferred without an organization context."""
         user = User.objects.create_user(
             username="member_only", password="password123"  # nosec B106
         )
@@ -185,8 +183,10 @@ class ScopedFallbackTests(TestCase):
             is_active=True,
         )
 
-        self.assertEqual(get_user_role(user), "LeadMentor")
-        self.assertTrue(user_is_lead_mentor(user))
+        self.assertIsNone(get_user_role(user))
+        self.assertFalse(user_is_lead_mentor(user))
+        self.assertEqual(get_user_role(user, org=self.gos), "LeadMentor")
+        self.assertTrue(user_is_lead_mentor(user, org=self.gos))
 
     def test_inactive_membership_org_none_denied(self):
         user = User.objects.create_user(
@@ -364,13 +364,15 @@ class ScopedFallbackTests(TestCase):
                         with self.subTest(helper=helper.__name__):
                             self.assertFalse(helper(user))
 
-    def test_missing_default_org_keeps_no_row_legacy_fallback(self):
+    def test_legacy_group_fallback_requires_explicit_org(self):
         user = User.objects.create_user(username="missing_default_legacy")
         user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
 
         with patch("organizations.utils.get_default_organization", return_value=None):
-            self.assertEqual(get_user_role(user), "LeadMentor")
-            self.assertTrue(user_is_lead_mentor(user))
+            self.assertIsNone(get_user_role(user))
+            self.assertFalse(user_is_lead_mentor(user))
+            self.assertEqual(get_user_role(user, org=self.gos), "LeadMentor")
+            self.assertTrue(user_is_lead_mentor(user, org=self.gos))
 
 
 class ProfileMembershipSyncTests(TestCase):

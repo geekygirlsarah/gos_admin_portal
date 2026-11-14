@@ -14,7 +14,7 @@
         {% if departure.return_date %} (returning {{ departure.return_date|date:"N j, Y" }}){% endif %}
     </p>
     {% endif %}
-    <p>Please log in to the Girls of Steel Portal and approve or decline this sign-up from the Travel page.</p>
+    <p>Please log in to the {{ organization.name|default:"Momentum" }} Portal and approve or decline this sign-up from the Travel page.</p>
     {% if permission_form_available %}
     <p>
         <strong>Note:</strong> this trip requires a signed permission form. The permission form is

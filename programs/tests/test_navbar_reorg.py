@@ -55,6 +55,18 @@ class LeadMentorAdminDropdownSplitTests(TestCase):
         self.assertContains(response, 'id="manageDataAdminDropdown"')
         self.assertContains(response, 'id="adminDropdown"')
 
+    def test_email_history_link_is_in_admin_dropdown(self):
+        self._login()
+        response = self.client.get(reverse("program_list"))
+        admin_menu_start = response.content.find(
+            b'<ul class="dropdown-menu" aria-labelledby="adminDropdown">'
+        )
+        admin_menu_end = response.content.find(b"</ul>", admin_menu_start)
+        admin_menu = response.content[admin_menu_start:admin_menu_end]
+
+        self.assertIn(reverse("email_history_list").encode(), admin_menu)
+        self.assertIn(b"Email History", admin_menu)
+
     def test_redundant_all_programs_link_removed(self):
         self._login()
         response = self.client.get(reverse("program_list"))
@@ -272,6 +284,8 @@ class ParentDashboardAndProgramDropdownTests(TestCase):
         response = self.client.get(reverse("profile_dashboard"))
         self.assertContains(response, reverse("profile_dashboard"))
         self.assertContains(response, "Dashboard")
+        self.assertNotContains(response, reverse("email_history_list"))
+        self.assertNotContains(response, "Email History")
 
     def test_outreach_link_shown_in_program_dropdown_for_parent(self):
         self._login()

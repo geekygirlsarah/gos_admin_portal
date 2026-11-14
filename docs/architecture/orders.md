@@ -7,6 +7,9 @@ This document details purchase requests (`OrderItem`), grouped orders (`Order`),
 Order management uses a two-level model hierarchy in `orders/models.py`:
 1. **`OrderItem` (Item Level)**: Individual items requested by students or mentors.
 2. **`Order` (Order Level)**: Grouped purchase orders placed with a specific vendor.
+An item can optionally be assigned to multiple program-specific Groups. Team
+remains separate; Group choices are limited to the item's organization and
+program, and existing Crew/SubTeam item assignments are migrated to Groups.
 
 ### Item Request Pool & Derived Status
 - An `OrderItem` with `order=None` sits in the unassigned **Request Pool** (`order_list` page).
@@ -64,4 +67,4 @@ Access is divided into four permission sections in `programs/models/`:
 Exports operate at the **line-item level** for financial accounting:
 - Active Export: Request pool items + non-received order items.
 - Archive Export: Received order items.
-- Columns: Program, Item, Quantity, Unit Price, Total, URL, Order #, Vendor, Vendor Website, Requested By, Requested On, Notes, Team, Crew, Subteam, Item Status, Ordered On.
+- Columns: Program, Item, Quantity, Unit Price, Total, URL, Order #, Vendor, Vendor Website, Requested By, Requested On, Notes, Team, Groups, Item Status, Ordered On.

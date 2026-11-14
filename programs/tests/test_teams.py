@@ -4,10 +4,15 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from audit.events import AuditEvent
+from audit.models import AuditLog
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Crew,
     Enrollment,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     ProgramFeature,
     Student,
@@ -310,6 +315,12 @@ class AssignmentTests(TestCase):
         self.enrollment2 = Enrollment.objects.create(
             student=self.student2, program=self.program
         )
+        self.assignment_group = ProgramGroup.objects.create(
+            name="Chassis",
+            program=self.program,
+            organization=self.program.organization,
+        )
+        self.enrollment1.groups.add(self.assignment_group)
         self.team = Team.objects.create(
             team_type="FLL_CHALLENGE", number=123, name="Cool Bots"
         )
@@ -322,7 +333,7 @@ class AssignmentTests(TestCase):
         self.assertContains(response, self.student1.last_name)
         self.assertContains(response, self.student2.last_name)
         self.assertContains(response, self.team.name)
-        self.assertContains(response, self.crew.name)
+        self.assertContains(response, self.assignment_group.name)
 
     def test_bulk_assign_team(self):
         url = reverse("program_assignment", args=[self.program.id])
@@ -395,6 +406,162 @@ class AssignmentTests(TestCase):
         self.enrollment1.refresh_from_db()
         self.assertIsNone(self.enrollment1.subteam)
 
+    def test_bulk_group_assignment_adds_multiple_groups_without_removing_existing(self):
+        existing_group = ProgramGroup.objects.create(
+            name="Existing",
+            program=self.program,
+            organization=self.program.organization,
+        )
+        new_groups = [
+            ProgramGroup.objects.create(
+                name=name, program=self.program, organization=self.program.organization
+            )
+            for name in ("Build", "Outreach")
+        ]
+        self.enrollment1.groups.add(existing_group)
+
+        response = self.client.post(
+            reverse("program_assignment", args=[self.program.pk]),
+            {
+                "assignment_type": "group",
+                "target_id": [str(group.pk) for group in new_groups],
+                "student_ids": [str(self.student1.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [message.message for message in response.context["messages"]],
+            ["Added Build, Outreach to 1 student(s)."],
+        )
+        self.enrollment1.refresh_from_db()
+        self.assertSetEqual(
+            set(self.enrollment1.groups.values_list("pk", flat=True)),
+            {
+                self.assignment_group.pk,
+                existing_group.pk,
+                *(group.pk for group in new_groups),
+            },
+        )
+        audit = AuditLog.objects.get(
+            event=AuditEvent.ENROLLMENT_CHANGED,
+            resource_type="Enrollment",
+            resource_id=str(self.enrollment1.pk),
+        )
+        self.assertEqual(
+            audit.before,
+            {"group_ids": sorted([self.assignment_group.pk, existing_group.pk])},
+        )
+        self.assertEqual(
+            audit.after,
+            {
+                "group_ids": sorted(
+                    [
+                        self.assignment_group.pk,
+                        existing_group.pk,
+                        *(g.pk for g in new_groups),
+                    ]
+                )
+            },
+        )
+
+    def test_bulk_unassign_groups_clears_all_groups(self):
+        added_group = ProgramGroup.objects.create(
+            name="Build",
+            program=self.program,
+            organization=self.program.organization,
+        )
+        self.enrollment1.groups.add(added_group)
+        response = self.client.post(
+            reverse("program_assignment", args=[self.program.pk]),
+            {
+                "assignment_type": "group",
+                "target_id": "",
+                "student_ids": [str(self.student1.pk)],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(self.enrollment1.groups.exists())
+        audit = AuditLog.objects.get(
+            event=AuditEvent.ENROLLMENT_CHANGED,
+            resource_type="Enrollment",
+            resource_id=str(self.enrollment1.pk),
+        )
+        self.assertEqual(
+            audit.before,
+            {"group_ids": sorted([self.assignment_group.pk, added_group.pk])},
+        )
+        self.assertEqual(audit.after, {"group_ids": []})
+
+    def test_single_enrollment_group_changes_are_audited(self):
+        selected_group = ProgramGroup.objects.create(
+            name="Outreach",
+            program=self.program,
+            organization=self.program.organization,
+        )
+        response = self.client.post(
+            reverse("program_enrollment_update", args=[self.program.pk]),
+            {
+                "enrollment_id": self.enrollment1.pk,
+                "group_ids": [str(selected_group.pk)],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        audit = AuditLog.objects.get(
+            event=AuditEvent.ENROLLMENT_CHANGED,
+            resource_type="Enrollment",
+            resource_id=str(self.enrollment1.pk),
+        )
+        self.assertEqual(audit.before, {"group_ids": [self.assignment_group.pk]})
+        self.assertEqual(audit.after, {"group_ids": [selected_group.pk]})
+
+    def test_bulk_group_assignment_rejects_group_from_another_program(self):
+        other_program = Program.objects.create(name="Other Program")
+        other_group = ProgramGroup.objects.create(
+            name="Private Group",
+            program=other_program,
+            organization=other_program.organization,
+        )
+        response = self.client.post(
+            reverse("program_assignment", args=[self.program.pk]),
+            {
+                "assignment_type": "group",
+                "target_id": [str(other_group.pk)],
+                "student_ids": [str(self.student1.pk)],
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertSetEqual(
+            set(self.enrollment1.groups.values_list("pk", flat=True)),
+            {self.assignment_group.pk},
+        )
+        self.assertContains(response, "not in this program")
+
+    def test_single_enrollment_can_be_assigned_multiple_groups(self):
+        groups = [
+            ProgramGroup.objects.create(
+                name=name,
+                program=self.program,
+                organization=self.program.organization,
+            )
+            for name in ("Mechanical", "Outreach")
+        ]
+        response = self.client.post(
+            reverse("program_enrollment_update", args=[self.program.pk]),
+            {
+                "enrollment_id": self.enrollment1.pk,
+                "group_ids": [str(group.pk) for group in groups],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertSetEqual(
+            set(self.enrollment1.groups.values_list("pk", flat=True)),
+            {group.pk for group in groups},
+        )
+
     def test_bulk_unassign_no_students_selected(self):
         url = reverse("program_assignment", args=[self.program.id])
         data = {
@@ -453,7 +620,7 @@ class AssignmentTests(TestCase):
 
 
 class GroupBadgeRenderingTests(TestCase):
-    """The shared team/crew/subteam pill partial renders on student cards."""
+    """Team and program-group badges render on student-facing pages."""
 
     def setUp(self):
         self.password = "password"  # nosec B105
@@ -465,11 +632,17 @@ class GroupBadgeRenderingTests(TestCase):
         self.team = Team.objects.create(
             team_type="FRC", number=1, name="Steel", color="#c1121f"
         )
-        self.crew = Crew.objects.create(
-            name="Build Crew", program=self.program, color="#2a9d8f"
+        self.build_group = ProgramGroup.objects.create(
+            name="Build Crew",
+            program=self.program,
+            organization=self.program.organization,
+            color="#2a9d8f",
         )
-        self.subteam = SubTeam.objects.create(
-            name="Drivetrain", program=self.program, color="#3a86ff"
+        self.drivetrain_group = ProgramGroup.objects.create(
+            name="Drivetrain",
+            program=self.program,
+            organization=self.program.organization,
+            color="#3a86ff",
         )
         self.student = Student.objects.create(
             legal_first_name="Ada", last_name="Lovelace"
@@ -479,9 +652,8 @@ class GroupBadgeRenderingTests(TestCase):
             program=self.program,
             active=True,
             team=self.team,
-            crew=self.crew,
-            subteam=self.subteam,
         )
+        self.enrollment.groups.add(self.build_group, self.drivetrain_group)
 
     def test_photo_grid_shows_group_badges(self):
         url = reverse("program_student_photos", args=[self.program.pk])
@@ -491,8 +663,7 @@ class GroupBadgeRenderingTests(TestCase):
         self.assertContains(response, "Build Crew")
         self.assertContains(response, "Drivetrain")
         self.assertContains(response, "team-badge")
-        self.assertContains(response, "crew-badge")
-        self.assertContains(response, "subteam-badge")
+        self.assertContains(response, "group-badge")
 
     def test_program_detail_shows_group_badges(self):
         url = reverse("program_detail", args=[self.program.pk])

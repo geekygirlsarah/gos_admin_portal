@@ -22,6 +22,7 @@ class Enrollment(models.Model):
         blank=True,
         related_name="enrollments",
     )
+    groups = models.ManyToManyField("Group", blank=True, related_name="enrollments")
     crew = models.ForeignKey(
         "Crew",
         on_delete=models.SET_NULL,

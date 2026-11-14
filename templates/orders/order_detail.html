@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load form_tags %}
 
-{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+{% block title %}{{ page_title }} - {{ organization_name }} Portal{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -249,12 +249,9 @@
                                 {% if item.team %}
                                 <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
                                 {% endif %}
-                                {% if item.crew %}
-                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
-                                {% endif %}
-                                {% if item.subteam %}
-                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
-                                {% endif %}
+                                {% for group in item.groups.all %}
+                                <span class="badge rounded-pill group-badge ms-1" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+                                {% endfor %}
                             </div>
                             {% if item.vendor_name_display %}
                             <div class="text-muted small">
@@ -336,12 +333,9 @@
                                 {% if item.team %}
                                 <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
                                 {% endif %}
-                                {% if item.crew %}
-                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
-                                {% endif %}
-                                {% if item.subteam %}
-                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
-                                {% endif %}
+                                {% for group in item.groups.all %}
+                                <span class="badge rounded-pill group-badge ms-1" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+                                {% endfor %}
                                 <span class="text-muted small">
                                     · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}
                                     · {{ item.requested_by_name }}

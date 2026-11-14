@@ -139,7 +139,11 @@ def get_default_organization(slug: Optional[str] = None) -> Optional[Organizatio
     """
     from organizations.models import Organization
 
-    target_slug = slug or getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    target_slug = (
+        slug if slug is not None else getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "")
+    )
+    if not target_slug:
+        return None
     return Organization.objects.filter(slug__iexact=target_slug, is_active=True).first()
 
 
@@ -427,8 +431,8 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
 def get_organization_settings(
     organization: Optional[Organization] = None,
 ) -> SettingsDict:
-    """Return the resolved SettingsDict for an organization (or default organization)."""
-    org = organization or get_default_organization()
+    """Return the resolved SettingsDict for the given organization."""
+    org = organization
     if org is not None:
         if isinstance(org.settings, SettingsDict):
             return org.settings
@@ -450,11 +454,7 @@ def get_organization_email_settings(
     organization: Optional[Organization] = None,
 ) -> Dict[str, Any]:
     """Retrieve structured email settings for an organization with platform fallbacks."""
-    org = None
-    try:
-        org = organization or get_default_organization()
-    except Exception:
-        org = None
+    org = organization
 
     org_settings = None
     if org:
@@ -470,10 +470,8 @@ def get_organization_email_settings(
     )
 
     default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
-    # Use platform defaults (settings.py values) as fallbacks; these are
-    # deployment-configurable via environment variables and should not be
-    # GoS-specific.  When an org has its own email_settings they take
-    # precedence; otherwise the platform-level defaults apply.
+    # Use neutral platform defaults only when no organization provides a value.
+    # An organization name is the branding fallback for that tenant.
     default_reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", "reply@example.com")
     default_from_email = getattr(settings, "NOTIFICATION_FROM_EMAIL", None) or getattr(
         settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
@@ -481,6 +479,7 @@ def get_organization_email_settings(
 
     sender_display_name = (
         raw_cfg.get("sender_display_name")
+        or (dict.get(org.settings, "portal_title") if org else None)
         or (org.name if org else None)
         or default_name
         or "Platform Notifications"
@@ -508,13 +507,21 @@ def get_organization_email_settings(
         base_url = get_site_base_url()
         if base_url:
             logo_url = f"{base_url}{logo_url}"
-    organization_name = (
-        raw_cfg.get("organization_name")
-        or (org.name if org else default_name)
-        or default_name
+
+    def resolve_logo(key):
+        value = raw_cfg.get(key) or ""
+        base_url = get_site_base_url() if value.startswith("/") else ""
+        return f"{base_url}{value}" if base_url else value
+
+    wordmark_url = resolve_logo("wordmark_url")
+    host_logo_url = resolve_logo("host_logo_url")
+    organization_name = raw_cfg.get("organization_name") or (
+        org.name if org else "Momentum"
     )
     address_line1 = raw_cfg.get("address_line1", "")
     address_line2 = raw_cfg.get("address_line2", "")
+    tax_id = raw_cfg.get("tax_id", "")
+    website = raw_cfg.get("website", "")
     footer_text = raw_cfg.get("footer_text", "")
     portal_url = lazy(_resolve_portal_url, str)(raw_cfg, org)
 
@@ -531,9 +538,13 @@ def get_organization_email_settings(
         "secondary_color": secondary_color,
         "header_text_color": header_text_color,
         "logo_url": logo_url,
+        "wordmark_url": wordmark_url,
+        "host_logo_url": host_logo_url,
         "organization_name": organization_name,
         "address_line1": address_line1,
         "address_line2": address_line2,
+        "tax_id": tax_id,
+        "website": website,
         "footer_text": footer_text,
         "portal_url": portal_url,
         "contact_name": contact_name,

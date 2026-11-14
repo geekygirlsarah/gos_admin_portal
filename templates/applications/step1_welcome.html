@@ -1,11 +1,11 @@
 {% extends "applications/_wizard_base.html" %}
 
 {% block wizard_title %}Welcome{% endblock %}
-{% block wizard_heading %}Apply to Girls of Steel{% endblock %}
+{% block wizard_heading %}Apply to {{ organization_name }}{% endblock %}
 
 {% block wizard_body %}
     <div class="mb-4">
-        <p class="lead mb-1">Welcome to the Girls of Steel application system!</p>
+        <p class="lead mb-1">Welcome to the {{ organization_name }} application system!</p>
         <p class="mb-0">
             Use this wizard to apply for one of our upcoming programs or start the
             process of becoming a mentor. If you already started an application,
@@ -172,8 +172,12 @@
     {% else %}
         <div class="alert alert-info" role="status">
             There are no programs accepting applications right now.
-            Please check back soon, or contact us at
-            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            {% if org_contact_email %}
+                Please check back soon, or contact us at
+                <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>.
+            {% else %}
+                Please check back soon.
+            {% endif %}
         </div>
     {% endif %}
 

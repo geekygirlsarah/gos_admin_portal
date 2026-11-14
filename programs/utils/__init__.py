@@ -43,9 +43,7 @@ from .merges import (
     perform_visitor_merge,
 )
 from .notifications import (
-    LEAD_MENTOR_EMAIL,
     generate_otp,
-    get_lead_mentor_notification_email,
     send_otp_email,
     send_templated_notification,
 )
@@ -122,9 +120,7 @@ __all__ = [
     "get_student_program_balance",
     "program_overlaps_sliding_window",
     # notifications
-    "LEAD_MENTOR_EMAIL",
     "generate_otp",
-    "get_lead_mentor_notification_email",
     "send_otp_email",
     "send_templated_notification",
     # programs

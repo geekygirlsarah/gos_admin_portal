@@ -125,11 +125,11 @@
 </div>
 {% endif %}
 
-{# Andrew / Organization ID #}
+{# Organization account #}
 {% can_read user 'cmu_andrew' as can_read_cmu %}
 {% if can_read_cmu and 'cmu-andrew' in program_feature_keys and org_account_enabled %}
 <div class="card mb-4">
-  <div class="card-header">{{ org_account_name|default:"Andrew ID" }}</div>
+  <div class="card-header">{{ org_account_name|default:"Organization account" }}</div>
   <div class="card-body">
     <div class="row g-3">
       {% can_write user 'cmu_andrew' form.instance as can_write_cmu %}

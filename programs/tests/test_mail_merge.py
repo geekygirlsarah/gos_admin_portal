@@ -1,5 +1,6 @@
 import json
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -15,10 +16,12 @@ from programs.models import (
     Adult,
     AdultStudentRelationship,
     Enrollment,
+    Group,
     Program,
     ProgramFeature,
     RolePermission,
     Student,
+    Team,
 )
 from programs.utils.mail_merge import (
     analyze_merge_fields,
@@ -462,6 +465,108 @@ class ProgramMailMergeViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "no longer in this program")
         self.assertEqual(mail.outbox, [])
+
+    def test_group_filters_use_or_and_preserve_team_restriction(self):
+        self.allow_mail_merge()
+        group_a = Group.objects.create(
+            organization=self.organization, program=self.program, name="Group A"
+        )
+        group_b = Group.objects.create(
+            organization=self.organization, program=self.program, name="Group B"
+        )
+        team = Team.objects.create(
+            organization=self.organization, team_type="FRC", number=1234
+        )
+        first = Enrollment.objects.get(student=self.first_student, program=self.program)
+        second = Enrollment.objects.get(
+            student=self.second_student, program=self.program
+        )
+        first.groups.add(group_a, group_b)
+        second.groups.add(group_b)
+        second.team = team
+        second.save(update_fields=["team"])
+        unassigned = self.make_student("Unassigned", "Student", "none@example.test")
+        url = reverse("program_mail_merge")
+
+        response = self.client.get(
+            url, {"program": self.program.pk}, HTTP_HOST=self.host
+        )
+        self.assertEqual(
+            {row["student"].pk for row in response.context["merge_rows"]},
+            {self.first_student.pk, self.second_student.pk, unassigned.pk},
+        )
+        self.assertContains(response, "No groups selected means no group restriction")
+        response = self.client.get(
+            url,
+            {"program": self.program.pk, "groups": [group_a.pk, group_b.pk]},
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(
+            [row["student"].pk for row in response.context["merge_rows"]],
+            [self.first_student.pk, self.second_student.pk],
+        )
+        self.assertContains(response, f'name="groups" value="{group_a.pk}"')
+        self.assertContains(response, f'name="groups" value="{group_b.pk}"')
+        response = self.client.get(
+            url,
+            {
+                "program": self.program.pk,
+                "groups": [group_a.pk, group_b.pk],
+                "teams": [team.pk],
+            },
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(
+            [row["student"].pk for row in response.context["merge_rows"]],
+            [self.second_student.pk],
+        )
+        response = self.post_merge(
+            [{"student_id": self.first_student.pk, "note": "excluded"}],
+            action="confirm",
+            subject="Hello",
+            body="<p>Hi</p>",
+            groups=[group_b.pk],
+            teams=[team.pk],
+        )
+        self.assertContains(response, "no longer in this program")
+        self.assertEqual(mail.outbox, [])
+
+    def test_forged_groups_are_rejected_on_get_and_post(self):
+        other_org = Organization.objects.create(
+            name="Other Org", slug="other-merge-org", subdomain="other-merge-org"
+        )
+        other_program = Program.objects.create(
+            organization=self.organization, name="Other Program"
+        )
+        foreign = Group.objects.create(
+            organization=other_org, program=self.program, name="Foreign Group"
+        )
+        wrong_program = Group.objects.create(
+            organization=self.organization, program=other_program, name="Wrong Program"
+        )
+        for group in (foreign, wrong_program):
+            with self.subTest(group=group):
+                with patch(
+                    "programs.views.mail_merge.get_user_role",
+                    return_value="LeadMentor",
+                ):
+                    response = self.client.get(
+                        reverse("program_mail_merge"),
+                        {"program": self.program.pk, "groups": [group.pk]},
+                        HTTP_HOST=self.host,
+                    )
+                    self.assertEqual(response.status_code, 302)
+                    self.assertEqual(response["Location"], reverse("home"))
+                    response = self.post_merge(
+                        [{"student_id": self.first_student.pk, "note": "value"}],
+                        action="confirm",
+                        subject="Hello",
+                        body="<p>Hi</p>",
+                        groups=[group.pk],
+                    )
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response["Location"], reverse("home"))
+                self.assertEqual(mail.outbox, [])
 
     def test_roster_is_sorted_by_display_name_with_preferred_first_name(self):
         self.allow_mail_merge()

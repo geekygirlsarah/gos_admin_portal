@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Bad Request – Girls of Steel{% endblock %}
+{% block title %}Bad Request – {{ organization_name }}{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -20,9 +20,9 @@
                 </div>
             </div>
         </div>
-        <p class="text-center text-muted small mt-4">
-            If you were trying to do something legitimate, please let us know at <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
-        </p>
+        {% if org_contact_email %}<p class="text-center text-muted small mt-4">
+            If you were trying to do something legitimate, please let us know at <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>.
+        </p>{% endif %}
     </div>
 </div>
 {% endblock %}

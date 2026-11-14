@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Settings | GoS Portal{% endblock %}
+{% block title %}Settings | {{ organization_name }} Portal{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -19,13 +19,39 @@
         <div class="card-body p-2">
             <ul class="nav nav-pills nav-fill gap-1" id="settingsTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="pill" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-shield-lock me-1"></i> Permissions
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="pill" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-people me-1"></i> Teams
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'groups' %}active{% endif %}" id="groups-tab" data-bs-toggle="pill" data-bs-target="#groups" type="button" role="tab" aria-controls="groups" aria-selected="{% if active_tab == 'groups' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-tags me-1"></i> Groups
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'lead_mentors' %}active{% endif %}" id="lead_mentors-tab" data-bs-toggle="pill" data-bs-target="#lead_mentors" type="button" role="tab" aria-controls="lead_mentors" aria-selected="{% if active_tab == 'lead_mentors' %}true{% else %}false{% endif %}">
                         <i class="bi bi-person-badge me-1"></i> Lead Mentors
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="pill" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-cloud-upload me-1"></i> Imports
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="pill" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-percent me-1"></i> Sliding Scale
+                        {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'payment_instructions' %}active{% endif %}" id="payment_instructions-tab" data-bs-toggle="pill" data-bs-target="#payment_instructions" type="button" role="tab" aria-controls="payment_instructions" aria-selected="{% if active_tab == 'payment_instructions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-credit-card me-1"></i> Payment Instructions
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -39,13 +65,18 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'org_accounts' %}active{% endif %}" id="org_accounts-tab" data-bs-toggle="pill" data-bs-target="#org_accounts" type="button" role="tab" aria-controls="org_accounts" aria-selected="{% if active_tab == 'org_accounts' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-person-badge-fill me-1"></i> Org Accounts
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'portal_address' %}active{% endif %}" id="portal_address-tab" data-bs-toggle="pill" data-bs-target="#portal_address" type="button" role="tab" aria-controls="portal_address" aria-selected="{% if active_tab == 'portal_address' %}true{% else %}false{% endif %}">
                         <i class="bi bi-globe2 me-1"></i> Portal Address
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'payment_instructions' %}active{% endif %}" id="payment_instructions-tab" data-bs-toggle="pill" data-bs-target="#payment_instructions" type="button" role="tab" aria-controls="payment_instructions" aria-selected="{% if active_tab == 'payment_instructions' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-credit-card me-1"></i> Payment Instructions
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'branding' %}active{% endif %}" id="branding-tab" data-bs-toggle="pill" data-bs-target="#branding" type="button" role="tab" aria-controls="branding" aria-selected="{% if active_tab == 'branding' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-palette me-1"></i> Branding
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -54,44 +85,8 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'branding' %}active{% endif %}" id="branding-tab" data-bs-toggle="pill" data-bs-target="#branding" type="button" role="tab" aria-controls="branding" aria-selected="{% if active_tab == 'branding' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-palette me-1"></i> Email Branding
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'org_accounts' %}active{% endif %}" id="org_accounts-tab" data-bs-toggle="pill" data-bs-target="#org_accounts" type="button" role="tab" aria-controls="org_accounts" aria-selected="{% if active_tab == 'org_accounts' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-person-badge-fill me-1"></i> Org Accounts
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="pill" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-people me-1"></i> Teams
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="pill" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-diagram-3 me-1"></i> Crews
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'subteams' %}active{% endif %}" id="subteams-tab" data-bs-toggle="pill" data-bs-target="#subteams" type="button" role="tab" aria-controls="subteams" aria-selected="{% if active_tab == 'subteams' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-grid me-1"></i> SubTeams
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="pill" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-percent me-1"></i> Sliding Scale
-                        {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="pill" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">
-                        <i class="bi bi-cloud-upload me-1"></i> Imports
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="pill" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-shield-lock me-1"></i> Permissions
                     </button>
                 </li>
             </ul>
@@ -99,6 +94,93 @@
     </div>
 
     <div class="tab-content" id="settingsTabsContent">
+        <div class="tab-pane fade {% if active_tab == 'groups' %}show active{% endif %}" id="groups" role="tabpanel" aria-labelledby="groups-tab">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Add Program Group</h5>
+                    <p class="text-muted small mb-0 mt-1">Groups can be used to organize students in this program. A student can belong to multiple groups.</p>
+                </div>
+                <div class="card-body p-3">
+                    <form method="post" class="row g-3" action="{% url 'portal_groups' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_group">
+                        <div class="col-md-5">
+                            <label for="group_program_id" class="form-label fw-semibold small">Program</label>
+                            <select name="program_id" id="group_program_id" class="form-select" required>
+                                {% for prog in programs %}
+                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year_display }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="group_name" class="form-label fw-semibold small">Group Name</label>
+                            <input type="text" name="name" id="group_name" class="form-control" maxlength="100" required placeholder="e.g. Chassis, Mechanical, Outreach">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="group_color" class="form-label fw-semibold small">Color</label>
+                            <input type="color" name="color" id="group_color" class="form-control form-control-color w-100" value="#0d6efd">
+                        </div>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success px-4 fw-semibold"><i class="bi bi-plus-lg me-1"></i> Add Group</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="d-flex flex-column gap-4">
+                {% for prog in programs %}
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">{{ prog.name }}</h6>
+                            <span class="text-muted small">{% if prog.year_display %}{{ prog.year_display }} &bull; {% endif %}{% if prog.active %}Active{% else %}Inactive{% endif %}</span>
+                        </div>
+                        <span class="badge bg-light text-dark border fw-semibold">{{ prog.groups.count }} Group{{ prog.groups.count|pluralize }}</span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if prog.groups.all %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light"><tr><th>Group Name</th><th>Color</th><th class="text-end">Actions</th></tr></thead>
+                                <tbody>
+                                    {% for group in prog.groups.all %}
+                                    <tr>
+                                        <td>
+                                            <form id="update-group-{{ group.id }}" method="post" action="{% url 'portal_groups' %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="update_group">
+                                                <input type="hidden" name="group_id" value="{{ group.id }}">
+                                            </form>
+                                            <input form="update-group-{{ group.id }}" type="text" name="name" value="{{ group.name }}" class="form-control form-control-sm" maxlength="100" required>
+                                        </td>
+                                        <td>
+                                            <input form="update-group-{{ group.id }}" type="color" name="color" value="{{ group.color }}" class="form-control form-control-color form-control-sm" title="Group color">
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-flex gap-1 justify-content-end">
+                                                <button form="update-group-{{ group.id }}" type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                                <form method="post" action="{% url 'portal_groups' %}" class="d-inline js-confirm" data-confirm="Delete this group and remove it from associated students and order items?">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="delete_group">
+                                                    <input type="hidden" name="group_id" value="{{ group.id }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="p-3 text-center text-muted small">No groups configured for this program yet.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="card border-0 bg-light p-4 text-center text-muted">No programs created yet. Create a program first to add groups.</div>
+                {% endfor %}
+            </div>
+        </div>
         <!-- Permissions Tab -->
         <div class="tab-pane fade {% if active_tab == 'permissions' %}show active{% endif %}" id="permissions" role="tabpanel" aria-labelledby="permissions-tab">
             <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -581,7 +663,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="name" class="form-label fw-semibold small">Team Name</label>
-                            <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Girls of Steel">
+                            <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Robotics Team">
                         </div>
                         <div class="col-md-2">
                             <label for="color" class="form-label fw-semibold small">Color</label>
@@ -2042,12 +2124,12 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="email_sender_display_name" class="form-label fw-semibold small">Sender Display Name</label>
-                                <input type="text" name="sender_display_name" id="email_sender_display_name" class="form-control" value="{{ email_settings.sender_display_name }}" placeholder="e.g. Girls of Steel Robotics" required>
-                                <div class="form-text">The name people see in their inbox when they receive an email from the portal (e.g. "Girls of Steel Robotics").</div>
+                                <input type="text" name="sender_display_name" id="email_sender_display_name" class="form-control" value="{{ email_settings.sender_display_name }}" placeholder="e.g. Your organization" required>
+                                <div class="form-text">The name people see in their inbox when they receive an email from the portal.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="email_reply_to_email" class="form-label fw-semibold small">Primary Reply-To Email</label>
-                                <input type="email" name="reply_to_email" id="email_reply_to_email" class="form-control" value="{{ email_settings.reply_to_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                <input type="email" name="reply_to_email" id="email_reply_to_email" class="form-control" value="{{ email_settings.reply_to_email }}" placeholder="e.g. contact@example.org" required>
                                 <div class="form-text">Where replies will be sent when someone replies to an automated email or notification.</div>
                             </div>
                             <div class="col-md-12">
@@ -2074,11 +2156,11 @@
                                         <div class="row g-3">
                                             <div class="col-md-6">
                                                 <label for="custom_domain_domain" class="form-label fw-semibold small">Domain Name</label>
-                                                <input type="text" name="custom_domain_domain" id="custom_domain_domain" class="form-control form-control-sm" value="{{ email_settings.custom_domain.domain }}" placeholder="e.g. girlsofsteelrobotics.org">
+                                                <input type="text" name="custom_domain_domain" id="custom_domain_domain" class="form-control form-control-sm" value="{{ email_settings.custom_domain.domain }}" placeholder="e.g. example.org">
                                             </div>
                                             <div class="col-md-6">
                                                 <label for="custom_domain_from_email" class="form-label fw-semibold small">Custom From Address</label>
-                                                <input type="email" name="custom_domain_from_email" id="custom_domain_from_email" class="form-control form-control-sm" value="{{ email_settings.custom_domain.from_email }}" placeholder="e.g. notifications@girlsofsteelrobotics.org">
+                                                <input type="email" name="custom_domain_from_email" id="custom_domain_from_email" class="form-control form-control-sm" value="{{ email_settings.custom_domain.from_email }}" placeholder="e.g. notifications@example.org">
                                             </div>
                                         </div>
                                     </div>
@@ -2121,11 +2203,11 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_display_name" class="form-label fw-semibold small">Display Name</label>
-                                    <input type="text" name="display_name" id="new_identity_display_name" class="form-control form-control-sm" placeholder="e.g. Girls of Steel Lead Mentors" required>
+                                    <input type="text" name="display_name" id="new_identity_display_name" class="form-control form-control-sm" placeholder="e.g. Program Leadership Team" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_email" class="form-label fw-semibold small">Sender Email Address</label>
-                                    <input type="email" name="email" id="new_identity_email" class="form-control form-control-sm" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                    <input type="email" name="email" id="new_identity_email" class="form-control form-control-sm" placeholder="e.g. team@example.org" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label for="new_identity_reply_to" class="form-label fw-semibold small">Reply-To Address</label>
@@ -2274,12 +2356,12 @@
                             </div>
                             <div class="col-md-6">
                                 <label for="id_org_account_name" class="form-label fw-semibold">Account / Identifier Name</label>
-                                <input type="text" class="form-control" id="id_org_account_name" name="org_account_name" value="{{ org_account_name|default:'Andrew ID' }}" placeholder="e.g. Andrew ID, School Account, Sciencey SSO">
-                                <div class="form-text">The label displayed across the portal and member profiles (e.g., "Andrew ID", "School Account", "Student ID Email").</div>
+                                <input type="text" class="form-control" id="id_org_account_name" name="org_account_name" value="{{ org_account_name|default:'Organization account' }}" placeholder="e.g. School Account, Membership ID, Organization SSO">
+                                <div class="form-text">The label displayed across the portal and member profiles (e.g., "School Account", "Membership ID", "Organization Email").</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="id_org_email_domain" class="form-label fw-semibold">Organization / School Email Domain</label>
-                                <input type="text" class="form-control" id="id_org_email_domain" name="org_email_domain" value="{{ org_email_domain|default:'' }}" placeholder="e.g. andrew.cmu.edu, somewhere.pa.k12.us, scienceyrobotics.org">
+                                <input type="text" class="form-control" id="id_org_email_domain" name="org_email_domain" value="{{ org_email_domain|default:'' }}" placeholder="e.g. school.example.org, robotics.example.org">
                                 <div class="form-text">Allowed domain(s) for organization accounts. Separate multiple domains with commas.</div>
                             </div>
                         </div>
@@ -2428,7 +2510,7 @@
 
         if (orgNameInput) {
             orgNameInput.addEventListener('input', function() {
-                var val = orgNameInput.value || 'Girls of Steel Robotics';
+                var val = orgNameInput.value || '{{ organization_email_name|escapejs }}';
                 if (previewOrgTitle) previewOrgTitle.textContent = val;
                 if (previewOrgSub) previewOrgSub.textContent = val;
                 if (previewOrgAutomated) previewOrgAutomated.textContent = val;

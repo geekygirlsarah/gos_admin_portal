@@ -156,16 +156,11 @@
                           {{ enr.team.team_type }} {{ enr.team.number }}{% if enr.team.name %} {{ enr.team.name }}{% endif %}
                         </span>
                       {% endif %}
-                      {% if enr.crew %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.crew.color }}; color: {{ enr.crew.color|contrast_color }};">
-                          {{ enr.crew.name }}
+                      {% for group in enr.groups.all %}
+                        <span class="badge rounded-pill" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">
+                          {{ group.name }}
                         </span>
-                      {% endif %}
-                      {% if enr.subteam %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.subteam.color }}; color: {{ enr.subteam.color|contrast_color }};">
-                          {{ enr.subteam.name }}
-                        </span>
-                      {% endif %}
+                      {% endfor %}
                     </div>
                   </div>
                   <div class="text-end">
@@ -604,9 +599,9 @@
 
                 {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
                   <div class="col-md-6">
-                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Andrew Account" }}</div>
-                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Andrew ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
-                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Andrew" }} Email:</span> {{ student.org_email|default:'—' }}</div>
+                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Organization account" }}</div>
+                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Organization account ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
+                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Organization" }} Email:</span> {{ student.org_email|default:'—' }}</div>
                   </div>
                 {% endif %}
               </div>

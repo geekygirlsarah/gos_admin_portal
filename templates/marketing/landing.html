@@ -55,7 +55,7 @@
         <div>
             <h5 class="fw-bold mb-1 text-dark">Momentum is Currently in Pilot Access</h5>
             <p class="mb-0 text-secondary">
-                We are actively testing and expanding our multi-organizational architecture with select pilot teams (including Girls of Steel). General adoption for all FIRST® and competitive robotics teams is <strong>coming soon</strong>!
+                We are actively testing and expanding our multi-organizational architecture with select pilot teams. General adoption for all FIRST® and competitive robotics teams is <strong>coming soon</strong>!
             </p>
         </div>
     </div>
@@ -417,7 +417,7 @@
                         <input type="text"
                                id="teamSearchInput"
                                class="form-control bg-dark text-white border-secondary placeholder-light"
-                               placeholder="Search team by name or subdomain (e.g. Girls of Steel, gos)..."
+                               placeholder="Search team by name or subdomain (e.g. Robotics Team, my-team)..."
                                aria-label="Search teams"
                                aria-describedby="team-search-addon"
                                autocomplete="off">
@@ -458,18 +458,9 @@
                         </div>
                             {% endif %}
                         {% empty %}
-                        <a href="https://gos.momentumteam.app"
-                           class="list-group-item list-group-item-action list-group-item-dark d-flex justify-content-between align-items-center py-3 px-4 border-secondary team-item"
-                           data-team-name="girls of steel robotics"
-                           data-team-slug="gos">
-                            <div>
-                                <h6 class="mb-1 fw-bold text-white">Girls of Steel Robotics</h6>
-                                <small class="text-light opacity-75">gos.momentumteam.app</small>
-                            </div>
-                            <span class="btn btn-sm btn-primary fw-semibold">
-                                Go to Portal <i class="bi bi-arrow-right ms-1"></i>
-                            </span>
-                        </a>
+                        <div class="list-group-item list-group-item-dark text-center text-light opacity-75 py-3">
+                            No organization portals are currently available.
+                        </div>
                         {% endfor %}
                     </div>
 
