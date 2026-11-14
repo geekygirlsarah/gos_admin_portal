@@ -1,7 +1,7 @@
 from django import forms
 
 from orders.models import Order, OrderItem, ShippingCarrier, Vendor
-from programs.models import Crew, Program, SubTeam, Team
+from programs.models import Group, Program, Team
 from programs.utils import GroupedProgramChoiceField
 
 # Sentinel value for the "Not listed" option in the order form's vendor
@@ -42,21 +42,12 @@ class OrderItemForm(forms.ModelForm):
         empty_label="No team",
         help_text="Optional team this item is for.",
     )
-    crew = forms.ModelChoiceField(
-        queryset=Crew.objects.none(),
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.none(),
         required=False,
-        label="Crew",
-        widget=forms.Select,
-        empty_label="No crew",
-        help_text="Optional crew/project this item is for.",
-    )
-    subteam = forms.ModelChoiceField(
-        queryset=SubTeam.objects.none(),
-        required=False,
-        label="Subteam",
-        widget=forms.Select,
-        empty_label="No subteam",
-        help_text="Optional subteam this item is for.",
+        label="Groups",
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Select all groups this item is for.",
     )
 
     class Meta:
@@ -67,8 +58,7 @@ class OrderItemForm(forms.ModelForm):
             "unit_price",
             "url",
             "team",
-            "crew",
-            "subteam",
+            "groups",
             "notes",
         ]
         widgets = {
@@ -104,24 +94,12 @@ class OrderItemForm(forms.ModelForm):
         self.fields["team"].queryset = Team.objects.for_organization(org).order_by(
             "team_type", "number"
         )
-        if program:
-            self.fields["crew"].queryset = (
-                Crew.objects.for_organization(org)
+        if program and org:
+            self.fields["groups"].queryset = (
+                Group.objects.for_organization(org)
                 .filter(program=program)
                 .order_by("name")
             )
-            self.fields["subteam"].queryset = (
-                SubTeam.objects.for_organization(org)
-                .filter(program=program)
-                .order_by("name")
-            )
-        else:
-            self.fields["crew"].queryset = Crew.objects.for_organization(org).order_by(
-                "name"
-            )
-            self.fields["subteam"].queryset = SubTeam.objects.for_organization(
-                org
-            ).order_by("name")
 
         choices = [
             (vendor.pk, vendor.name)
@@ -157,6 +135,7 @@ class OrderItemForm(forms.ModelForm):
             item.vendor_url = ""
         if commit:
             item.save()
+            self.save_m2m()
         return item
 
 

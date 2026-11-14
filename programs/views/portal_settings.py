@@ -33,6 +33,7 @@ from programs.models import (
     BackgroundCheckType,
     Crew,
     Enrollment,
+    Group,
     MentorAgreement,
     Program,
     RolePermission,
@@ -171,6 +172,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .filter(program__organization=org)
             .select_related("program")
         )
+        groups = (
+            Group.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
         programs = (
             Program.objects.for_organization(org)
             .prefetch_related(
@@ -183,6 +189,12 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 Prefetch(
                     "subteams",
                     queryset=SubTeam.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.for_organization(org).filter(
                         program__organization=org
                     ),
                 ),
@@ -253,6 +265,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if org
             else OrganizationDomain.objects.none()
         )
+        active_tab = request.GET.get("tab", "teams")
+        if active_tab in {"crews", "subteams"}:
+            active_tab = "groups"
 
         context = {
             "grouped_permissions": grouped_permissions,
@@ -260,6 +275,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "team_types": team_types,
             "crews": crews,
             "subteams": subteams,
+            "groups": groups,
             "programs": programs,
             "attendance_programs": attendance_programs,
             "kiosk_configs": kiosk_configs,
@@ -284,7 +300,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "notification_from_override": _stored_notification_sender(org),
             "payment_settings": get_organization_payment_settings(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
-            "active_tab": request.GET.get("tab", "teams"),
+            "active_tab": active_tab,
             "sections": sections,
         }
         return render(request, self.template_name, context)
@@ -541,6 +557,89 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect("/programs/settings/?tab=crews")
 
         return redirect("/programs/settings/?tab=crews")
+
+
+class PortalGroupView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Manage program-specific groups from Portal Settings."""
+
+    def post(self, request):
+        organization = _request_organization(request)
+        action = request.POST.get("action")
+        group_id = request.POST.get("group_id")
+        program_id = request.POST.get("program_id")
+
+        if action == "add_group":
+            name = request.POST.get("name", "").strip()
+            color = request.POST.get("color")
+            program = (
+                Program.objects.for_organization(organization)
+                .filter(pk=program_id)
+                .first()
+            )
+            if program is None or not name:
+                messages.error(request, "Choose a program and enter a group name.")
+                return redirect("/programs/settings/?tab=groups")
+            Group.objects.create(
+                organization=organization,
+                program=program,
+                name=name,
+                color=color,
+            )
+            messages.success(request, f"Group {name} added.")
+            return redirect("/programs/settings/?tab=groups")
+
+        if action in ("update_group", "delete_group"):
+            group = (
+                Group.objects.for_organization(organization)
+                .filter(program__organization=organization, pk=group_id)
+                .first()
+            )
+            if group is None:
+                messages.error(request, "That group could not be found.")
+                return redirect("/programs/settings/?tab=groups")
+
+            if action == "update_group":
+                name = request.POST.get("name", "").strip()
+                if not name:
+                    messages.error(request, "Group names cannot be blank.")
+                else:
+                    group.name = name
+                    group.color = request.POST.get("color")
+                    group.save()
+                    messages.success(request, "Group updated.")
+                return redirect("/programs/settings/?tab=groups")
+
+            from orders.models import OrderItem
+
+            if (
+                _has_foreign_enrollments(
+                    "groups", group, organization, program=group.program
+                )
+                or OrderItem.objects.filter(groups=group)
+                .exclude(organization=organization)
+                .exists()
+            ):
+                messages.error(
+                    request,
+                    "This group is linked to records owned by another organization and cannot be deleted.",
+                )
+                return redirect("/programs/settings/?tab=groups")
+            log_deletion(
+                resource=group,
+                request=request,
+                before={
+                    "name": group.name,
+                    "color": group.color,
+                    "program_id": group.program_id,
+                },
+                notes="Program group deleted from Portal Settings.",
+            )
+            group.delete()
+            messages.success(request, "Group deleted.")
+            return redirect("/programs/settings/?tab=groups")
+
+        messages.error(request, "Unknown group action.")
+        return redirect("/programs/settings/?tab=groups")
 
 
 class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-14
+
+### Added
+- Added program-specific Groups as flexible student labels, with multiple assignments per enrollment and order item, multi-group email targeting, and migration of existing Crew/SubTeam assignments.
+
 ## 2026-11-13
 
 ### Added

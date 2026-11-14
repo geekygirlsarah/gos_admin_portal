@@ -67,6 +67,15 @@ On program detail rosters, student membership is toggled rather than deleted:
 - "Mark Inactive": `ProgramStudentDeactivateView` (`program_student_deactivate`) sets `Enrollment.active = False`.
 - "Reactivate": `ProgramStudentActivateView` (`program_student_activate`) sets `Enrollment.active = True` (hidden for graduated students).
 
+### Program Groups
+`Group` is a program-specific label for organizing students. An `Enrollment`
+can belong to multiple groups; assignments are scoped to the enrollment's
+program and organization. The separate `Team` assignment remains unchanged.
+Legacy Crew and SubTeam records are copied into Groups by the data migration;
+the legacy enrollment fields remain in the schema during the transition.
+Enrollment Group membership changes are recorded as `ENROLLMENT_CHANGED` audit
+events with before-and-after Group IDs, including bulk assignment and removal.
+
 ---
 
 ## Merging Duplicate Records

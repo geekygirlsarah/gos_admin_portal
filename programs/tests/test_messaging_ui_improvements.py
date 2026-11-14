@@ -4,7 +4,7 @@ Covers:
 - Unified ProgramEmailView accessible from Admin (global) and Program Detail.
 - Role-based program visibility (Lead Mentors see all programs, Mentors see readable programs).
 - Pre-selection of program via URL parameter or query string.
-- Subgroup filtering by Team, Crew/Project, and SubTeam for Students and Parents.
+- Subgroup filtering by Team and Group for Students and Parents.
 - Management command get_program_emails with subgroup filtering flags.
 - UI elements, confirmation modal markers, and CSP nonce compliance.
 """
@@ -18,7 +18,18 @@ from django.test import TestCase
 from django.urls import reverse
 
 from organizations.models import Organization, UserOrganizationMembership
-from programs.models import Adult, Crew, Enrollment, Program, Student, SubTeam, Team
+from programs.models import (
+    Adult,
+    Crew,
+    Enrollment,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
+    Program,
+    Student,
+    SubTeam,
+    Team,
+)
 
 
 class MessagingUIImprovementsTests(TestCase):
@@ -77,6 +88,12 @@ class MessagingUIImprovementsTests(TestCase):
         self.subteam_intake = SubTeam.objects.create(
             name="Intake", program=self.active_program, color="#ffc107"
         )
+        self.group_mech = ProgramGroup.objects.create(
+            name="Mechanical", program=self.active_program
+        )
+        self.group_soft = ProgramGroup.objects.create(
+            name="Software", program=self.active_program
+        )
 
         # Create students
         self.student_mech = Student.objects.create(
@@ -96,7 +113,7 @@ class MessagingUIImprovementsTests(TestCase):
         )
 
         # Enrollments
-        Enrollment.objects.create(
+        mech_enrollment = Enrollment.objects.create(
             student=self.student_mech,
             program=self.active_program,
             team=self.team_frc,
@@ -104,7 +121,7 @@ class MessagingUIImprovementsTests(TestCase):
             subteam=self.subteam_chassis,
             active=True,
         )
-        Enrollment.objects.create(
+        soft_enrollment = Enrollment.objects.create(
             student=self.student_soft,
             program=self.active_program,
             team=self.team_ftc,
@@ -117,6 +134,8 @@ class MessagingUIImprovementsTests(TestCase):
             program=self.active_program,
             active=True,
         )
+        mech_enrollment.groups.add(self.group_mech, self.group_soft)
+        soft_enrollment.groups.add(self.group_soft)
 
         # Parents
         self.parent_mech = Adult.objects.create(
@@ -212,12 +231,12 @@ class MessagingUIImprovementsTests(TestCase):
         # 3 students + 2 parents = 5 recipients
         self.assertContains(response, "Email sent to 5 recipient(s)")
 
-    def test_subgroup_filter_by_crew(self):
+    def test_subgroup_filter_by_group(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         post_data = {
             "program": self.active_program.pk,
             "recipient_groups": ["students", "parents"],
-            "crews": [self.crew_mech.pk],
+            "groups": [self.group_mech.pk],
             "subject": "Mechanical Crew Meeting",
             "body": "<p>Mech meeting today</p>",
             "from_account": "DEFAULT",
@@ -246,12 +265,12 @@ class MessagingUIImprovementsTests(TestCase):
         # Only Sofia (student on FTC 8911)
         self.assertContains(response, "Email sent to 1 recipient(s)")
 
-    def test_subgroup_filter_by_subteam(self):
+    def test_subgroup_filter_by_multiple_groups_uses_or_without_duplicates(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         post_data = {
             "program": self.active_program.pk,
             "recipient_groups": ["students", "parents"],
-            "subteams": [self.subteam_chassis.pk],
+            "groups": [self.group_mech.pk, self.group_soft.pk],
             "subject": "Chassis Subteam Notice",
             "body": "<p>Chassis announcement</p>",
             "from_account": "DEFAULT",
@@ -260,8 +279,37 @@ class MessagingUIImprovementsTests(TestCase):
             reverse("program_messaging"), data=post_data, follow=True
         )
         self.assertEqual(response.status_code, 200)
-        # Maya + Peter = 2 recipients
-        self.assertContains(response, "Email sent to 2 recipient(s)")
+        # Maya belongs to both groups but receives only one email.
+        self.assertContains(response, "Email sent to 4 recipient(s)")
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {
+                "maya@example.com",
+                "sofia@example.com",
+                "peter_parent@example.com",
+                "sarah_parent@example.com",
+            },
+        )
+
+    def test_group_and_team_filters_are_combined(self):
+        self.client.force_login(self.lead_user)
+        response = self.client.post(
+            reverse("program_messaging"),
+            {
+                "program": self.active_program.pk,
+                "recipient_groups": ["students"],
+                "groups": [self.group_mech.pk, self.group_soft.pk],
+                "teams": [self.team_ftc.pk],
+                "subject": "Team update",
+                "body": "<p>Hello</p>",
+                "from_account": "DEFAULT",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "Email sent to 1 recipient(s)")
+        self.assertEqual(
+            [message.to for message in mail.outbox], [["sofia@example.com"]]
+        )
 
     def test_sent_email_uses_normalized_wrapped_and_text_alternative(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
@@ -327,8 +375,9 @@ class MessagingUIImprovementsTests(TestCase):
         )
         self.assertContains(response, "Filter by Subgroups")
         self.assertContains(response, "Teams")
-        self.assertContains(response, "Crews / Projects")
-        self.assertContains(response, "SubTeams")
+        self.assertContains(response, "Groups")
+        self.assertNotContains(response, "Crews / Projects")
+        self.assertNotContains(response, "SubTeams")
         self.assertContains(response, 'id="emailSendConfirmModal"')
         # Ensure scripts have nonce
         self.assertContains(response, 'nonce="')
@@ -336,8 +385,7 @@ class MessagingUIImprovementsTests(TestCase):
 
     def test_subgroups_without_assigned_students_are_hidden(self):
         Team.objects.create(team_type="FLL", number=303, name="Orphan FLL")
-        Crew.objects.create(name="Orphan Crew", program=self.active_program)
-        SubTeam.objects.create(name="Orphan Subteam", program=self.active_program)
+        ProgramGroup.objects.create(name="Orphan Group", program=self.active_program)
 
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         response = self.client.get(reverse("program_messaging"))
@@ -345,11 +393,10 @@ class MessagingUIImprovementsTests(TestCase):
         # Assigned subgroups still render
         self.assertContains(response, "Girls of Steel")
         self.assertContains(response, "Mechanical")
-        self.assertContains(response, "Chassis")
+        self.assertContains(response, "Software")
         # Subgroups with no assigned students are hidden
         self.assertNotContains(response, "Orphan FLL")
-        self.assertNotContains(response, "Orphan Crew")
-        self.assertNotContains(response, "Orphan Subteam")
+        self.assertNotContains(response, "Orphan Group")
 
     def test_subgroup_hidden_when_only_graduated_student_assigned(self):
         graduated = Student.objects.create(

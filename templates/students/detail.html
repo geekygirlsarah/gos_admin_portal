@@ -156,16 +156,11 @@
                           {{ enr.team.team_type }} {{ enr.team.number }}{% if enr.team.name %} {{ enr.team.name }}{% endif %}
                         </span>
                       {% endif %}
-                      {% if enr.crew %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.crew.color }}; color: {{ enr.crew.color|contrast_color }};">
-                          {{ enr.crew.name }}
+                      {% for group in enr.groups.all %}
+                        <span class="badge rounded-pill" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">
+                          {{ group.name }}
                         </span>
-                      {% endif %}
-                      {% if enr.subteam %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.subteam.color }}; color: {{ enr.subteam.color|contrast_color }};">
-                          {{ enr.subteam.name }}
-                        </span>
-                      {% endif %}
+                      {% endfor %}
                     </div>
                   </div>
                   <div class="text-end">

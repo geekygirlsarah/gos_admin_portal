@@ -69,7 +69,8 @@ class OrderListView(
             .filter(
                 Q(order__isnull=True) | Q(order__organization_id=F("organization_id"))
             )
-            .select_related("program", "vendor", "team", "crew", "subteam")
+            .select_related("program", "vendor", "team")
+            .prefetch_related("groups")
         )
 
     def get_export_items(self):
@@ -84,13 +85,12 @@ class OrderListView(
                 "program",
                 "vendor",
                 "team",
-                "crew",
-                "subteam",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
                 "order__ordered_by",
             )
+            .prefetch_related("groups")
             .order_by("-requested_at")
         )
 
@@ -101,9 +101,8 @@ class OrderListView(
         pool_items = list(
             OrderItem.objects.for_organization(org)
             .filter(order__isnull=True)
-            .select_related(
-                "program", "vendor", "team", "crew", "subteam", "requested_by"
-            )
+            .select_related("program", "vendor", "team", "requested_by")
+            .prefetch_related("groups")
             .order_by("-requested_at")
         )
         active_orders = list(
@@ -113,9 +112,9 @@ class OrderListView(
             .prefetch_related(
                 Prefetch(
                     "items",
-                    queryset=OrderItem.objects.for_organization(org).select_related(
-                        "team", "crew", "subteam"
-                    ),
+                    queryset=OrderItem.objects.for_organization(org)
+                    .select_related("team")
+                    .prefetch_related("groups"),
                 )
             )
             .order_by("-created_at")
@@ -183,9 +182,9 @@ class OrderArchiveView(
             .prefetch_related(
                 Prefetch(
                     "items",
-                    queryset=OrderItem.objects.for_organization(org).select_related(
-                        "team", "crew", "subteam"
-                    ),
+                    queryset=OrderItem.objects.for_organization(org)
+                    .select_related("team")
+                    .prefetch_related("groups"),
                 )
             )
             .order_by("-ordered_at", "-created_at")
@@ -203,13 +202,12 @@ class OrderArchiveView(
                 "program",
                 "vendor",
                 "team",
-                "crew",
-                "subteam",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
                 "order__ordered_by",
             )
+            .prefetch_related("groups")
             .order_by("-order__ordered_at", "-requested_at")
         )
 
@@ -266,15 +264,15 @@ class OrderDetailView(
             .prefetch_related(
                 Prefetch(
                     "items",
-                    queryset=OrderItem.objects.for_organization(org).select_related(
+                    queryset=OrderItem.objects.for_organization(org)
+                    .select_related(
                         "program",
                         "vendor",
                         "team",
-                        "crew",
-                        "subteam",
                         "requested_by",
                         "order",
-                    ),
+                    )
+                    .prefetch_related("groups"),
                 )
             )
         )
@@ -287,9 +285,8 @@ class OrderDetailView(
         context["available_items"] = (
             OrderItem.objects.for_organization(org)
             .filter(order__isnull=True)
-            .select_related(
-                "program", "vendor", "team", "crew", "subteam", "requested_by"
-            )
+            .select_related("program", "vendor", "team", "requested_by")
+            .prefetch_related("groups")
             .order_by("vendor_name", "vendor__name", "-requested_at")
         )
         context["is_lead"] = role == "LeadMentor"

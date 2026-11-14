@@ -24,11 +24,10 @@ from outreach.utils import get_outreach_stats_by_student
 from programs.forms import ProgramEmailForm
 from programs.models import (
     AdultStudentRelationship,
-    Crew,
     Enrollment,
+    Group,
     Program,
     RolePermission,
-    SubTeam,
     Team,
 )
 from programs.permission_views import (
@@ -201,8 +200,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
         if program is None:
             return {
                 "teams": Team.objects.none(),
-                "crews": Crew.objects.none(),
-                "subteams": SubTeam.objects.none(),
+                "groups": Group.objects.none(),
             }
         active_enrollments = Enrollment.objects.filter(
             organization=self.organization,
@@ -217,12 +215,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
             .filter(enrollments__in=active_enrollments)
             .distinct()
             .order_by("team_type", "number"),
-            "crews": Crew.objects.for_organization(self.organization)
-            .filter(program=program, program__organization=self.organization)
-            .filter(enrollments__in=active_enrollments)
-            .distinct()
-            .order_by("name"),
-            "subteams": SubTeam.objects.for_organization(self.organization)
+            "groups": Group.objects.for_organization(self.organization)
             .filter(program=program, program__organization=self.organization)
             .filter(enrollments__in=active_enrollments)
             .distinct()
@@ -231,12 +224,11 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
 
     def _enrollments(self, program, subgroup_query_data, subgroups):
         team_ids = _get_selected_ids(subgroup_query_data, "teams", subgroups["teams"])
-        crew_ids = _get_selected_ids(subgroup_query_data, "crews", subgroups["crews"])
-        subteam_ids = _get_selected_ids(
-            subgroup_query_data, "subteams", subgroups["subteams"]
+        group_ids = _get_selected_ids(
+            subgroup_query_data, "groups", subgroups["groups"]
         )
         if program is None:
-            return Enrollment.objects.none(), team_ids, crew_ids, subteam_ids
+            return Enrollment.objects.none(), team_ids, group_ids
 
         enrollments = (
             Enrollment.objects.for_organization(self.organization)
@@ -260,10 +252,12 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
         )
         if team_ids:
             enrollments = enrollments.filter(team_id__in=team_ids)
-        if crew_ids:
-            enrollments = enrollments.filter(crew_id__in=crew_ids)
-        if subteam_ids:
-            enrollments = enrollments.filter(subteam_id__in=subteam_ids)
+        if group_ids:
+            enrollments = enrollments.filter(
+                groups__id__in=group_ids,
+                groups__organization=self.organization,
+                groups__program=program,
+            ).distinct()
         return (
             enrollments.select_related("student", "team", "crew", "subteam").order_by(
                 Lower(
@@ -276,8 +270,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
                 "student_id",
             ),
             team_ids,
-            crew_ids,
-            subteam_ids,
+            group_ids,
         )
 
     def _field_labels(self, request, program: Program | None):
@@ -535,7 +528,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
         program = self._resolve_program(request, query_data, programs)
         subgroups = self._subgroups(program)
         try:
-            enrollments, team_ids, crew_ids, subteam_ids = self._enrollments(
+            enrollments, team_ids, group_ids = self._enrollments(
                 program,
                 query_data,
                 subgroups,
@@ -659,11 +652,9 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
             "program_groups": program_groups,
             "program": program,
             "teams": subgroups["teams"],
-            "crews": subgroups["crews"],
-            "subteams": subgroups["subteams"],
+            "groups": subgroups["groups"],
             "selected_teams": [str(value) for value in team_ids],
-            "selected_crews": [str(value) for value in crew_ids],
-            "selected_subteams": [str(value) for value in subteam_ids],
+            "selected_groups": [str(value) for value in group_ids],
             "merge_rows": merge_rows,
             "columns": raw_merge_data["columns"],
             "grid_fields": grid_fields,
@@ -727,7 +718,7 @@ class ProgramMailMergeView(LoginRequiredMixin, View):
             raise Http404
         _, attendance_allowed, outreach_allowed = self._field_labels(request, program)
         subgroups = self._subgroups(program)
-        enrollments, _, _, _ = self._enrollments(program, request.POST, subgroups)
+        enrollments, _, _ = self._enrollments(program, request.POST, subgroups)
         try:
             merge_rows, available_labels = self._student_fields(
                 program,

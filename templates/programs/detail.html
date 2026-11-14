@@ -413,12 +413,9 @@
                   {% if e.team %}
                     <span class="badge rounded-pill team-badge ms-1" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                   {% endif %}
-                  {% if e.crew %}
-                    <span class="badge rounded-pill crew-badge ms-1" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                  {% endif %}
-                  {% if e.subteam %}
-                    <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                  {% endif %}
+                  {% for group in e.groups.all %}
+                    <span class="badge rounded-pill group-badge ms-1" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+                  {% endfor %}
                   {% if role != 'Student' and 'background-checks' in program.feature_keys %}
                     {% needs_bg s as missing_bg %}
                     {% if missing_bg %}
@@ -476,12 +473,9 @@
                   {% if e.team %}
                     <span class="badge rounded-pill team-badge ms-1" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                   {% endif %}
-                  {% if e.crew %}
-                    <span class="badge rounded-pill crew-badge ms-1" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                  {% endif %}
-                  {% if e.subteam %}
-                    <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                  {% endif %}
+                  {% for group in e.groups.all %}
+                    <span class="badge rounded-pill group-badge ms-1" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+                  {% endfor %}
                   {% needs_bg s as missing_bg %}
                   {% if missing_bg %}
                     <span class="badge bg-warning text-dark ms-1">BG Check Needed</span>
@@ -564,7 +558,7 @@
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.team-badge, .crew-badge, .subteam-badge').forEach(function(badge) {
+    document.querySelectorAll('.team-badge, .group-badge').forEach(function(badge) {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;

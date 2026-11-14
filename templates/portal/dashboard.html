@@ -187,16 +187,11 @@ STUDENT DASHBOARD
                                     <i class="bi bi-people-fill me-1"></i>{{ enrollment.team.team_type }} {{ enrollment.team.number }}{% if enrollment.team.name %} · {{ enrollment.team.name }}{% endif %}
                                 </span>
                             {% endif %}
-                            {% if enrollment.crew %}
-                                <span class="badge rounded-pill crew-badge" data-color="{{ enrollment.crew.color }}" style="background-color: {{ enrollment.crew.color|default:'#6c757d' }}; color: {{ enrollment.crew.color|contrast_color }};">
-                                    <i class="bi bi-kanban me-1"></i>{{ enrollment.crew.name }}
+                            {% for group in enrollment.groups.all %}
+                                <span class="badge rounded-pill group-badge" data-color="{{ group.color }}" style="background-color: {{ group.color|default:'#6c757d' }}; color: {{ group.color|contrast_color }};">
+                                    <i class="bi bi-tags me-1"></i>{{ group.name }}
                                 </span>
-                            {% endif %}
-                            {% if enrollment.subteam %}
-                                <span class="badge rounded-pill subteam-badge" data-color="{{ enrollment.subteam.color }}" style="background-color: {{ enrollment.subteam.color|default:'#198754' }}; color: {{ enrollment.subteam.color|contrast_color }};">
-                                    <i class="bi bi-gear-wide-connected me-1"></i>{{ enrollment.subteam.name }}
-                                </span>
-                            {% endif %}
+                            {% endfor %}
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -408,16 +403,11 @@ PARENT DASHBOARD
                                             {{ row.enrollment.team.team_type }} {{ row.enrollment.team.number }}
                                         </span>
                                     {% endif %}
-                                    {% if row.enrollment.crew %}
-                                        <span class="badge rounded-pill crew-badge" data-color="{{ row.enrollment.crew.color }}" style="background-color: {{ row.enrollment.crew.color|default:'#6c757d' }}; color: {{ row.enrollment.crew.color|contrast_color }};">
-                                            {{ row.enrollment.crew.name }}
+                                    {% for group in row.enrollment.groups.all %}
+                                        <span class="badge rounded-pill group-badge" data-color="{{ group.color }}" style="background-color: {{ group.color|default:'#6c757d' }}; color: {{ group.color|contrast_color }};">
+                                            {{ group.name }}
                                         </span>
-                                    {% endif %}
-                                    {% if row.enrollment.subteam %}
-                                        <span class="badge rounded-pill subteam-badge" data-color="{{ row.enrollment.subteam.color }}" style="background-color: {{ row.enrollment.subteam.color|default:'#198754' }}; color: {{ row.enrollment.subteam.color|contrast_color }};">
-                                            {{ row.enrollment.subteam.name }}
-                                        </span>
-                                    {% endif %}
+                                    {% endfor %}
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-2 align-items-center">

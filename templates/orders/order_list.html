@@ -168,12 +168,9 @@
                                 {% if item.team %}
                                 <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
                                 {% endif %}
-                                {% if item.crew %}
-                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
-                                {% endif %}
-                                {% if item.subteam %}
-                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
-                                {% endif %}
+                                {% for group in item.groups.all %}
+                                <span class="badge rounded-pill group-badge ms-1" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+                                {% endfor %}
                             </div>
                             {% if item.vendor_name_display and not group.vendor %}
                             <div class="text-muted small">
@@ -282,7 +279,7 @@
                         <td>
                             <div>
                                 {% for it in order.organization_items %}
-                                <span class="text-dark">{{ it.item_name }}</span>{% if it.quantity_normalized != "1" %} <span class="text-muted small">(x{{ it.quantity_normalized }})</span>{% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                                <span class="text-dark">{{ it.item_name }}</span>{% if it.quantity_normalized != "1" %} <span class="text-muted small">(x{{ it.quantity_normalized }})</span>{% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% for group in it.groups.all %} <span class="badge rounded-pill group-badge" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>{% endfor %}{% if not forloop.last %}, {% endif %}
                                 {% empty %}
                                 <span class="text-muted small">No items grouped yet</span>
                                 {% endfor %}

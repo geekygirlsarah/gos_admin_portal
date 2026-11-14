@@ -30,6 +30,7 @@ from .views import (
     PortalCrewView,
     PortalDomainView,
     PortalEmailSettingsView,
+    PortalGroupView,
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
@@ -689,6 +690,11 @@ urlpatterns = [
         "settings/teams/",
         PortalTeamView.as_view(),
         name="portal_team",
+    ),
+    path(
+        "settings/groups/",
+        PortalGroupView.as_view(),
+        name="portal_groups",
     ),
     path(
         "settings/crews/",

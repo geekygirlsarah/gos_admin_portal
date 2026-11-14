@@ -46,7 +46,7 @@ from .finances import (
     _tax_form_upload_to,
 )
 from .geocoding import AddressGeocode
-from .groups import Crew, SubTeam, Team
+from .groups import Crew, Group, SubTeam, Team
 from .notifications import Notification, UserNotificationStatus
 from .permissions import RolePermission
 from .programs import (
@@ -87,6 +87,7 @@ __all__ = [
     "Enrollment",
     "Fee",
     "FeeAssignment",
+    "Group",
     "MentorAgreement",
     "MentorAgreementAcceptance",
     "MentorAgreementSubmission",

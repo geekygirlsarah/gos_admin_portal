@@ -40,6 +40,7 @@ from ..models import (
     BackgroundCheck,
     EmailDeliveryEvent,
     Enrollment,
+    Group,
     Program,
     Student,
     StudentDocument,
@@ -501,14 +502,20 @@ class StudentDetailView(
                     "enrollment_set",
                     queryset=Enrollment.objects.for_organization(organization)
                     .filter(program__organization=organization)
-                    .select_related("program", "team", "crew", "subteam")
+                    .select_related("program", "team")
                     .prefetch_related(
+                        Prefetch(
+                            "groups",
+                            queryset=Group.objects.for_organization(
+                                organization
+                            ).filter(program__organization=organization),
+                        ),
                         Prefetch(
                             "program__features",
                             queryset=ProgramFeature.objects.for_organization(
                                 organization
                             ),
-                        )
+                        ),
                     ),
                 ),
                 Prefetch("email_delivery_events", queryset=email_delivery_events),

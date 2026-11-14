@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -194,10 +195,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # ── Student profile ──────────────────────────────────────────────────
         context["student"] = student
         if student:
+            from programs.models import Group
+
             enrollments = (
                 _organization_enrollments(org)
                 .filter(student=student)
                 .select_related("program", "team", "crew", "subteam")
+                .prefetch_related(
+                    Prefetch(
+                        "groups",
+                        queryset=Group.objects.for_organization(org).filter(
+                            program__organization=org
+                        ),
+                    )
+                )
                 .order_by("-program__start_date")
             )
             # Separate active from non-active programs for a cleaner dashboard
@@ -311,6 +322,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 # Attach per-program balance info to each student
                 parent_data = []
                 from attendance.services import get_student_attendance_stats
+                from programs.models import Group
                 from programs.permission_views import can_user_read
                 from programs.utils.balances import (
                     InconsistentBalanceStatementError,
@@ -321,6 +333,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     _organization_enrollments(org)
                     .filter(student_id__in=[s.pk for s in linked_students])
                     .select_related("student", "program", "team", "crew", "subteam")
+                    .prefetch_related(
+                        Prefetch(
+                            "groups",
+                            queryset=Group.objects.for_organization(org).filter(
+                                program__organization=org
+                            ),
+                        )
+                    )
                     .order_by("-program__start_date")
                 )
                 enrollments_by_student = {}

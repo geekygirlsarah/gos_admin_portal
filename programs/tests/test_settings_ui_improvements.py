@@ -12,6 +12,9 @@ from programs.models import (
     Adult,
     Crew,
     Fee,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     MentorAgreement,
     Program,
     ProgramDocument,
@@ -97,16 +100,14 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, 'id="portal_address-tab"')
         self.assertContains(response, 'id="branding-tab"')
         self.assertContains(response, 'id="teams-tab"')
-        self.assertContains(response, 'id="crews-tab"')
-        self.assertContains(response, 'id="subteams-tab"')
+        self.assertContains(response, 'id="groups-tab"')
         self.assertContains(response, 'id="imports-tab"')
         self.assertContains(response, 'id="kiosk_configs-tab"')
         self.assertContains(response, 'id="sliding_scale_settings-tab"')
         self.assertContains(response, 'id="agreements-tab"')
         tab_order = [
             "teams",
-            "crews",
-            "subteams",
+            "groups",
             "lead_mentors",
             "kiosk_configs",
             "imports",
@@ -128,6 +129,8 @@ class SettingsUIImprovementsTests(TestCase):
 
         permissions_response = self.client.get(url, {"tab": "permissions"})
         self.assertEqual(permissions_response.context["active_tab"], "permissions")
+        legacy_groups_response = self.client.get(url, {"tab": "crews"})
+        self.assertEqual(legacy_groups_response.context["active_tab"], "groups")
 
         # Verify role headers and permission controls
         self.assertContains(response, "Lead Mentor")
@@ -154,6 +157,65 @@ class SettingsUIImprovementsTests(TestCase):
         # Verify CSP nonce in script tags
         self.assertIn("csp_nonce", response.context)
         self.assertContains(response, f'nonce="{response.context["csp_nonce"]}"')
+
+    def test_program_groups_can_be_created_updated_and_deleted(self):
+        self._login(self.lead_user)
+        url = reverse("portal_groups")
+        response = self.client.post(
+            url,
+            {
+                "action": "add_group",
+                "program_id": self.program.pk,
+                "name": "Outreach",
+                "color": "#123456",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        group = ProgramGroup.objects.get(
+            organization=self.program.organization,
+            program=self.program,
+            name="Outreach",
+        )
+
+        self.client.post(
+            url,
+            {
+                "action": "update_group",
+                "group_id": group.pk,
+                "name": "Community Outreach",
+                "color": "#654321",
+            },
+        )
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Community Outreach")
+        self.assertEqual(group.color, "#654321")
+
+        self.client.post(url, {"action": "delete_group", "group_id": group.pk})
+        self.assertFalse(ProgramGroup.objects.filter(pk=group.pk).exists())
+
+    def test_program_groups_reject_foreign_organization_program(self):
+        self._login(self.lead_user)
+        other_org = Organization.objects.create(
+            slug="other-groups", name="Other Groups Organization"
+        )
+        other_program = Program.objects.create(
+            name="Other Program", organization=other_org
+        )
+
+        response = self.client.post(
+            reverse("portal_groups"),
+            {
+                "action": "add_group",
+                "program_id": other_program.pk,
+                "name": "Private Group",
+                "color": "#123456",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ProgramGroup.objects.filter(program=other_program).exists())
+        self.assertContains(response, "Choose a program")
 
     @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
     def test_portal_address_tab_shows_momentum_address_and_setup_guidance(self):

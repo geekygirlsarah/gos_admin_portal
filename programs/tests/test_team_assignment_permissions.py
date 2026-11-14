@@ -2,7 +2,8 @@
 
 from datetime import timedelta
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group as AuthGroup
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -10,12 +11,13 @@ from django.utils import timezone
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
-    Crew,
     Enrollment,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     RolePermission,
     Student,
-    SubTeam,
     Team,
 )
 
@@ -59,14 +61,9 @@ class TeamAssignmentOrganizationIsolationTests(TestCase):
         self.other_team = Team.objects.create(
             team_type="FRC", number=2, organization=self.other_organization
         )
-        self.other_crew = Crew.objects.create(
-            name="Other crew",
-            program=self.program,
-            organization=self.other_organization,
-        )
-        self.other_subteam = SubTeam.objects.create(
-            name="Other subteam",
-            program=self.program,
+        self.other_group = ProgramGroup.objects.create(
+            name="Other group",
+            program=self.other_program,
             organization=self.other_organization,
         )
 
@@ -102,8 +99,7 @@ class TeamAssignmentOrganizationIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(self.team, response.context["teams"])
         self.assertNotIn(self.other_team, response.context["teams"])
-        self.assertNotIn(self.other_crew, response.context["crews"])
-        self.assertNotIn(self.other_subteam, response.context["subteams"])
+        self.assertNotIn(self.other_group, response.context["groups"])
 
     def test_other_organization_team_cannot_be_assigned(self):
         for url_name, payload in (
@@ -130,34 +126,22 @@ class TeamAssignmentOrganizationIsolationTests(TestCase):
                 self.enrollment.refresh_from_db()
                 self.assertIsNone(self.enrollment.team)
 
-    def test_other_organization_crew_and_subteam_cannot_be_assigned(self):
-        for field, foreign in (
-            ("crew", self.other_crew),
-            ("subteam", self.other_subteam),
-        ):
-            for url_name, payload in (
-                (
-                    "program_enrollment_update",
-                    {"enrollment_id": self.enrollment.pk, f"{field}_id": foreign.pk},
-                ),
-                (
-                    "program_assignment",
-                    {
-                        "assignment_type": field,
-                        "target_id": foreign.pk,
-                        "student_ids": [self.student.pk],
-                    },
-                ),
-            ):
-                with self.subTest(field=field, url_name=url_name):
-                    response = self.client.post(
-                        reverse(url_name, args=[self.program.pk]), payload
-                    )
-                    self.assertRedirects(
-                        response, reverse("home"), fetch_redirect_response=False
-                    )
-                    self.enrollment.refresh_from_db()
-                    self.assertIsNone(getattr(self.enrollment, field))
+    def test_other_organization_group_cannot_be_assigned(self):
+        response = self.client.post(
+            reverse("program_assignment", args=[self.program.pk]),
+            {
+                "assignment_type": "group",
+                "target_id": self.other_group.pk,
+                "student_ids": [self.student.pk],
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("program_assignment", args=[self.program.pk]),
+            fetch_redirect_response=False,
+        )
+        self.enrollment.refresh_from_db()
+        self.assertFalse(self.enrollment.groups.exists())
 
     def test_mismatched_student_enrollment_is_not_displayed_or_updated(self):
         enrollment = Enrollment.objects.create(
@@ -205,10 +189,6 @@ class MentorTeamAssignmentPermissionTests(TestCase):
             end_date=self.today + timedelta(days=5),
         )
         self.team = Team.objects.create(team_type="FRC", number=9999, color="#ff0000")
-        self.crew = Crew.objects.create(name="Chassis", program=self.active_program)
-        self.crew_past = Crew.objects.create(name="OldCrew", program=self.past_program)
-        self.subteam = SubTeam.objects.create(name="Elec", program=self.active_program)
-
         self.student1 = Student.objects.create(
             legal_first_name="A", last_name="Student"
         )
@@ -240,7 +220,7 @@ class MentorTeamAssignmentPermissionTests(TestCase):
         self.lead_user = User.objects.create_user(
             username="lead", password="pass123"
         )  # nosec B106
-        self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead_group, _ = AuthGroup.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(self.lead_group)
         UserOrganizationMembership.objects.create(
             user=self.lead_user,

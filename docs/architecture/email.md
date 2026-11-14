@@ -30,6 +30,10 @@ the sending provider, DNS, or HTTPS.
 
 ## Bulk Email Pipeline & Background Dispatch
 
+Program email filters can target multiple Groups and match students assigned
+to **any** selected Group. A selected Team filter applies in addition to the
+Group filter; Group targeting includes students and their parents, not mentors.
+
 Bulk email views (`ProgramEmailView`, `ApplicationEmailView`, `ProgramEmailBalancesView`) avoid request timeouts and spam filter penalties:
 - **Individual Dispatch**: Constructs individual messages per recipient instead of large BCC lists.
 - **Threaded Background Execution**: Uses `send_messages_in_background()` to dispatch batches asynchronously via an in-process thread pool.

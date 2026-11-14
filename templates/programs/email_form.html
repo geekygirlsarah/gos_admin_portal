@@ -159,7 +159,7 @@
                 <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-funnel text-primary me-1"></i> Filter by Subgroups (Optional)</h6>
                 <span class="badge bg-secondary-subtle text-secondary border">Optional</span>
               </div>
-              <p class="text-muted small mb-3">Leave checkboxes unselected to message all enrolled students and parents in the program, or select specific teams, crews, and subteams to narrow recipients (students and their parents) to those subgroups.</p>
+              <p class="text-muted small mb-3">No groups selected means no group restriction. When multiple groups are checked, include students assigned to ANY of them. Teams are a separate filter; if selected, students must also belong to a selected team. These filters apply to students and their parents, not mentors.</p>
 
               <div class="row g-3">
                 <!-- Teams Filter -->
@@ -180,39 +180,21 @@
                   </div>
                 </div>
 
-                <!-- Crews / Projects Filter -->
+                <!-- Groups Filter -->
                 <div class="col-md-4">
-                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-diagram-3 me-1"></i>Crews / Projects</label>
-                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;" id="crewsContainer">
-                    {% for crew in crews %}
-                      <div class="form-check mb-1 js-crew-item" data-program="{{ crew.program_id }}">
-                        <input class="form-check-input js-subgroup-input" type="checkbox" name="crews" value="{{ crew.id }}" id="crew_{{ crew.id }}" {% if crew.id|stringformat:"s" in form.crews.value or crew in form.crews.value %}checked{% endif %}>
-                        <label class="form-check-label small" for="crew_{{ crew.id }}">
-                          <span class="badge" style="background-color: {{ crew.color }};">{{ crew.name }}</span>
+                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-diagram-3 me-1"></i>Groups</label>
+                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;" id="groupsContainer">
+                    {% for group in groups %}
+                      <div class="form-check mb-1 js-group-item" data-program="{{ group.program_id }}">
+                        <input class="form-check-input js-subgroup-input" type="checkbox" name="groups" value="{{ group.id }}" id="group_{{ group.id }}" {% if group.id|stringformat:"s" in form.groups.value or group in form.groups.value %}checked{% endif %}>
+                        <label class="form-check-label small" for="group_{{ group.id }}">
+                          <span class="badge" style="background-color: {{ group.color }};">{{ group.name }}</span>
                         </label>
                       </div>
                     {% empty %}
-                      <div class="text-muted small p-1">No crews configured</div>
+                      <div class="text-muted small p-1">No groups configured</div>
                     {% endfor %}
-                    <div class="text-muted small p-1 d-none" id="noCrewsMsg">No crews for selected program</div>
-                  </div>
-                </div>
-
-                <!-- SubTeams Filter -->
-                <div class="col-md-4">
-                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-boxes me-1"></i>SubTeams</label>
-                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;" id="subteamsContainer">
-                    {% for subteam in subteams %}
-                      <div class="form-check mb-1 js-subteam-item" data-program="{{ subteam.program_id }}">
-                        <input class="form-check-input js-subgroup-input" type="checkbox" name="subteams" value="{{ subteam.id }}" id="subteam_{{ subteam.id }}" {% if subteam.id|stringformat:"s" in form.subteams.value or subteam in form.subteams.value %}checked{% endif %}>
-                        <label class="form-check-label small" for="subteam_{{ subteam.id }}">
-                          <span class="badge" style="background-color: {{ subteam.color }};">{{ subteam.name }}</span>
-                        </label>
-                      </div>
-                    {% empty %}
-                      <div class="text-muted small p-1">No subteams configured</div>
-                    {% endfor %}
-                    <div class="text-muted small p-1 d-none" id="noSubteamsMsg">No subteams for selected program</div>
+                    <div class="text-muted small p-1 d-none" id="noGroupsMsg">No groups for selected program</div>
                   </div>
                 </div>
               </div>
@@ -340,47 +322,25 @@
         if (!progSelect) return;
         var selectedProgId = String(progSelect.value || '');
 
-        var crewItems = document.querySelectorAll('.js-crew-item');
-        var visibleCrews = 0;
-        crewItems.forEach(function (item) {
+        var groupItems = document.querySelectorAll('.js-group-item');
+        var visibleGroups = 0;
+        groupItems.forEach(function (item) {
           var prog = String(item.dataset.program || '');
           if (!selectedProgId || prog === selectedProgId) {
             item.classList.remove('d-none');
-            visibleCrews++;
+            visibleGroups++;
           } else {
             item.classList.add('d-none');
             var input = item.querySelector('input');
             if (input) input.checked = false;
           }
         });
-        var noCrewsMsg = document.getElementById('noCrewsMsg');
-        if (noCrewsMsg) {
-          if (visibleCrews === 0 && selectedProgId) {
-            noCrewsMsg.classList.remove('d-none');
+        var noGroupsMsg = document.getElementById('noGroupsMsg');
+        if (noGroupsMsg) {
+          if (visibleGroups === 0 && selectedProgId) {
+            noGroupsMsg.classList.remove('d-none');
           } else {
-            noCrewsMsg.classList.add('d-none');
-          }
-        }
-
-        var subteamItems = document.querySelectorAll('.js-subteam-item');
-        var visibleSubteams = 0;
-        subteamItems.forEach(function (item) {
-          var prog = String(item.dataset.program || '');
-          if (!selectedProgId || prog === selectedProgId) {
-            item.classList.remove('d-none');
-            visibleSubteams++;
-          } else {
-            item.classList.add('d-none');
-            var input = item.querySelector('input');
-            if (input) input.checked = false;
-          }
-        });
-        var noSubteamsMsg = document.getElementById('noSubteamsMsg');
-        if (noSubteamsMsg) {
-          if (visibleSubteams === 0 && selectedProgId) {
-            noSubteamsMsg.classList.remove('d-none');
-          } else {
-            noSubteamsMsg.classList.add('d-none');
+            noGroupsMsg.classList.add('d-none');
           }
         }
       }
