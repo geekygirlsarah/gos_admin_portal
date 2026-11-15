@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-15
+
+### Changed
+- Mentor digital sign-out pages load individual signature images only when selected.
+
 ## 2026-11-14
 
 ### Added

@@ -1002,9 +1002,24 @@ class DigitalSignoutSignatureEncryptionAndEndpointTests(TestCase):
         response = self.client.get(self.url)
         self.assertIn(response.status_code, (302, 403))
 
-    def test_program_digital_signout_page_lazy_loads_signatures(self):
+    def test_program_digital_signout_page_defers_signatures_until_selected(self):
         self.client.force_login(self.lead_user)
         url = reverse("program_digital_signout", args=[self.program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'loading="lazy"')
+        self.assertContains(response, "Ada Lovelace")
+        self.assertContains(response, "Jane Guardian")
+        self.assertContains(response, f'href="{self.url}"')
+        self.assertContains(response, "View signature")
+        self.assertNotContains(response, f'src="{self.url}"')
+
+    def test_program_digital_signout_page_without_signature_has_no_link(self):
+        self.signout.signature = ""
+        self.signout.save(update_fields=["signature"])
+        self.client.force_login(self.lead_user)
+        response = self.client.get(
+            reverse("program_digital_signout", args=[self.program.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Jane Guardian")
+        self.assertNotContains(response, f'href="{self.url}"')
