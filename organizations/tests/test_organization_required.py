@@ -56,6 +56,11 @@ class OrganizationRequiredTests(TestCase):
                     self.assertTrue(field.null)
                     self.assertIs(field.remote_field.on_delete, SET_NULL)
                     continue
+                if model._meta.label == "audit.AuditLog":
+                    # Platform and unattributed audit events must remain unscoped.
+                    self.assertTrue(field.null)
+                    self.assertIs(field.remote_field.on_delete, SET_NULL)
+                    continue
                 self.assertFalse(field.null)
                 if model._meta.label in NON_PROTECT_MODELS:
                     continue

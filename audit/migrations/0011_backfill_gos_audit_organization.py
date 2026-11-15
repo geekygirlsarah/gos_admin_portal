@@ -15,11 +15,11 @@ def backfill_first_organization(apps, schema_editor):
     alias = schema_editor.connection.alias
     organizations = Organization.objects.using(alias)
     organization = organizations.order_by("pk").first()
-    # if organization is None or organizations.exclude(pk=organization.pk).exists():
-    #     logger.warning(
-    #         "Audit history was not backfilled: there is not exactly one organization."
-    #     )
-    #     return
+    if organization is None or organizations.exclude(pk=organization.pk).exists():
+        logger.warning(
+            "Audit history was not backfilled: there is not exactly one organization."
+        )
+        return
 
     Membership = apps.get_model("organizations", "UserOrganizationMembership")
     member_ids = (

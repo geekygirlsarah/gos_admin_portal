@@ -1097,9 +1097,14 @@ def convert_application_to_student(application: Application, request=None):
             )
         return application.converted_student
 
-    # Persist any legacy step-key migration (``step5`` → ``step5-student``,
-    # etc.) so both this conversion and any later reads see merged data.
-    application.normalize_step_data(save=True)
+    answers = []
+    if application.applicant_type != Application.Type.MENTOR:
+        from .answers import extract_experience_answers
+
+        try:
+            answers = extract_experience_answers(application.data)
+        except ValueError as exc:
+            raise ApplicationConversionError(str(exc)) from exc
 
     # Mentors don't produce a Student record, so idempotency is tracked by
     # the CONVERTED status plus a lookup of the created mentor Adult.
@@ -1107,6 +1112,7 @@ def convert_application_to_student(application: Application, request=None):
         application.applicant_type == Application.Type.MENTOR
         and application.status == Application.Status.CONVERTED
     ):
+        application.normalize_step_data(save=True)
         return find_existing_mentor_by_email(
             application.email, organization=application.organization
         )
@@ -1159,8 +1165,9 @@ def convert_application_to_student(application: Application, request=None):
                     "Application documents must belong to this organization and program."
                 )
 
-    data = application.data or {}
     with transaction.atomic():
+        application.normalize_step_data(save=True)
+        data = application.data or {}
         if application.applicant_type == Application.Type.MENTOR:
             mentor_data = (data.get("mentor_info") or {}).copy()
             # Ensure the verified email is used as personal_email if none provided in the form
@@ -1336,6 +1343,9 @@ def convert_application_to_student(application: Application, request=None):
                 "updated_at",
             ]
         )
+        from .answers import save_experience_answers
+
+        save_experience_answers(application, student, answers)
 
     # Send notification email outside the transaction
     send_application_converted_email(application, request=request)

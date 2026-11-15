@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-11-15
 
+### Added
+- Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
+
 ### Changed
 - Condensed navigation into People, Admin, and Activities menus, and grouped platform operations to leave more room in the navigation bar.
 - Mentor digital sign-out pages load individual signature images only when selected.

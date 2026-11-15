@@ -22,6 +22,23 @@ Never run development seed commands or test-data anonymization against productio
 data. Do not use `--fix`, `--execute`, or `--force` until the proposed changes
 have been reviewed.
 
+### Reviewing historical application answers
+
+After applying the application-answer migrations through the approved deployment
+process, the read-only command
+`python manage.py report_application_answer_backfill --organization <slug>`
+lists approved or converted student applications with no linked student,
+inconsistent ownership, or malformed experience data. It reports application IDs
+and reasons, not answer text or foreign profile details. Approved applications
+without a converted student normally remain unlinked until conversion. Review
+exceptions in the organization-scoped application review workflow; do not infer
+identity from a shared email or reassign inconsistent records automatically.
+Valid answers from linked applications were copied without overwriting existing
+student fields. Reversing the data migration leaves these answer records in place;
+the source application data is not changed by the backfill. Reversing the
+preceding schema migration drops the answer table and all its records, including
+any created after the backfill; preserve a backup before rolling back that far.
+
 ## Temporary Maintenance Mode
 
 Set `MAINTENANCE_MODE=true` on each web service instance and restart or redeploy

@@ -300,7 +300,7 @@ def _validate_parent_merge_ownership(keep: Any, source: Any) -> None:
 
 
 def _validate_student_merge_ownership(keep: Any, source: Any) -> None:
-    from applications.models import Application
+    from applications.models import Application, StudentApplicationAnswer
     from attendance.models import (
         AttendanceEvent,
         AttendanceSession,
@@ -442,6 +442,24 @@ def _validate_student_merge_ownership(keep: Any, source: Any) -> None:
         ("organization_id", "converted_student__organization_id"),
         ("program__organization_id",),
     )
+    answers = StudentApplicationAnswer.objects.filter(student_id__in=student_ids)
+    _validate_related_organization(
+        answers,
+        organization_id,
+        (
+            "organization_id",
+            "student__organization_id",
+            "application__organization_id",
+            "application__converted_student__organization_id",
+        ),
+        ("application__program__organization_id",),
+    )
+    if answers.exclude(
+        application__converted_student_id=models.F("student_id")
+    ).exists():
+        raise ValidationError(
+            "Merge blocked because an application answer has an inconsistent student."
+        )
     _validate_related_organization(
         OutreachSignup.objects.filter(student_id__in=student_ids),
         organization_id,
@@ -882,10 +900,11 @@ def _transfer_student_attendance_records(keep: Any, source: Any) -> None:
 
 
 def _transfer_student_outreach_signups(keep: Any, source: Any) -> None:
-    from applications.models import Application
+    from applications.models import Application, StudentApplicationAnswer
     from outreach.models import OutreachSignup
 
     Application.objects.filter(converted_student=source).update(converted_student=keep)
+    StudentApplicationAnswer.objects.filter(student=source).update(student=keep)
 
     for signup in list(OutreachSignup.objects.filter(student=source)):
         existing = OutreachSignup.objects.filter(
