@@ -88,35 +88,15 @@
                             <li><a class="dropdown-item" href="{% url 'platform_admin:organization_create' %}"><i class="bi bi-plus-circle me-2"></i>Add Organization</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:metrics' %} active{% endif %}" href="{% url 'platform_admin:metrics' %}">
-                            <i class="bi bi-graph-up-arrow me-1"></i>Usage Metrics
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:health' %} active{% endif %}" href="{% url 'platform_admin:health' %}">
-                            <i class="bi bi-heart-pulse me-1"></i>System Health
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:user_support' %} active{% endif %}" href="{% url 'platform_admin:user_support' %}">
-                            <i class="bi bi-people me-1"></i>User Support
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:audit_logs' %} active{% endif %}" href="{% url 'platform_admin:audit_logs' %}">
-                            <i class="bi bi-journal-text me-1"></i>Audit Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.view_name == 'platform_admin:notification_create' %} active{% endif %}" href="{% url 'platform_admin:notification_create' %}">
-                            <i class="bi bi-send me-1" aria-hidden="true"></i>Send platform update
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">
-                            <i class="bi bi-tools me-1"></i>Django Admin
-                        </a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle{% if request.resolver_match.view_name == 'platform_admin:metrics' or request.resolver_match.view_name == 'platform_admin:health' or request.resolver_match.view_name == 'platform_admin:user_support' or request.resolver_match.view_name == 'platform_admin:audit_logs' or request.resolver_match.view_name == 'platform_admin:notification_create' %} active{% endif %}" href="#" id="platformOperationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Operations</a>
+                        <ul class="dropdown-menu" aria-labelledby="platformOperationsDropdown">
+                            <li><a class="dropdown-item{% if request.resolver_match.view_name == 'platform_admin:metrics' %} active{% endif %}" href="{% url 'platform_admin:metrics' %}"><i class="bi bi-graph-up-arrow me-2"></i>Usage Metrics</a></li>
+                            <li><a class="dropdown-item{% if request.resolver_match.view_name == 'platform_admin:health' %} active{% endif %}" href="{% url 'platform_admin:health' %}"><i class="bi bi-heart-pulse me-2"></i>System Health</a></li>
+                            <li><a class="dropdown-item{% if request.resolver_match.view_name == 'platform_admin:user_support' %} active{% endif %}" href="{% url 'platform_admin:user_support' %}"><i class="bi bi-people me-2"></i>User Support</a></li>
+                            <li><a class="dropdown-item{% if request.resolver_match.view_name == 'platform_admin:audit_logs' %} active{% endif %}" href="{% url 'platform_admin:audit_logs' %}"><i class="bi bi-journal-text me-2"></i>Audit Logs</a></li>
+                            <li><a class="dropdown-item{% if request.resolver_match.view_name == 'platform_admin:notification_create' %} active{% endif %}" href="{% url 'platform_admin:notification_create' %}"><i class="bi bi-send me-2" aria-hidden="true"></i>Send platform update</a></li>
+                        </ul>
                     </li>
                     {% else %}
                     {% if navbar_role == 'Student' or navbar_is_parent %}
@@ -132,11 +112,6 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'parent_payments' %} active{% endif %}" href="{% url 'parent_payments' %}">Payments</a>
                     </li>
-                    {% for p in parent_travel_programs %}
-                    <li class="nav-item">
-                        <a class="nav-link{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if parent_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
-                    </li>
-                    {% endfor %}
                     {% endif %}
 
                     {% if navbar_role == 'Student' and user.student_profile %}
@@ -159,21 +134,6 @@
                     </li>
                     {% endif %}
                     {% endif %}
-                    {% for p in student_outreach_programs %}
-                    <li class="nav-item">
-                        <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
-                    </li>
-                    {% endfor %}
-                    {% for p in student_orders_programs %}
-                    <li class="nav-item">
-                        <a class="nav-link{% if 'orders' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'orders:order_list' p.pk %}">Order Requests{% if student_orders_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
-                    </li>
-                    {% endfor %}
-                    {% for p in student_travel_programs %}
-                    <li class="nav-item">
-                        <a class="nav-link{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if student_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
-                    </li>
-                    {% endfor %}
                     {% endif %}
 
                     {% if user_has_any_badge_program %}
@@ -188,12 +148,24 @@
                     </li>
                     {% endif %}
 
-                    {% if carpool_map_programs %}
+                    {% if carpool_map_programs or student_outreach_programs or student_orders_programs or student_travel_programs or parent_travel_programs %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle{% if 'map' in request.path %} active{% endif %}" href="#" id="carpoolMapDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Carpool Map</a>
-                        <ul class="dropdown-menu" aria-labelledby="carpoolMapDropdown">
+                        <a class="nav-link dropdown-toggle{% if 'map' in request.path or 'outreach' in request.path or 'orders' in request.path or 'travel' in request.path %} active{% endif %}" href="#" id="activitiesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Activities</a>
+                        <ul class="dropdown-menu" aria-labelledby="activitiesDropdown">
+                            {% for p in student_outreach_programs %}
+                            <li><a class="dropdown-item{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            {% endfor %}
+                            {% for p in student_orders_programs %}
+                            <li><a class="dropdown-item{% if 'orders' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'orders:order_list' p.pk %}">Order Requests{% if student_orders_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            {% endfor %}
+                            {% for p in student_travel_programs %}
+                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if student_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            {% endfor %}
+                            {% for p in parent_travel_programs %}
+                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if parent_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            {% endfor %}
                             {% for p in carpool_map_programs %}
-                            <li><a class="dropdown-item{% if 'map' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'program_student_map' p.pk %}">{{ p.name }}</a></li>
+                            <li><a class="dropdown-item{% if 'map' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'program_student_map' p.pk %}">Carpool Map ({{ p.name }})</a></li>
                             {% endfor %}
                         </ul>
                     </li>
@@ -281,11 +253,12 @@
                         </li>
                     {% endif %}
 
-                    {# ── LeadMentor admin dropdowns, split by topic so each stays short ── #}
+                    {# ── LeadMentor administration ── #}
                     {% if navbar_role == 'LeadMentor' %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="studentsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
-                            <ul class="dropdown-menu" aria-labelledby="studentsAdminDropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="peopleDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">People</a>
+                            <ul class="dropdown-menu" aria-labelledby="peopleDropdown">
+                                <li><h6 class="dropdown-header">Students</h6></li>
                                 <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
                                 <li><a class="dropdown-item" href="{% url 'student_photos' %}">All Student Photos</a></li>
                                 <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">Students by Grade</a></li>
@@ -293,11 +266,8 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
                                 <li><a class="dropdown-item" href="/programs/schools/">Schools</a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adultsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Adults</a>
-                            <ul class="dropdown-menu" aria-labelledby="adultsAdminDropdown">
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">Adults</h6></li>
                                 <li><a class="dropdown-item" href="{% url 'adult_list' %}">All Adults</a></li>
                                 <li><a class="dropdown-item" href="{% url 'parent_list' %}">All Parents</a></li>
                                 <li><a class="dropdown-item" href="{% url 'mentor_list' %}">All Mentors</a></li>
@@ -305,28 +275,23 @@
                             </ul>
                         </li>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="applicationsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Applications</a>
-                            <ul class="dropdown-menu" aria-labelledby="applicationsAdminDropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
+                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><h6 class="dropdown-header">Applications</h6></li>
                                 {% if perms.applications.review_application or current_navbar_user_role == 'LeadMentor' %}
                                     <li><a class="dropdown-item" href="{% url 'application_review_list' %}">Program/Mentor Applications</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'sliding_scale_review_list' %}">Sliding Scale Applications</a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="manageDataAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Manage Data</a>
-                            <ul class="dropdown-menu" aria-labelledby="manageDataAdminDropdown">
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">Manage Data</h6></li>
                                 {% if perms.guest_forms.review_guestform or current_navbar_user_role == 'LeadMentor' %}
                                     <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
                                 {% endif %}
                                 {% if org_account_enabled %}
                                 <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Organization account" }}s</a></li>
                                 {% endif %}
-                            </ul>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
-                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">Organization</h6></li>
                                 <li><a class="dropdown-item" href="{% url 'program_create' %}">Add New Program</a></li>
                                 <li><a class="dropdown-item" href="{% url 'import_dashboard' %}">Import Data</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -366,7 +331,7 @@
             </div>
         {% endif %}
 
-        <div class="d-flex gap-2 align-items-center">
+        <div class="navbar-account d-flex gap-2 align-items-center">
             {% if not user.is_authenticated and "/apply" not in request.path %}
             {% if request.organization %}
             <a class="btn btn-warning" href="/apply/">Apply to the Program</a>

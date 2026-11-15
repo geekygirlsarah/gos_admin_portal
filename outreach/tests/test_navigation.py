@@ -41,15 +41,13 @@ class OutreachNavigationTest(TestCase):
             resp, f'href="/programs/{self.program.id}/outreach/">Outreach</a>'
         )
 
-        # The program name should only show up as a "Carpool Map" dropdown
-        # menu item (the student's currently-active program), not as a
-        # separate top-level program link.
+        # The map is grouped with the other program activities.
         nav_start = resp.content.find(b'<nav class="navbar')
         nav_end = resp.content.find(b"</nav>", nav_start)
         nav_content = resp.content[nav_start:nav_end]
 
         self.assertIn(self.program.name.encode(), nav_content)
-        self.assertIn(b'id="carpoolMapDropdown"', nav_content)
+        self.assertIn(b'id="activitiesDropdown"', nav_content)
 
         # Should NOT see 'Students' link in the nav bar
         self.assertNotIn(b"Students</a>", nav_content)
@@ -68,6 +66,5 @@ class OutreachNavigationTest(TestCase):
             resp, f'href="/programs/{self.program.id}/outreach/">Outreach</a>'
         )
 
-        # The program name shows up as a "Carpool Map" dropdown menu item
-        # for the student's currently-active program.
+        # The map identifies the student's currently-active program.
         self.assertIn(self.program.name.encode(), nav_content)

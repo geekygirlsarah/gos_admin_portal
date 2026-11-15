@@ -1,5 +1,39 @@
 /* Site-wide custom styles */
 
+/* Keep long names and additional role links from pushing the account menu out. */
+.navbar-brand {
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar .dropdown-menu {
+  max-height: 65vh;
+  max-width: calc(100vw - 2rem);
+  overflow-y: auto;
+}
+
+.navbar .dropdown-item {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1200px) {
+  .navbar-brand { max-width: 25%; }
+  .navbar-collapse { min-width: 0; }
+  .navbar-nav { flex-wrap: wrap; min-width: 0; }
+  .navbar-nav .nav-item { min-width: 0; max-width: 100%; }
+  .navbar-nav .nav-link { overflow-wrap: anywhere; }
+  .navbar-account { flex-shrink: 0; }
+  #accountMenuDropdown {
+    max-width: 15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* Generic circular avatar base */
 .avatar {
   display: inline-block;
