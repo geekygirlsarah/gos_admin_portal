@@ -46,6 +46,11 @@ from ..services import (
     student_to_prefill,
     students_for_adult,
 )
+from .browser import (
+    _grant_browser_access,
+    _require_browser_access,
+    _start_bootstrap,
+)
 from .utils import (
     TOTAL_STEPS,
     _get_application_or_404,
@@ -76,6 +81,11 @@ class Step2ApplicantTypeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
+        if application.status == Application.Status.AWAITING_PARENT:
+            return _redirect_to_current_step(application)
         form = ApplicantTypeForm(
             initial={
                 "applicant_type": application.applicant_type or None,
@@ -89,14 +99,22 @@ class Step2ApplicantTypeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
+        if application.status == Application.Status.AWAITING_PARENT:
+            return _redirect_to_current_step(application)
         form = ApplicantTypeForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
 
+        old_type = application.applicant_type
         application.applicant_type = form.cleaned_data["applicant_type"]
         new_email = form.cleaned_data.get("email") or ""
         # Changing the email invalidates a prior verification.
-        if new_email and new_email.lower() != (application.email or "").lower():
+        email_changed = new_email.lower() != (application.email or "").lower()
+        if email_changed:
+            _start_bootstrap(request, application)
             application.email_verified_at = None
             application.otp_hash = ""
             application.otp_expires_at = None
@@ -104,6 +122,8 @@ class Step2ApplicantTypeView(View):
         application.email = new_email
         application.current_step = max(application.current_step, 3)
         application.save()
+        if old_type != application.applicant_type and application.email_is_verified:
+            _grant_browser_access(request, application)
 
         # If a student didn't provide an email, tell them the parent should
         # take over and stop the wizard here for now.
@@ -161,7 +181,7 @@ class Step4ProgramView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         future, current, past = get_program_buckets(request.organization)
@@ -175,7 +195,7 @@ class Step4ProgramView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         future, current, past = get_program_buckets(request.organization)
@@ -220,6 +240,9 @@ class Step3VerifyEmailView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         if application.email_is_verified:
             # Mentors skip program selection — send them back into the mentor
             # wizard; everyone else continues to Step 4 (program selection).
@@ -251,6 +274,9 @@ class Step3VerifyEmailView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         rate_limited = check_otp_verify_limit(request, application.application_id)
         if rate_limited is not None:
             return rate_limited
@@ -279,6 +305,7 @@ class Step3VerifyEmailView(View):
             return self._render(request, application, form)
         application.current_step = max(application.current_step, 4)
         application.save(update_fields=["current_step", "updated_at"])
+        _grant_browser_access(request, application)
 
         # Check for existing draft applications with the same email.
         # If found, redirect to a page that lets them resume the old one or start over.
@@ -324,7 +351,7 @@ class Step3DuplicateFoundView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         # Find other applications with the same email that are in progress
@@ -363,7 +390,7 @@ class Step3DuplicateFoundView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         action = request.POST.get("action")
@@ -468,6 +495,9 @@ class Step3ResendCodeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         if not application.email:
             return redirect("apply_step2", app_id=application.application_id)
         rate_limited = check_otp_send_limit(request, application.email)
@@ -504,7 +534,7 @@ class Step5StudentInfoView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -532,7 +562,7 @@ class Step5StudentInfoView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -764,7 +794,7 @@ class Step6ExperienceView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -776,7 +806,7 @@ class Step6ExperienceView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -815,7 +845,7 @@ class Step7PrimaryParentView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -833,7 +863,7 @@ class Step7PrimaryParentView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1161,7 +1191,7 @@ class SwapParentsView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1242,7 +1272,7 @@ class Step8SecondaryParentView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1264,7 +1294,7 @@ class Step8SecondaryParentView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1390,7 +1420,7 @@ class Step9ConfirmView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1405,7 +1435,7 @@ class Step9ConfirmView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 

@@ -15,6 +15,7 @@ from audit.service import log_event
 from ..forms import ResumeApplicationForm
 from ..models import Application
 from ..services import PENDING_STATUSES, applications_for_user, get_program_buckets
+from .browser import _require_browser_access, _start_bootstrap
 from .utils import (
     TOTAL_STEPS,
     _auto_authorize_handoff,
@@ -52,6 +53,7 @@ class WelcomeView(View):
         # POST on Step 1 means "start a new application".
         organization = _require_organization(request)
         application = Application.objects.create(organization=organization)
+        _start_bootstrap(request, application)
         return redirect("apply_step2", app_id=application.application_id)
 
 
@@ -104,6 +106,9 @@ class ResumeLinkView(View):
 class ContinueView(View):
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         # Let a logged-in parent whose email matches the handoff recipient
         # resume an AWAITING_PARENT application from their dashboard.
         _auto_authorize_handoff(request, application)
@@ -197,6 +202,9 @@ class SubmittedView(View):
             Application.Status.APPROVED_SIGNED,
         ):
             return redirect("apply_step10", app_id=application.application_id)
+        guard = _require_browser_access(request, application)
+        if guard is not None:
+            return guard
         if _is_mentor(application):
             current_step, total_steps = _mentor_progress("submitted")
         else:

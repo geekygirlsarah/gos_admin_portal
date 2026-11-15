@@ -20,6 +20,7 @@ from ..services import (
     send_application_submitted_email,
     send_lead_notification_email,
 )
+from .browser import _require_browser_access
 from .utils import (
     MENTOR_TOTAL_STEPS,
     _get_application_or_404,
@@ -37,9 +38,12 @@ def _require_mentor(application: Application):
     return None
 
 
-def _require_mentor_verified(application: Application):
+def _require_mentor_verified(request, application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
     guard = _require_mentor(application)
+    if guard is not None:
+        return guard
+    guard = _require_browser_access(request, application)
     if guard is not None:
         return guard
     if not application.email_is_verified:
@@ -62,6 +66,9 @@ class MentorBlockedView(View):
         application = _get_application_or_404(app_id, request.organization)
         if not _is_mentor(application):
             return _redirect_to_current_step(application)
+        guard = _require_browser_access(request, application)
+        if guard is not None:
+            return guard
         return render(
             request,
             self.template_name,
@@ -79,7 +86,7 @@ class MentorInfoView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         initial = (application.data or {}).get("mentor_info") or {}
@@ -87,7 +94,7 @@ class MentorInfoView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorInfoForm(request.POST)
@@ -122,7 +129,7 @@ class MentorClearanceInterestView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         initial = (application.data or {}).get("mentor_clearance_interest") or {}
@@ -132,7 +139,7 @@ class MentorClearanceInterestView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorClearanceInterestForm(request.POST)
@@ -178,7 +185,7 @@ class MentorClearanceDetailView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         # Don't show this page if they said "no" on the interest step.
@@ -195,7 +202,7 @@ class MentorClearanceDetailView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorClearanceDetailForm(request.POST)
@@ -231,14 +238,14 @@ class MentorConfirmView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         return self._render(request, application, ConfirmSubmitForm())
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = ConfirmSubmitForm(request.POST)

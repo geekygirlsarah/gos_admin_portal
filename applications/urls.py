@@ -98,6 +98,11 @@ urlpatterns = [
         name="apply_step3",
     ),
     path(
+        "<str:app_id>/verify-browser/",
+        views.BrowserVerificationView.as_view(),
+        name="apply_browser_verification",
+    ),
+    path(
         "<str:app_id>/step3/duplicate-found/",
         views.Step3DuplicateFoundView.as_view(),
         name="apply_duplicate_found",

@@ -145,10 +145,15 @@ def _redirect_after_email_verified(application: Application):
     return redirect("apply_step4", app_id=application.application_id)
 
 
-def _require_verified_email(application: Application):
+def _require_verified_email(request, application: Application):
     locked_redirect = _locked_application_redirect(application)
     if locked_redirect is not None:
         return locked_redirect
+    from .browser import _require_browser_access
+
+    guard = _require_browser_access(request, application, allow_bootstrap=True)
+    if guard is not None:
+        return guard
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
     return None
@@ -184,9 +189,9 @@ def _is_handoff_authorized(request, application: Application) -> bool:
 
     expected = application.handoff_token
     if not expected:
-        # If for some reason there is no token on file but it's awaiting
-        # parent, we allow it (best effort for legacy/corrupt records).
-        return True
+        from .browser import _has_browser_access
+
+        return _has_browser_access(request, application)
 
     session_token = request.session.get(f"handoff_token_{application.application_id}")
     return bool(session_token and session_token == expected)
@@ -309,12 +314,17 @@ def _require_mentor(application: Application):
     return None
 
 
-def _require_mentor_verified(application: Application):
+def _require_mentor_verified(request, application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
     locked_redirect = _locked_application_redirect(application)
     if locked_redirect is not None:
         return locked_redirect
     guard = _require_mentor(application)
+    if guard is not None:
+        return guard
+    from .browser import _require_browser_access
+
+    guard = _require_browser_access(request, application)
     if guard is not None:
         return guard
     if not application.email_is_verified:
