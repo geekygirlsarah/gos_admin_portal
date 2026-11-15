@@ -78,6 +78,7 @@ class PermissionMatrixTests(TestCase):
         cls.mentor_only_sections = {
             "mail_merge",
             "team_assignments",
+            "program_groups",
             "badge_award",
             "badge_manage",
         }
@@ -85,6 +86,7 @@ class PermissionMatrixTests(TestCase):
             "attendance",
             "mail_merge",
             "team_assignments",
+            "program_groups",
             "badge_award",
             "badge_manage",
         }

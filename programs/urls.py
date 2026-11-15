@@ -57,6 +57,7 @@ from .views import (
     ProgramFeeCreateView,
     ProgramFeeSelectView,
     ProgramFeeUpdateView,
+    ProgramGroupsView,
     ProgramListView,
     ProgramMailMergeView,
     ProgramMedicalInfoView,
@@ -471,6 +472,7 @@ urlpatterns = [
         login_required(ProgramAssignmentView.as_view()),
         name="program_assignment",
     ),
+    path("<int:pk>/groups/", ProgramGroupsView.as_view(), name="program_groups"),
     path(
         "<int:pk>/enrollment/update/",
         ProgramEnrollmentUpdateView.as_view(),

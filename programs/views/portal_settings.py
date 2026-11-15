@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -45,6 +46,9 @@ from programs.models import (
 from programs.permission_views import (
     ORDERS_SECTIONS,
     LeadMentorRequiredMixin,
+    can_user_read,
+    can_user_write,
+    user_is_lead_mentor,
 )
 
 try:
@@ -112,7 +116,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_read": orders_ok,
                         "can_write": orders_ok,
                     }
-                elif section_code == "mail_merge":
+                elif section_code in ("mail_merge", "program_groups"):
                     defaults = {"can_read": False, "can_write": False}
                 RolePermission.objects.get_or_create(
                     organization=org,
@@ -128,6 +132,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         for section_code, section_name in sections:
             active_column = ORDERS_SECTIONS.get(section_code)
             is_mail_merge = section_code == "mail_merge"
+            mentor_only = section_code in ("mail_merge", "program_groups")
             uses_read = (
                 is_mail_merge or active_column is None or active_column == "view"
             )
@@ -142,14 +147,14 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     ).first(),
                     "parent": (
                         None
-                        if is_mail_merge
+                        if mentor_only
                         else permissions.filter(
                             section=section_code, role="Parent"
                         ).first()
                     ),
                     "student": (
                         None
-                        if is_mail_merge
+                        if mentor_only
                         else permissions.filter(
                             section=section_code, role="Student"
                         ).first()
@@ -557,6 +562,146 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect("/programs/settings/?tab=crews")
 
         return redirect("/programs/settings/?tab=crews")
+
+
+class ProgramGroupsView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=kwargs["pk"]
+        )
+        if not can_user_read(request.user, "programs", self.program, org=organization):
+            messages.error(request, "You do not have permission to view this program.")
+            return redirect("home")
+        if not can_user_read(
+            request.user, "program_groups", self.program, org=organization
+        ):
+            messages.error(
+                request, "You do not have permission to view program groups."
+            )
+            return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        organization = request.organization
+        return render(
+            request,
+            "programs/groups.html",
+            {
+                "program": self.program,
+                "groups": Group.objects.for_organization(organization).filter(
+                    program=self.program, program__organization=organization
+                ),
+                "can_edit_groups": can_user_write(
+                    request.user, "program_groups", self.program, org=organization
+                ),
+                "can_delete_groups": user_is_lead_mentor(
+                    request.user, org=organization
+                ),
+            },
+        )
+
+    def post(self, request, pk):
+        organization = request.organization
+        destination = redirect("program_groups", pk=pk)
+        action = request.POST.get("action")
+        if not can_user_write(
+            request.user, "program_groups", self.program, org=organization
+        ):
+            messages.error(
+                request, "You do not have permission to edit program groups."
+            )
+            return destination
+        if action not in ("add_group", "update_group", "delete_group"):
+            messages.error(request, "Unknown group action.")
+            return destination
+        group = None
+        if action != "add_group":
+            group_id = request.POST.get("group_id", "")
+            if (
+                not group_id.isascii()
+                or not group_id.isdecimal()
+                or len(group_id) > 19
+                or int(group_id) > 9223372036854775807
+            ):
+                messages.error(request, "That group could not be found.")
+                return destination
+            group = get_object_or_404(
+                Group.objects.for_organization(organization),
+                pk=group_id,
+                program=self.program,
+                program__organization=organization,
+            )
+        if action == "delete_group":
+            if not user_is_lead_mentor(request.user, org=organization):
+                messages.error(request, "Only Lead Mentors can delete groups.")
+                return destination
+            from orders.models import OrderItem
+
+            if (
+                _has_foreign_enrollments(
+                    "groups", group, organization, program=self.program
+                )
+                or OrderItem.objects.filter(groups=group)
+                .exclude(organization=organization)
+                .exists()
+            ):
+                messages.error(
+                    request,
+                    "This group is linked to records owned by another organization and cannot be deleted.",
+                )
+                return destination
+            log_deletion(
+                resource=group,
+                request=request,
+                before={
+                    "name": group.name,
+                    "color": group.color,
+                    "program_id": group.program_id,
+                },
+                notes="Program group deleted from program settings.",
+            )
+            group.delete()
+            messages.success(request, "Group deleted.")
+            return destination
+
+        name = request.POST.get("name", "").strip()
+        color = request.POST.get("color", "")
+        if not name or len(name) > 100 or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            messages.error(request, "Enter a group name and a valid color.")
+            return destination
+        duplicates = Group.objects.for_organization(organization).filter(
+            program=self.program, name=name
+        )
+        if group is not None:
+            duplicates = duplicates.exclude(pk=group.pk)
+        if duplicates.exists():
+            messages.error(
+                request, "A group with that name already exists in this program."
+            )
+            return destination
+        try:
+            with transaction.atomic():
+                if group is None:
+                    Group.objects.create(
+                        organization=organization,
+                        program=self.program,
+                        name=name,
+                        color=color,
+                    )
+                else:
+                    group.name = name
+                    group.color = color
+                    group.save()
+        except IntegrityError:
+            messages.error(
+                request, "The group could not be saved. Check its name and try again."
+            )
+            return destination
+        messages.success(request, "Group saved.")
+        return destination
 
 
 class PortalGroupView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

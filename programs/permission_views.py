@@ -344,6 +344,8 @@ def can_user_read(user, section, obj=None, org=None):
         return True
     if role is None:
         return False
+    if section == "program_groups" and role != "Mentor":
+        return False
     if section == "mail_merge" and role != "Mentor":
         return False
 
@@ -396,6 +398,8 @@ def can_user_read(user, section, obj=None, org=None):
             default_read = False
         if role == "Mentor" and section == "team_assignments":
             default_read = False
+        if section == "program_groups":
+            default_read = False
         if role == "Mentor" and section in ("badge_award", "badge_manage"):
             default_read = False
         if role == "Student" and section == "outreach":
@@ -412,8 +416,8 @@ def can_user_read(user, section, obj=None, org=None):
     if not can_read_section:
         return False
 
-    # Team assignments are mentor-only (besides LeadMentor) and program-scoped
-    if section == "team_assignments":
+    # These program-specific sections are mentor-only and program-scoped.
+    if section in ("team_assignments", "program_groups"):
         if role not in ("Mentor", "LeadMentor"):
             return False
         if role == "Mentor" and obj and isinstance(obj, Program):
@@ -586,6 +590,8 @@ def can_user_write(user, section, obj=None, org=None):
         return True
     if role is None:
         return False
+    if section == "program_groups" and role != "Mentor":
+        return False
     if section == "mail_merge":
         return False
 
@@ -718,8 +724,8 @@ def can_user_write(user, section, obj=None, org=None):
     if not can_write_section:
         return False
 
-    # Team assignments are mentor-only (besides LeadMentor) and program-scoped
-    if section == "team_assignments":
+    # These program-specific sections are mentor-only and program-scoped.
+    if section in ("team_assignments", "program_groups"):
         if role not in ("Mentor", "LeadMentor"):
             return False
         if role == "Mentor" and obj and isinstance(obj, Program):
@@ -784,7 +790,7 @@ def can_user_delete(user, section, obj=None, org=None):
         return True
     if role is None:
         return False
-    if section == "mail_merge":
+    if section in ("mail_merge", "program_groups"):
         return False
 
     # Mentors can add/edit attendance but never delete it

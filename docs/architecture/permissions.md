@@ -175,6 +175,12 @@ If an explicit request organization is supplied, the object must belong to that 
 - Read and write access to `attendance` (marking presence, operating sign-outs, closing stale sessions).
 - Deletion of records is restricted (`can_user_delete` is Lead Mentor only).
 
+Program group management has its own **Programs - Groups** permission. Mentors
+default to no access; read permits viewing the program's groups, and read/write
+permits creating and editing them in active or upcoming programs. Deletion is
+restricted to Lead Mentors. This permission does not change the separate
+team/group assignment permission.
+
 ### Order Request Granular Sections (`ORDERS_SECTIONS`)
 Order management uses four fine-grained permission sections:
 - `orders-view`: Master view toggle to see requested orders.

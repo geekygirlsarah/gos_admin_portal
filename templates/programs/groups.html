@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Groups | {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <a href="{% url 'program_detail' program.id %}" class="link-secondary"><i class="bi bi-arrow-left me-1"></i>Back to {{ program.name }}</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 my-4">
+        <div>
+            <p class="text-muted mb-1">{{ program.name }}{% if program.year_display %} &middot; {{ program.year_display }}{% endif %}</p>
+            <h1 class="h3 fw-bold mb-2">Program Groups</h1>
+            <p class="text-muted mb-0">Organize students with groups. Each student can belong to more than one group.</p>
+        </div>
+        <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary">Back to Program</a>
+    </div>
+
+    {% if can_edit_groups %}
+    <section class="card shadow-sm border-0 rounded-3 mb-4" aria-labelledby="add-group-heading">
+        <div class="card-body p-4">
+            <h2 class="h5 fw-bold" id="add-group-heading"><i class="bi bi-plus-circle text-success me-2"></i>Add a group</h2>
+            <form method="post" class="row g-3 align-items-end mt-1">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_group">
+                <div class="col-md-7">
+                    <label class="form-label fw-semibold" for="new-group-name">Group name</label>
+                    <input class="form-control" type="text" name="name" id="new-group-name" maxlength="100" placeholder="e.g. Mechanical or Outreach" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold" for="new-group-color">Color</label>
+                    <input class="form-control form-control-color" type="color" name="color" id="new-group-color" value="#0d6efd" required>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-success w-100" type="submit"><i class="bi bi-plus-lg me-1"></i>Add Group</button>
+                </div>
+            </form>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card shadow-sm border-0 rounded-3" aria-labelledby="groups-heading">
+        <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+            <div>
+                <h2 class="h5 fw-bold mb-1" id="groups-heading">Groups in this program</h2>
+                <p class="text-muted small mb-0">Assign students to these groups from the program roster.</p>
+            </div>
+            <span class="badge bg-light text-dark border">{{ groups|length }} group{{ groups|length|pluralize }}</span>
+        </div>
+        <div class="card-body p-3 p-md-4">
+            {% for group in groups %}
+            <div class="border rounded-3 p-3 mb-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <input type="color" class="form-control form-control-color" value="{{ group.color }}" aria-label="Color for {{ group.name }}" disabled>
+                        <div><h3 class="h6 fw-bold mb-1">{{ group.name }}</h3><span class="text-muted small">Color: {{ group.color }}</span></div>
+                    </div>
+                    {% if can_edit_groups %}
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#edit-group-{{ group.id }}" aria-expanded="false" aria-controls="edit-group-{{ group.id }}">Edit <span class="visually-hidden">{{ group.name }}</span></button>
+                        {% if can_delete_groups %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_group">
+                            <input type="hidden" name="group_id" value="{{ group.id }}">
+                            <button class="btn btn-outline-danger btn-sm js-confirm" data-confirm="Delete this group and remove it from associated students and order items?" type="submit">Delete <span class="visually-hidden">{{ group.name }}</span></button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% if can_edit_groups %}
+                <div class="collapse mt-3" id="edit-group-{{ group.id }}">
+                    <form method="post" class="row g-3 align-items-end border-top pt-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_group">
+                        <input type="hidden" name="group_id" value="{{ group.id }}">
+                        <div class="col-md-7">
+                            <label class="form-label" for="group-name-{{ group.id }}">Group name</label>
+                            <input class="form-control" type="text" name="name" id="group-name-{{ group.id }}" value="{{ group.name }}" maxlength="100" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="group-color-{{ group.id }}">Color</label>
+                            <input class="form-control form-control-color" type="color" name="color" id="group-color-{{ group.id }}" value="{{ group.color }}" required>
+                        </div>
+                        <div class="col-md-3"><button class="btn btn-primary w-100" type="submit">Save changes</button></div>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-center text-muted py-4"><i class="bi bi-tags fs-3 d-block mb-2"></i>No groups yet.{% if can_edit_groups %} Add one above to get started.{% endif %}</div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

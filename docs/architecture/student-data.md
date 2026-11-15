@@ -75,6 +75,9 @@ Legacy Crew and SubTeam records are copied into Groups by the data migration;
 the legacy enrollment fields remain in the schema during the transition.
 Enrollment Group membership changes are recorded as `ENROLLMENT_CHANGED` audit
 events with before-and-after Group IDs, including bulk assignment and removal.
+Groups are managed on each program's Groups page; Portal Settings retains a
+program chooser. Mentor access is controlled independently of assignment access
+by the Programs - Groups permission, and deletion is Lead Mentor-only.
 
 ---
 

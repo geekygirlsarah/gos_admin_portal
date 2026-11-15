@@ -390,7 +390,7 @@ class MentorTeamAssignmentPermissionTests(TestCase):
         url = reverse("program_detail", args=[self.active_program.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Assign Teams/Crews")
+        self.assertContains(resp, "Assign Teams &amp; Groups")
 
     def test_detail_button_hidden_for_mentor_on_past_program(self):
         self._enable_mentor_assign()
@@ -405,4 +405,4 @@ class MentorTeamAssignmentPermissionTests(TestCase):
         url = reverse("program_detail", args=[self.active_program.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "Assign Teams/Crews")
+        self.assertNotContains(resp, "Assign Teams &amp; Groups")

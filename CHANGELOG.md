@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Added program-specific Groups as flexible student labels, with multiple assignments per enrollment and order item, multi-group email targeting, and migration of existing Crew/SubTeam assignments.
 
+### Changed
+- Group management now lives within each program, with clearer controls and a separate, opt-in Mentor permission.
+
 ## 2026-11-13
 
 ### Added
