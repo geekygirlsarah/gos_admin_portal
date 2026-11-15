@@ -7,6 +7,12 @@ from programs.utils import calculate_grade, format_grade
 register = template.Library()
 
 
+@register.simple_tag
+def wizard_step_numbers(total_steps):
+    """Return the numbered positions in the application wizard."""
+    return range(1, total_steps + 1)
+
+
 # Friendly labels for known field keys used in the saved step data.
 # Anything not listed falls back to humanizing the snake_case key.
 FIELD_LABELS = {

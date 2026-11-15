@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
 
 ### Changed
+- Application forms show numbered steps instead of a percentage bar; the submission confirmation no longer displays the documents step as the current page.
 - Condensed navigation into People, Admin, and Activities menus, and grouped platform operations to leave more room in the navigation bar.
 - Mentor digital sign-out pages load individual signature images only when selected.
 - Lead Mentors can search and filter their organization's audit activity in the portal instead of Django Admin.
