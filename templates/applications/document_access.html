@@ -3,8 +3,11 @@
 {% block wizard_heading %}Verify your email to view signed documents{% endblock %}
 
 {% block wizard_body %}
+  {% if missing_email %}
+    <div class="alert alert-warning">A parent or guardian email is needed to access these documents. Contact your program for assistance.</div>
+  {% else %}
   <p class="text-muted">
-    To protect these documents, we’ll send a short-lived code to the email address on this application.
+    To protect these documents, we’ll send a short-lived code to the parent or guardian email on this application.
   </p>
   <form method="post" class="mb-4">
     {% csrf_token %}
@@ -23,4 +26,5 @@
     </div>
     <button type="submit" class="btn btn-primary">Verify and continue</button>
   </form>
+  {% endif %}
 {% endblock %}

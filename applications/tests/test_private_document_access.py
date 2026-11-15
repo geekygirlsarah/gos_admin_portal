@@ -12,7 +12,11 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from applications.models import Application, ApplicationDocumentSubmission
+from applications.models import (
+    Application,
+    ApplicationDocumentSubmission,
+    OtpVerifyResult,
+)
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program, ProgramDocument
 
@@ -124,8 +128,10 @@ class PrivateApplicationDocumentAccessTests(TestCase):
         )
         codes = []
         with patch(
-            "applications.views.utils.send_otp_email",
-            side_effect=lambda application, code, request=None: codes.append(code),
+            "applications.views.documents.send_otp_email",
+            side_effect=lambda application, code, request=None, recipient=None: codes.append(
+                code
+            ),
         ):
             response = self.client.post(
                 access_url,
@@ -198,6 +204,169 @@ class PrivateApplicationDocumentAccessTests(TestCase):
             self.assertNotIn(self.file_content, b"".join(denied.streaming_content))
         else:
             self.assertNotIn(self.file_content, denied.content)
+
+    def test_student_handoff_sends_document_code_to_parent_not_student(self):
+        self.application.applicant_type = Application.Type.STUDENT
+        self.application.email = "student@example.test"
+        self.application.data = {
+            "step7_handoff": {"parent_email": "parent@example.test"},
+            "step7-primaryparent": {"email": "parent@example.test"},
+        }
+        self.application.save()
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch("applications.views.documents.send_otp_email") as send:
+            response = self.client.post(
+                access_url, {"action": "send"}, HTTP_HOST=self.host
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(send.call_args.kwargs["recipient"], "parent@example.test")
+        code = send.call_args.args[1]
+        self.application.refresh_from_db()
+        self.assertFalse(self.application.otp_hash)
+        self.assertEqual(self.application.email, "student@example.test")
+        response = self.client.post(
+            access_url, {"action": "verify", "code": code}, HTTP_HOST=self.host
+        )
+        self.assertEqual(response.status_code, 302)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.email, "student@example.test")
+        download = self.client.get(
+            reverse(
+                "apply_step10_document_download",
+                kwargs={
+                    "app_id": self.application.application_id,
+                    "document_id": self.document.pk,
+                },
+            ),
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(b"".join(download.streaming_content), self.file_content)
+
+        self.application.data["step7_handoff"]["parent_email"] = "new@example.test"
+        self.application.data["step7-primaryparent"]["email"] = "new@example.test"
+        self.application.save(update_fields=["data"])
+        denied = self.client.get(
+            reverse(
+                "apply_step10_document_download",
+                kwargs={
+                    "app_id": self.application.application_id,
+                    "document_id": self.document.pk,
+                },
+            ),
+            HTTP_HOST=self.host,
+        )
+        self.assertNotEqual(denied.status_code, 200)
+
+    def test_document_code_is_separate_from_applicant_email_verification(self):
+        self.application.applicant_type = Application.Type.STUDENT
+        self.application.email = "student@example.test"
+        self.application.data = {
+            "step7_handoff": {"parent_email": "parent@example.test"}
+        }
+        self.application.save()
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch("applications.views.documents.send_otp_email") as send:
+            self.client.post(access_url, {"action": "send"}, HTTP_HOST=self.host)
+        code = send.call_args.args[1]
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.verify_otp(code), OtpVerifyResult.NO_CODE)
+        response = self.client.post(
+            access_url, {"action": "verify", "code": code}, HTTP_HOST=self.host
+        )
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(
+            access_url, {"action": "verify", "code": code}, HTTP_HOST=self.host
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_document_challenge_invalidated_when_parent_email_changes(self):
+        self.application.applicant_type = Application.Type.STUDENT
+        self.application.data = {
+            "step7_handoff": {"parent_email": "parent@example.test"}
+        }
+        self.application.save()
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch("applications.views.documents.send_otp_email") as send:
+            self.client.post(access_url, {"action": "send"}, HTTP_HOST=self.host)
+        code = send.call_args.args[1]
+        self.application.data["step7_handoff"]["parent_email"] = "new@example.test"
+        self.application.save(update_fields=["data"])
+        response = self.client.post(
+            access_url, {"action": "verify", "code": code}, HTTP_HOST=self.host
+        )
+        self.assertContains(response, "Please request a new verification code.")
+        self.assertNotIn(
+            f"application_document_access:{self.organization.pk}:{self.application.application_id}",
+            self.client.session,
+        )
+
+    def test_document_code_expires_after_too_many_incorrect_attempts(self):
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch("applications.views.documents.send_otp_email") as send:
+            self.client.post(access_url, {"action": "send"}, HTTP_HOST=self.host)
+        code = send.call_args.args[1]
+        wrong_code = "000000" if code != "000000" else "111111"
+        for _ in range(10):
+            self.client.post(
+                access_url,
+                {"action": "verify", "code": wrong_code},
+                HTTP_HOST=self.host,
+            )
+        response = self.client.post(
+            access_url, {"action": "verify", "code": code}, HTTP_HOST=self.host
+        )
+        self.assertContains(response, "Too many incorrect attempts")
+        self.assertNotIn(
+            f"application_document_access:{self.organization.pk}:{self.application.application_id}",
+            self.client.session,
+        )
+
+    def test_student_with_no_parent_email_cannot_request_document_code(self):
+        self.application.applicant_type = Application.Type.STUDENT
+        self.application.email = "student@example.test"
+        self.application.data = {}
+        self.application.save()
+        response = self.client.post(
+            reverse(
+                "apply_step10_document_access",
+                kwargs={"app_id": self.application.application_id},
+            ),
+            {"action": "send"},
+            HTTP_HOST=self.host,
+        )
+        self.assertNotEqual(response.status_code, 302)
+        self.assertContains(response, "Contact your program", status_code=400)
+
+    def test_document_code_email_is_delivered_to_parent(self):
+        self.application.applicant_type = Application.Type.STUDENT
+        self.application.email = "student@example.test"
+        self.application.data = {
+            "step7_handoff": {"parent_email": "parent@example.test"}
+        }
+        self.application.save()
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch("applications.services._send_html_email") as send:
+            response = self.client.post(
+                access_url, {"action": "send"}, HTTP_HOST=self.host
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(send.call_args.kwargs["recipients"], ["parent@example.test"])
 
     def test_existing_legacy_submission_remains_available_through_authorized_endpoint(
         self,

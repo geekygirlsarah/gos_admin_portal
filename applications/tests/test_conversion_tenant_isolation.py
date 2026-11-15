@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -335,3 +336,83 @@ class ApplicationConversionTenantIsolationTests(TestCase):
         )
         with student_document.file.open("rb") as signed_file:
             self.assertEqual(signed_file.read(), b"signed document bytes")
+
+    def test_unreadable_signed_document_stops_conversion_without_partial_records(self):
+        document = ProgramDocument.objects.create(
+            program=self.alpha_program, name="Local release", file=""
+        )
+        application = self._student_application()
+        submission = ApplicationDocumentSubmission.objects.create(
+            organization=self.alpha,
+            application=application,
+            document=document,
+            file="missing-signed-document.pdf",
+        )
+
+        with patch.object(
+            submission.file.storage, "open", side_effect=FileNotFoundError("missing")
+        ):
+            with self.assertRaisesMessage(
+                ApplicationConversionError, "signed document could not be copied"
+            ):
+                convert_application_to_student(application)
+
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.APPROVED_SIGNED)
+        self.assertIsNone(application.converted_student_id)
+        self.assertFalse(Student.objects.filter(organization=self.alpha).exists())
+        self.assertFalse(Enrollment.objects.filter(organization=self.alpha).exists())
+        self.assertFalse(StudentDocument.objects.exists())
+
+    def test_empty_signed_document_submission_stops_conversion(self):
+        document = ProgramDocument.objects.create(
+            program=self.alpha_program, name="Local release", file=""
+        )
+        application = self._student_application()
+        ApplicationDocumentSubmission.objects.create(
+            organization=self.alpha,
+            application=application,
+            document=document,
+            file="",
+        )
+
+        with self.assertRaisesMessage(
+            ApplicationConversionError, "signed document could not be copied"
+        ):
+            convert_application_to_student(application)
+
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.APPROVED_SIGNED)
+        self.assertIsNone(application.converted_student_id)
+        self.assertFalse(Student.objects.filter(organization=self.alpha).exists())
+        self.assertFalse(StudentDocument.objects.exists())
+
+    def test_failed_document_transfer_does_not_update_existing_student(self):
+        student = Student.objects.create(
+            organization=self.alpha,
+            legal_first_name="Avery",
+            last_name="Student",
+            personal_email="student@example.test",
+            date_of_birth="2010-01-01",
+        )
+        document = ProgramDocument.objects.create(
+            program=self.alpha_program, name="Local release", file=""
+        )
+        application = self._student_application()
+        ApplicationDocumentSubmission.objects.create(
+            organization=self.alpha,
+            application=application,
+            document=document,
+            file="missing-signed-document.pdf",
+        )
+
+        with self.assertRaises(ApplicationConversionError):
+            convert_application_to_student(application)
+
+        student.refresh_from_db()
+        application.refresh_from_db()
+        self.assertFalse(student.preferred_first_name)
+        self.assertEqual(application.status, Application.Status.APPROVED_SIGNED)
+        self.assertIsNone(application.converted_student_id)
+        self.assertFalse(Enrollment.objects.filter(student=student).exists())
+        self.assertFalse(StudentDocument.objects.filter(student=student).exists())

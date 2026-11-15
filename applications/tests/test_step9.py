@@ -287,3 +287,17 @@ class Step9DocumentsTests(TestCase):
         # (which routes to /step10/ for APPROVED apps).
         self.assertIn(app.application_id, msg.body)
         self.assertIn("/apply/r/", msg.body)
+
+    def test_student_handoff_document_notice_goes_only_to_handoff_parent(self):
+        app = _approved_application(
+            self.program,
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.test",
+            data={
+                "step7_handoff": {"parent_email": "parent@example.test"},
+                "step7-primaryparent": {"email": "other@example.test"},
+            },
+        )
+        send_application_approved_email(app)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["parent@example.test"])

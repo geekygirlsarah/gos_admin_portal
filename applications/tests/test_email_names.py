@@ -78,9 +78,12 @@ class EmailNamesTest(TestCase):
         self.assertIn("Mary Doe", email.body)
 
     def test_application_approved_email_contains_names(self):
+        self.student_app.data["step7-primaryparent"]["email"] = "parent@example.test"
+        self.student_app.save(update_fields=["data"])
         send_application_approved_email(self.student_app)
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
+        self.assertEqual(email.to, ["parent@example.test"])
         self.assertIn("Jane Doe", email.body)
 
     def test_application_declined_email_contains_names(self):

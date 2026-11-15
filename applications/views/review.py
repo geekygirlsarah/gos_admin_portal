@@ -1259,8 +1259,12 @@ class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
             ):
                 messages.error(request, "This application has not been approved yet.")
             else:
-                send_application_approved_email(application, request=request)
-                messages.success(request, "Resent approval email.")
+                try:
+                    send_application_approved_email(application, request=request)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, "Resent approval email.")
         elif email_type == "declined":
             if application.status != Application.Status.DECLINED:
                 messages.error(request, "This application has not been declined yet.")

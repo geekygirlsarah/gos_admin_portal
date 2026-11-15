@@ -72,6 +72,10 @@ relationships, and enrollments. A selected foreign student, foreign program, or
 inconsistent relationship, enrollment, or signed-document link stops conversion
 without reassigning or deleting the existing records. `School` remains a shared
 catalog and is not tenant-filtered.
+If an application document is missing or cannot be copied, conversion fails and
+the database changes are rolled back; the reviewer must resolve the document
+before retrying. Storage writes are not transactional, so files copied before a
+later conversion error may remain in storage.
 
 ### Tenant isolation
 
@@ -81,7 +85,7 @@ Stale cleanup only considers applications belonging to the current organization.
 
 Public wizard routes require a resolved organization and load application IDs only within that organization. New applications are assigned to the request organization; program choices, duplicate-draft actions, and returning student/adult prefill are likewise organization-scoped. A missing tenant context fails closed. Lead notifications go only to active users with an active `LeadMentor` membership in the application organization; if there are no eligible email addresses, no lead notification is sent.
 
-Step 10 displays and accepts documents only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and current email. Staff use a separate download route protected by application-review permission and tenant scoping.
+Step 10 displays and accepts documents only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. Document notices use that same recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping.
 
 Approved and later application states are read-only through earlier public wizard steps. An application ID alone is not proof of applicant identity. Other in-progress wizard routes continue to follow the existing email-verification and parent-handoff workflow; this Step 10 challenge is an additional control for signed-document access.
 
