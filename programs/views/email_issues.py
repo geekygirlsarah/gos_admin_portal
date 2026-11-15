@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 def _audit_email_history_access(request, entry):
     try:
         AuditLog.objects.create(
+            organization=entry.organization,
             actor=request.user,
             event=AuditEvent.SENSITIVE_DATA_VIEW,
             resource_type="EmailHistory",

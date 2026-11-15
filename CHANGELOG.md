@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Mentor digital sign-out pages load individual signature images only when selected.
+- Lead Mentors can search and filter their organization's audit activity in the portal instead of Django Admin.
+- The audit log shows 50 recent actions per page by default, with options for 100, 200, or 500.
 
 ## 2026-11-14
 

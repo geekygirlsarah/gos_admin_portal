@@ -221,6 +221,7 @@ def sync_student_org_memberships(sender, instance, **kwargs):
 @receiver(post_delete, sender="programs.AdultStudentRelationship")
 def audit_guardian_removed(sender, instance, **kwargs):
     """Emit GUARDIAN_REMOVED when a guardian/parent link is deleted."""
+    from audit.context import get_current_request
     from audit.events import AuditEvent
     from audit.service import log_event
 
@@ -230,6 +231,7 @@ def audit_guardian_removed(sender, instance, **kwargs):
         log_event(
             event=AuditEvent.GUARDIAN_REMOVED,
             resource=instance,
+            request=get_current_request(),
             notes=(
                 f"Guardian {adult_repr} removed from student {student_repr}. "
                 f"Relationship was: {instance.get_relationship_to_student_display()}."

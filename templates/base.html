@@ -338,7 +338,7 @@
                                 <li><a class="dropdown-item" href="{% url 'notification_create' %}">Send organization update</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="/admin/audit/auditlog/">Audit Logs</a></li>
+                                <li><a class="dropdown-item" href="{% url 'audit:organization_log' %}">Audit Logs</a></li>
                             </ul>
                         </li>
                     {% endif %}

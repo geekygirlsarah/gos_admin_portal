@@ -16,12 +16,8 @@ from .models import AuditLog
 
 
 def _is_lead_mentor(user) -> bool:
-    """Check lead access without inferring an organization on the global admin site."""
-    if not user or not user.is_active:
-        return False
-    from programs.permission_views import user_is_lead_mentor
-
-    return user_is_lead_mentor(user)
+    """The global audit admin is restricted to active platform superusers."""
+    return bool(user and user.is_active and user.is_superuser)
 
 
 # ---------------------------------------------------------------------------

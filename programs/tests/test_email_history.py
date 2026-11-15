@@ -427,6 +427,7 @@ class EmailHistoryTests(TestCase):
             resource_type="EmailHistory",
             resource_id=str(record.pk),
         )
+        self.assertEqual(entry.organization_id, self.alpha.pk)
         audit_text = json.dumps(
             {"before": entry.before, "after": entry.after, "notes": entry.notes}
         )

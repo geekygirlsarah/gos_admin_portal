@@ -178,6 +178,10 @@ Dedicated platform administration endpoints (`/platform-admin/`) are strictly re
 - **Support Impersonation (`/platform-admin/impersonate/<id>/`)**: Active platform superusers select a specific active organization membership. The platform creates a five-minute, one-use POST handoff to that tenant's canonical HTTPS host. A narrowly CSRF-exempt, read-only bootstrap validates the high-entropy token issued only after a CSRF-protected platform request; a same-origin, CSRF-protected POST then consumes it and binds it to the existing tenant session. The browser returns to the platform, where the original superuser session is rechecked and issues a second one-use proof; a CSRF-protected tenant POST accepts that proof only in the bound tenant session. These steps preserve existing tenant cookies even for custom domains on another site. A separate CSRF-protected confirmation is required before replacing any existing tenant login. The platform session remains a superuser session only on the platform host; the tenant session authenticates as the selected member and cannot elevate to superuser. Every stage rechecks the selected host, account states, and membership; audit failure blocks starting access. Abandoned pending handoffs are closed when replaced. The tenant displays an impersonation banner and ends the tenant session on exit, while the separate platform session remains intact. Audit events record start and end (`USER_IMPERSONATED` and `IMPERSONATION_ENDED`).
 - **Cross-Tenant Audit Log Explorer (`/platform-admin/audit/`)**: Searchable and filterable history of security events, administrative updates, and access records; it is restricted to platform superusers.
 
+Tenant Lead Mentors use `/audit/` for the organization's attributed audit
+activity. The page excludes platform-wide and unassigned records; audit
+attribution and the historical backfill are described in `docs/security.md`.
+
 ---
 
 ## Architecture Invariants

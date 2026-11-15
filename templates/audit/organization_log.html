@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <h1>Audit Log</h1>
+    <p>Review important activity in {{ request.organization.name }}, including who did what and when. This is not a record of every action. Some older or platform-wide activity may not appear here.</p>
+    <p>The most recent activity appears first. Search for a person or record, or choose filters to narrow the results. Choose how many actions to show per page, then select Search and filter. Dates include the whole day. A failed result means the action did not succeed.</p>
+    <form method="get" class="card card-body mb-4">
+        <div class="row g-3">
+            {% for field in filter_form %}
+            <div class="col-md">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Search and filter</button>
+            <a class="btn btn-outline-secondary" href="{% url 'audit:organization_log' %}">Clear filters</a>
+        </div>
+    </form>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead><tr><th scope="col">When</th><th scope="col">What happened</th><th scope="col">Who</th><th scope="col">Record</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp|date:"M j, Y, g:i a" }}</td>
+                    <td>{{ log.get_event_display }}</td>
+                    <td>{% if log.actor %}{{ log.actor.get_full_name|default:log.actor.username }}{% else %}System or unknown{% endif %}</td>
+                    <td>{{ log.resource_repr|default:"Not available" }}</td>
+                    <td>{{ log.get_outcome_display }}</td>
+                    <td>{{ log.notes|default:"—" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6">No activity matches these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if is_paginated %}
+    <nav aria-label="Audit log pages">
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_previous %}<a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+        {% if page_obj.has_next %}<a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
