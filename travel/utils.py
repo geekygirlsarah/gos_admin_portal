@@ -6,11 +6,13 @@ opted-in and a personal email on file are notified.
 """
 
 
-def parent_recipients(student):
+def parent_recipients(student, organization=None):
     """Unique parent emails we are allowed to notify for ``student``."""
     emails = []
     seen = set()
     for parent in student.all_parents:
+        if organization is not None and parent.organization_id != organization.pk:
+            continue
         if not (
             parent.login_enabled and parent.email_updates and parent.personal_email
         ):

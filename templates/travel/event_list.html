@@ -103,8 +103,11 @@
 
                 {% if can_manage %}
                 {# ── Lead mentor: roster + add student ────────────────────── #}
-                <hr>
-                <h4 class="h6 fw-semibold">Student Sign-ups</h4>
+                <section class="card shadow-sm mt-3" aria-labelledby="student-signups-title">
+                    <div class="card-header bg-white">
+                        <h4 class="h6 fw-semibold mb-0" id="student-signups-title">Student Sign-ups</h4>
+                    </div>
+                    <div class="card-body">
                 {% for signup in event.signups.all %}
                 <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom">
                     <div>
@@ -161,25 +164,18 @@
                 </form>
                 {% endif %}
                 {% endwith %}
-
-                {# Mentor sign-ups (visible to all) #}
-                {% if event.mentor_signups.all %}
-                <h4 class="h6 fw-semibold mt-3">Mentors Going</h4>
-                <div class="d-flex flex-wrap gap-2">
-                    {% for ms in event.mentor_signups.all %}
-                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill">
-                        {{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i> Driver{% endif %}
-                    </span>
-                    {% endfor %}
-                </div>
-                {% endif %}
+                    </div>
+                </section>
                 {% endif %}
 
                 {# ── Parent chaperones ────────────────────────────────────── #}
                 {% with cs_form=chaperone_staff_forms|get_item:event.id %}
                 {% if event.parent_chaperones.all or cs_form or can_chaperone or event.id in my_chaperone_event_ids %}
-                <div class="mt-3">
-                    <h4 class="h6 fw-semibold">Parent Chaperones</h4>
+                <section class="card shadow-sm mt-3" aria-labelledby="parent-chaperones-title">
+                    <div class="card-header bg-white">
+                        <h4 class="h6 fw-semibold mb-0" id="parent-chaperones-title">Parent Chaperones</h4>
+                    </div>
+                    <div class="card-body">
                     {% if event.parent_chaperones.all %}
                     <div class="d-flex flex-wrap gap-2 align-items-center">
                         {% for cs in event.parent_chaperones.all %}
@@ -246,7 +242,8 @@
                         <button type="submit" class="btn btn-sm btn-outline-warning">Add chaperone</button>
                     </form>
                     {% endif %}
-                </div>
+                    </div>
+                </section>
                 {% endif %}
                 {% endwith %}
 
@@ -370,9 +367,30 @@
                 {% endif %}
 
                 {# ── Mentor view ──────────────────────────────────────────── #}
+                {% with mentor_form=mentor_staff_forms|get_item:event.id %}
+                {% if can_manage or viewer_is_mentor %}
+                <section class="card shadow-sm mt-3" aria-labelledby="mentor-signups-title">
+                    <div class="card-header bg-white">
+                        <h4 class="h6 fw-semibold mb-0" id="mentor-signups-title">Mentors Going</h4>
+                    </div>
+                    <div class="card-body">
+                {% if can_manage %}
+                {% if event.mentor_signups.all %}
+                <p class="small text-muted mb-0">
+                    <i class="bi bi-people me-1"></i>
+                    Mentors going:
+                    {% for ms in event.mentor_signups.all %}
+                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill me-1">{{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i>{% endif %}</span>
+                    {% endfor %}
+                </p>
+                {% else %}
+                <p class="text-muted small mb-0">No mentors signed up yet.</p>
+                {% endif %}
+                {% endif %}
+
                 {% if viewer_is_mentor %}
                 {% if event.id in mentor_signup_event_ids %}
-                <div class="alert alert-success mb-0 mt-3 py-2 d-flex flex-wrap justify-content-between align-items-center">
+                <div class="alert alert-success mb-0 mt-2 py-2 d-flex flex-wrap justify-content-between align-items-center">
                     <div class="small">
                         <i class="bi bi-check-circle me-1"></i><strong>You're going</strong>
                         {% for ms in event.mentor_signups.all %}
@@ -388,7 +406,7 @@
                     </form>
                 </div>
                 {% else %}
-                <form action="{% url 'travel:mentor_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <form action="{% url 'travel:mentor_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-2">
                     {% csrf_token %}
                     <span class="small text-muted">Mentors are welcome to come along as chaperones:</span>
                     {% if event.has_multiple_departures %}
@@ -401,17 +419,28 @@
                     <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-plus me-1"></i>I'm going</button>
                 </form>
                 {% endif %}
+                {% endif %}
 
-                {% if event.mentor_signups.all %}
-                <p class="small text-muted mt-2 mb-0">
-                    <i class="bi bi-people me-1"></i>
-                    Mentors going:
-                    {% for ms in event.mentor_signups.all %}
-                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill me-1">{{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i>{% endif %}</span>
-                    {% endfor %}
-                </p>
+                {% if mentor_form %}
+                <form action="{% url 'travel:mentor_add' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-end gap-2 mt-3">
+                    {% csrf_token %}
+                    <div>
+                        <label class="form-label small mb-0" for="{{ mentor_form.adult.id_for_label }}">Add a mentor</label>
+                        {{ mentor_form.adult }}
+                    </div>
+                    {% if event.has_multiple_departures %}
+                    <div>
+                        <label class="form-label small mb-0" for="{{ mentor_form.departure.id_for_label }}">Departure</label>
+                        {{ mentor_form.departure }}
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-plus me-1"></i>Add mentor</button>
+                </form>
                 {% endif %}
+                    </div>
+                </section>
                 {% endif %}
+                {% endwith %}
             </div>
         </div>
         {% endfor %}

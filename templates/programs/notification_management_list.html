@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Manage announcements | Momentum{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <p class="text-uppercase small fw-semibold text-primary mb-1">Announcements</p>
+        <h1 class="h2 mb-2">Manage active announcements</h1>
+        <p class="text-body-secondary mb-0">
+            Withdraw an announcement to hide it from everyone in its audience. Dismissals only affect the individual recipient.
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{% if platform_scope %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}">Back to announcements</a>
+        <a class="btn btn-primary" href="{% if platform_scope %}{% url 'platform_admin:notification_create' %}{% else %}{% url 'notification_create' %}{% endif %}">Send an announcement</a>
+    </div>
+</div>
+
+{% if notifications %}
+<div class="vstack gap-3">
+    {% for notification in notifications %}
+    <article class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h2 class="h5 mb-2">{{ notification.title }}</h2>
+                    <div class="mb-3">{{ notification.display_message|linebreaksbr }}</div>
+                    <p class="small text-body-secondary mb-0">
+                        {% if notification.is_platform_wide %}
+                        Platform-wide
+                        {% else %}
+                        {{ notification.organization.name }}
+                        {% endif %}
+                        · Audience:
+                        {% if notification.target_roles %}
+                        {{ notification.target_roles|join:", " }}
+                        {% else %}
+                        All active members
+                        {% endif %}
+                        ·
+                        {% if notification.expires_at %}
+                        Expires {{ notification.expires_at|date:"M j, Y" }}
+                        {% else %}
+                        No automatic expiry
+                        {% endif %}
+                    </p>
+                </div>
+                <form method="post" class="js-confirm" data-confirm="Withdraw this announcement for all recipients?" action="{% if platform_scope %}{% url 'platform_admin:notification_withdraw' notification.pk %}{% else %}{% url 'notification_withdraw' notification.pk %}{% endif %}">
+                    {% csrf_token %}
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Withdraw announcement</button>
+                </form>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card border-0 bg-body-tertiary">
+    <div class="card-body py-5 text-center">
+        <h2 class="h5">No active announcements to manage</h2>
+        <p class="text-body-secondary mb-0">Announcements that have expired or been withdrawn are not listed here.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

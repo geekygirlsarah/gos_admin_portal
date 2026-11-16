@@ -2,15 +2,28 @@ from django import forms
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
-from programs.models import Student
+from programs.models import Adult, Student
 from programs.utils import active_students_in_program
 from travel.models import (
     TravelCostOption,
     TravelDeparture,
     TravelEvent,
+    TravelMentorSignup,
     TravelParentChaperoneSignup,
     TravelSignup,
 )
+
+
+def _apply_bootstrap_classes(form):
+    for field in form.fields.values():
+        widget = field.widget
+        css_class = (
+            "form-select" if isinstance(widget, forms.Select) else "form-control"
+        )
+        existing_classes = widget.attrs.get("class", "").split()
+        if css_class not in existing_classes:
+            existing_classes.append(css_class)
+        widget.attrs["class"] = " ".join(existing_classes)
 
 
 class TravelEventForm(forms.ModelForm):
@@ -30,6 +43,10 @@ class TravelEventForm(forms.ModelForm):
             "end_date": forms.DateInput(attrs={"type": "date"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _apply_bootstrap_classes(self)
+
 
 class TravelDepartureForm(forms.ModelForm):
     class Meta:
@@ -39,6 +56,10 @@ class TravelDepartureForm(forms.ModelForm):
             "leave_date": forms.DateInput(attrs={"type": "date"}),
             "leave_time": forms.TimeInput(attrs={"type": "time"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _apply_bootstrap_classes(self)
 
 
 class TravelCostOptionForm(forms.ModelForm):
@@ -53,6 +74,7 @@ class TravelCostOptionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["unit_label"].required = False
         self.fields["sort_order"].required = False
+        _apply_bootstrap_classes(self)
 
 
 TravelDepartureFormSet = forms.inlineformset_factory(
@@ -147,6 +169,54 @@ class TravelParentChaperoneStaffForm(forms.ModelForm):
             )
             self.fields["adult"].label = "Parent"
             self.fields["adult"].empty_label = "-- Choose a parent --"
+
+
+class TravelMentorStaffSignupForm(forms.ModelForm):
+    """Lead Mentors add another active mentor to a trip."""
+
+    class Meta:
+        model = TravelMentorSignup
+        fields = ["adult", "departure"]
+
+    def __init__(self, *args, **kwargs):
+        program = kwargs.pop("program", None)
+        event = kwargs.pop("event", None)
+        departures = kwargs.pop("departures", None)
+        super().__init__(*args, **kwargs)
+
+        self.fields["adult"].queryset = Adult.objects.none()
+        self.fields["departure"].queryset = TravelDeparture.objects.none()
+        if program is not None and program.organization_id:
+            organization = program.organization
+            mentors = Adult.objects.for_organization(organization).filter(
+                organization=organization,
+                is_mentor=True,
+                mentor_active=True,
+            )
+            if event is not None:
+                existing_adult_ids = (
+                    TravelMentorSignup.objects.for_organization(organization)
+                    .filter(event=event)
+                    .values("adult_id")
+                )
+                mentors = mentors.exclude(pk__in=existing_adult_ids)
+            self.fields["adult"].queryset = mentors.order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")),
+                        "legal_first_name",
+                    )
+                ),
+                Lower("last_name"),
+            )
+        if departures is not None:
+            self.fields["departure"].queryset = departures
+
+        self.fields["adult"].label = "Mentor"
+        self.fields["adult"].empty_label = "-- Choose a mentor --"
+        self.fields["departure"].required = False
+        self.fields["departure"].empty_label = "-- Choose a departure --"
+        _apply_bootstrap_classes(self)
 
 
 class TravelApprovalForm(forms.Form):

@@ -1,6 +1,10 @@
 """Preserve answers captured by the existing student application wizard."""
 
-from .models import StudentApplicationAnswer
+from uuid import UUID
+
+from django.db import transaction
+
+from .models import Application, ProgramApplicationQuestion, StudentApplicationAnswer
 
 EXPERIENCE_QUESTIONS = {
     "interest_reason": (
@@ -20,6 +24,113 @@ EXPERIENCE_QUESTIONS = {
         "How did you hear about this program?",
     ),
 }
+
+
+def build_custom_question_snapshot(application):
+    """Build the active question set for this application's program."""
+    if not application.program_id:
+        raise ValueError("An application program is required for custom questions.")
+    if application.program.organization_id != application.organization_id:
+        raise ValueError("The application program does not belong to its organization.")
+    questions = ProgramApplicationQuestion.objects.for_organization(
+        application.organization
+    ).filter(
+        program_id=application.program_id,
+        program__organization_id=application.organization_id,
+        is_active=True,
+    )
+    return [
+        {
+            "question_id": str(question.question_id),
+            "question_text": question.text,
+            "required": question.is_required,
+            "answer": "",
+        }
+        for question in questions
+    ]
+
+
+def validate_custom_question_snapshot(snapshot, require_answers=False):
+    """Reject malformed snapshots and, when requested, missing required answers."""
+    if not isinstance(snapshot, list):
+        raise ValueError("Custom application questions are malformed.")
+    seen = set()
+    for item in snapshot:
+        if not isinstance(item, dict):
+            raise ValueError("Custom application question is malformed.")
+        question_id = item.get("question_id")
+        try:
+            if not isinstance(question_id, str):
+                raise ValueError
+            canonical_id = str(UUID(question_id))
+        except ValueError as exc:
+            raise ValueError("Custom application question is malformed.") from exc
+        if (
+            canonical_id in seen
+            or not isinstance(item.get("question_text"), str)
+            or not item["question_text"].strip()
+            or not isinstance(item.get("required"), bool)
+            or not isinstance(item.get("answer"), str)
+        ):
+            raise ValueError("Custom application question is malformed.")
+        seen.add(canonical_id)
+        if require_answers and item["required"] and not item["answer"].strip():
+            raise ValueError("Required custom questions are unanswered.")
+
+
+def freeze_custom_question_snapshot(application):
+    """Persist one program-bound question set without overwriting newer step data."""
+    with transaction.atomic(using=application._state.db):
+        current = (
+            Application.objects.using(application._state.db)
+            .filter(pk=application.pk, organization_id=application.organization_id)
+            .select_for_update()
+            .first()
+        )
+        if current is None:
+            raise ValueError(
+                "The application organization has changed or it is missing."
+            )
+        if current.program_id != application.program_id:
+            raise ValueError("The application program has changed.")
+        if current.status not in (
+            Application.Status.DRAFT,
+            Application.Status.EMAIL_VERIFIED,
+            Application.Status.AWAITING_PARENT,
+        ):
+            raise ValueError("The application is no longer editable.")
+        if not current.program_id:
+            raise ValueError("An application program is required for custom questions.")
+        if current.program.organization_id != current.organization_id:
+            raise ValueError(
+                "The application program does not belong to its organization."
+            )
+        data = current.data
+        if not isinstance(data, dict):
+            raise ValueError("Application answer data is malformed.")
+        has_snapshot = "step6-custom" in data
+        has_program = "_custom_question_program_id" in data
+        if has_snapshot != has_program:
+            raise ValueError("Custom application question ownership is missing.")
+        if has_snapshot:
+            snapshot_program = data["_custom_question_program_id"]
+            if (
+                type(snapshot_program) is not int
+                or snapshot_program != current.program_id
+            ):
+                raise ValueError("Custom questions belong to a different program.")
+            snapshot = data["step6-custom"]
+            validate_custom_question_snapshot(snapshot)
+            return snapshot
+        snapshot = build_custom_question_snapshot(current)
+        validate_custom_question_snapshot(snapshot)
+        current.data = {
+            **data,
+            "step6-custom": snapshot,
+            "_custom_question_program_id": current.program_id,
+        }
+        current.save(update_fields=["data", "updated_at"])
+        return snapshot
 
 
 def extract_experience_answers(data):
@@ -46,6 +157,39 @@ def extract_experience_answers(data):
                 continue
             seen.add((key, answer))
             answers.append((step, key, labels, answer))
+
+    custom_answers = data.get("step6-custom")
+    if custom_answers is not None:
+        if not isinstance(custom_answers, list):
+            raise ValueError("Custom application answers are malformed.")
+        custom_keys = set()
+        for item in custom_answers:
+            if not isinstance(item, dict):
+                raise ValueError("A custom application answer is malformed.")
+            question_id = item.get("question_id")
+            question_text = item.get("question_text")
+            answer = item.get("answer")
+            try:
+                if not isinstance(question_id, str):
+                    raise ValueError
+                key = str(UUID(question_id))
+            except ValueError as exc:
+                raise ValueError(
+                    "A custom application question ID is malformed."
+                ) from exc
+            if key in custom_keys:
+                raise ValueError("A custom application question is duplicated.")
+            custom_keys.add(key)
+            if (
+                not isinstance(question_text, str)
+                or not question_text.strip()
+                or not isinstance(answer, str)
+            ):
+                raise ValueError("A custom application answer is malformed.")
+            if answer.strip():
+                answers.append(
+                    ("step6-custom", key, (question_text, question_text), answer)
+                )
     return answers
 
 

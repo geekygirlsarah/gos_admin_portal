@@ -118,6 +118,7 @@ class CanonicalApplicationEmailTests(TestCase):
             organization=self.org,
             email="applicant@example.com",
             applicant_type=Application.Type.STUDENT,
+            data={"step7_handoff": {"parent_email": "parent@example.test"}},
         )
         self.app.issue_handoff_token()
         self.request = RequestFactory().get("/", HTTP_HOST="other.momentumteam.app")

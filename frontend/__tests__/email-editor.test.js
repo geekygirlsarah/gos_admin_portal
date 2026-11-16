@@ -30,9 +30,12 @@ const GOOGLE_DOCS_LINEBREAKS = "<p>Line one<br>Line two<br>Line three</p>";
 
 let activeEditors = [];
 
-function mountEditor(initialHtml) {
+function mountEditor(initialHtml, mode = "") {
+  const modeAttribute = mode ? ` data-email-editor-mode="${mode}"` : "";
   document.body.innerHTML =
-    '<form><textarea id="b" data-email-editor data-email-editor-placeholder="P">' +
+    '<form><textarea id="b" data-email-editor data-email-editor-placeholder="P"' +
+    modeAttribute +
+    ">" +
     "</textarea></form>";
   const ta = document.getElementById("b");
   ta.value = initialHtml;
@@ -65,6 +68,24 @@ describe("email editor bootstrap", () => {
     const { editor, ta } = mountEditor("");
     editor.chain().focus().insertContent("<p>Hello <strong>world</strong></p>").run();
     expect(ta.value).toContain("<strong>world</strong>");
+  });
+
+  it("uses only basic formatting controls for announcements", () => {
+    mountEditor("", "announcement");
+    const buttons = Array.from(
+      document.querySelectorAll(".email-editor .btn-toolbar button"),
+    ).map((button) => button.title);
+
+    expect(buttons).toEqual([
+      "Bold",
+      "Italic",
+      "Underline",
+      "Bulleted list",
+      "Numbered list",
+      "Undo",
+      "Redo",
+    ]);
+    expect(document.querySelector(".email-editor-size-counter")).toBeNull();
   });
 
   it("inserts merge-field text from a compose control", () => {

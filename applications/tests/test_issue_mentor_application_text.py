@@ -14,6 +14,7 @@ from django.urls import reverse
 
 from applications.models import Application
 from applications.services import send_application_submitted_email
+from applications.tests.access_helpers import verify_application_browser
 from programs.models import Program
 
 
@@ -64,6 +65,7 @@ class MentorApplicationTextReproductionTests(TestCase):
 
     def test_submitted_page_mentor_does_not_use_student_language(self):
         app = self._mentor_app()
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_submitted", kwargs={"app_id": app.application_id})
         )
@@ -77,6 +79,7 @@ class MentorApplicationTextReproductionTests(TestCase):
 
     def test_submitted_page_student_keeps_student_language(self):
         app = self._student_app()
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_submitted", kwargs={"app_id": app.application_id})
         )

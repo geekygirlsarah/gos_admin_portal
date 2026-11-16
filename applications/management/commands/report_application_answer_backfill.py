@@ -1,7 +1,8 @@
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import F, Prefetch
 
 from applications.answers import EXPERIENCE_QUESTIONS
-from applications.models import Application
+from applications.models import Application, StudentApplicationAnswer
 from organizations.models import Organization
 
 
@@ -10,6 +11,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--organization", required=True, help="Organization slug")
+        parser.add_argument(
+            "--check-copied",
+            action="store_true",
+            help="Also identify linked applications whose historical answers are not reflected on the student profile.",
+        )
 
     def handle(self, *args, **options):
         organization = Organization.objects.filter(slug=options["organization"]).first()
@@ -28,6 +34,19 @@ class Command(BaseCommand):
             .select_related("converted_student", "program")
             .order_by("pk")
         )
+        if options["check_copied"]:
+            applications = applications.prefetch_related(
+                Prefetch(
+                    "student_answers",
+                    queryset=StudentApplicationAnswer.objects.for_organization(
+                        organization
+                    ).filter(
+                        student__organization=organization,
+                        student_id=F("application__converted_student_id"),
+                    ),
+                    to_attr="reported_student_answers",
+                )
+            )
         count = 0
         for application in applications.iterator(chunk_size=500):
             if (
@@ -56,9 +75,32 @@ class Command(BaseCommand):
                             if key in EXPERIENCE_QUESTIONS
                         ):
                             malformed = True
-                    if not malformed:
+                    if malformed:
+                        reason = "malformed answer data"
+                    elif options["check_copied"]:
+                        copied = {
+                            (answer.question_key, answer.answer)
+                            for answer in application.reported_student_answers
+                        }
+                        seen = set()
+                        missing = False
+                        for step in ("step6-experience", "step6"):
+                            for key, answer in (data.get(step) or {}).items():
+                                if (
+                                    key not in EXPERIENCE_QUESTIONS
+                                    or answer is None
+                                    or not answer.strip()
+                                    or (key, answer) in seen
+                                ):
+                                    continue
+                                seen.add((key, answer))
+                                if (key, answer) not in copied:
+                                    missing = True
+                        if not missing:
+                            continue
+                        reason = "missing copied answers"
+                    else:
                         continue
-                    reason = "malformed answer data"
             self.stdout.write(f"{application.application_id}: {reason}")
             count += 1
         self.stdout.write(f"Applications requiring review: {count}")

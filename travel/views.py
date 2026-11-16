@@ -27,6 +27,7 @@ from travel.forms import (
     TravelCostOptionFormSet,
     TravelDepartureFormSet,
     TravelEventForm,
+    TravelMentorStaffSignupForm,
     TravelParentChaperoneStaffForm,
     TravelSignupForm,
     TravelStaffSignupForm,
@@ -40,6 +41,7 @@ from travel.models import (
     TravelSignup,
 )
 from travel.services import (
+    notify_approved_trip_changes,
     notify_mentor_signup_cancelled,
     notify_mentor_signup_created,
     notify_parent_chaperone_signup_cancelled,
@@ -49,6 +51,7 @@ from travel.services import (
     notify_signup_decision_undone,
     notify_signup_declined,
     notify_signup_withdrawn,
+    trip_change_summary,
 )
 
 
@@ -244,6 +247,19 @@ class TravelEventListView(
         context["staff_signup_forms"] = (
             self._staff_forms(upcoming_events) if is_lead else {}
         )
+        context["mentor_staff_forms"] = (
+            {
+                event.id: TravelMentorStaffSignupForm(
+                    program=self.program,
+                    event=event,
+                    departures=event.departures.all(),
+                    prefix=f"mentor-{event.id}",
+                )
+                for event in upcoming_events
+            }
+            if is_lead
+            else {}
+        )
 
         # ── Student view ─────────────────────────────────────────────────────
         if role == "Student":
@@ -384,6 +400,12 @@ class TravelInlineFormsetsMixin:
         cost_formset = context["cost_formset"]
         if not departure_formset.is_valid() or not cost_formset.is_valid():
             return self.render_to_response(context)
+        is_update = self.object is not None and self.object.pk is not None
+        changes = (
+            trip_change_summary(form, departure_formset, cost_formset)
+            if is_update
+            else []
+        )
         with transaction.atomic():
             response = super().form_valid(form)
             for formset in (departure_formset, cost_formset):
@@ -396,6 +418,20 @@ class TravelInlineFormsetsMixin:
                     ):
                         inline_form.instance.organization = self.object.organization
                 formset.save()
+            if is_update and changes:
+                transaction.on_commit(
+                    lambda event_id=self.object.pk, organization_id=self.object.organization_id, changes=changes: notify_approved_trip_changes(
+                        event_id, organization_id, changes
+                    )
+                )
+        if is_update and changes:
+            messages.info(
+                self.request,
+                "Trip updated. Update emails may be sent to students with approved "
+                "sign-ups and their eligible parents/guardians, as well as signed-up "
+                "mentors and parent chaperones with email updates enabled, when "
+                "email addresses are available.",
+            )
         return response
 
 
@@ -825,6 +861,70 @@ class TravelSignupUndoView(_ParentSignupActionView):
             f"Decision for {signup.student} / {signup.event.name} was reset; "
             "it is awaiting approval again.",
         )
+        return redirect("travel:event_list", program_id=self.program.id)
+
+
+class TravelMentorStaffSignupView(
+    LoginRequiredMixin, TravelProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentors add another active mentor to a trip."""
+
+    def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org),
+            pk=pk,
+            program=self.program,
+            organization=org,
+        )
+        if event.is_past:
+            messages.error(request, "This trip has already ended.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        departures = TravelDeparture.objects.for_organization(org).filter(
+            event=event,
+            event__organization=org,
+        )
+        form = TravelMentorStaffSignupForm(
+            request.POST,
+            program=self.program,
+            event=event,
+            departures=departures,
+            prefix=f"mentor-{event.id}",
+        )
+        if not form.is_valid():
+            messages.error(request, "Choose an active mentor for this trip.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        adult = form.cleaned_data["adult"]
+        if (
+            TravelMentorSignup.objects.filter(event=event, adult=adult)
+            .exclude(organization=org)
+            .exists()
+        ):
+            messages.error(request, "An existing signup requires organization review.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        departure = form.cleaned_data.get("departure") or _resolve_departure_for_event(
+            event, request.POST
+        )
+        signup, created = TravelMentorSignup.objects.for_organization(
+            org
+        ).get_or_create(
+            organization=org,
+            adult=adult,
+            event=event,
+            defaults={"departure": departure},
+        )
+        if not created and signup.departure_id != (departure.id if departure else None):
+            signup.departure = departure
+            signup.save(update_fields=["departure"])
+        if created:
+            notify_mentor_signup_created(signup)
+            messages.success(
+                request,
+                f"{adult.display_name} has been added to {event.name}.",
+            )
         return redirect("travel:event_list", program_id=self.program.id)
 
 

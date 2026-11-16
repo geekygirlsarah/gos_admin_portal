@@ -12,6 +12,8 @@ Only non-terminal statuses (draft, email_verified, awaiting_parent,
 submitted, approved, approved_signed) are shown as "pending".
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth.models import AnonymousUser, User
 from django.test import TestCase
 from django.urls import reverse
@@ -268,10 +270,30 @@ class HandoffResumeFromDashboardTests(TestCase):
         response = self.client.get(
             reverse("apply_continue", kwargs={"app_id": self.app.application_id})
         )
-        self.assertRedirects(
-            response, reverse("apply_step7", kwargs={"app_id": self.app.application_id})
+        verification_url = reverse(
+            "apply_browser_verification", kwargs={"app_id": self.app.application_id}
         )
-        response = self.client.get(response.url)
+        self.assertRedirects(response, verification_url, fetch_redirect_response=False)
+        self.assertEqual(self.client.get(verification_url).status_code, 200)
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email") as send:
+                response = self.client.post(verification_url, {"action": "send"})
+        self.assertRedirects(response, verification_url, fetch_redirect_response=False)
+        self.assertEqual(send.call_args.kwargs["recipient"], "parent@example.com")
+        self.assertNotEqual(send.call_args.kwargs["recipient"], "student@example.com")
+
+        response = self.client.post(verification_url, {"code": "000000"})
+        self.assertEqual(response.status_code, 200)
+        step7_url = reverse("apply_step7", kwargs={"app_id": self.app.application_id})
+        self.assertRedirects(
+            self.client.get(step7_url), verification_url, fetch_redirect_response=False
+        )
+
+        response = self.client.post(verification_url, {"code": "123456"})
+        self.assertRedirects(response, step7_url, fetch_redirect_response=False)
+        response = self.client.get(step7_url)
         self.assertContains(response, "Please provide the primary adult contact")
 
     def test_unrelated_parent_cannot_resume_handoff_app(self):
@@ -287,10 +309,22 @@ class HandoffResumeFromDashboardTests(TestCase):
         response = self.client.get(
             reverse("apply_continue", kwargs={"app_id": self.app.application_id})
         )
-        self.assertRedirects(
-            response, reverse("apply_step7", kwargs={"app_id": self.app.application_id})
+        verification_url = reverse(
+            "apply_browser_verification", kwargs={"app_id": self.app.application_id}
         )
-        response = self.client.get(response.url)
-        self.assertContains(
-            response, "This application has been handed off to an adult contact"
+        self.assertRedirects(response, verification_url, fetch_redirect_response=False)
+        self.assertEqual(self.client.get(verification_url).status_code, 200)
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email") as send:
+                self.client.post(verification_url, {"action": "send"})
+        self.assertEqual(send.call_args.kwargs["recipient"], "parent@example.com")
+        self.assertNotEqual(send.call_args.kwargs["recipient"], "other@example.com")
+        self.assertEqual(
+            self.client.post(verification_url, {"code": "654321"}).status_code, 200
+        )
+        step7_url = reverse("apply_step7", kwargs={"app_id": self.app.application_id})
+        self.assertRedirects(
+            self.client.get(step7_url), verification_url, fetch_redirect_response=False
         )

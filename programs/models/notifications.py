@@ -40,6 +40,7 @@ class Notification(models.Model):
     )
     title = models.CharField(max_length=255)
     message = models.TextField()
+    message_is_html = models.BooleanField(default=False)
     notification_type = models.CharField(
         max_length=20, choices=TYPE_CHOICES, default="info"
     )
@@ -85,6 +86,7 @@ class UserNotificationStatus(models.Model):
         related_name="read_receipts",
     )
     is_seen = models.BooleanField(default=False)
+    is_dismissed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,17 @@
+<div class="card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h2 class="h5 mb-0">Application questions</h2>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'program_application_question_create' form.instance.pk %}">Add question</a>
+  </div>
+  <div class="card-body">
+    <p class="text-muted small">These questions are not yet shown to applicants. They are being prepared for the new application workflow.</p>
+    {% for question in application_questions %}
+      <div class="d-flex justify-content-between align-items-center border-bottom py-2 gap-3">
+        <div>{{ question.text }} <span class="badge bg-secondary">{{ question.is_required|yesno:"Required,Optional" }}</span>{% if not question.is_active %} <span class="badge bg-warning text-dark">Inactive</span>{% endif %}</div>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_application_question_edit' form.instance.pk question.pk %}">Edit</a>
+      </div>
+    {% empty %}
+      <p class="text-muted mb-0">No custom questions configured.</p>
+    {% endfor %}
+  </div>
+</div>

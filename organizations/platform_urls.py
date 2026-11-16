@@ -4,8 +4,11 @@ from django.urls import path
 
 from programs.views.notifications import (
     PlatformNotificationCreateView,
+    PlatformNotificationDismissView,
     PlatformNotificationListView,
+    PlatformNotificationManagementListView,
     PlatformNotificationMarkAsReadView,
+    PlatformNotificationWithdrawView,
 )
 
 from . import platform_views as views
@@ -15,19 +18,64 @@ app_name = "platform_admin"
 urlpatterns = [
     path("", views.PlatformDashboardView.as_view(), name="dashboard"),
     path(
-        "notifications/",
+        "announcements/",
         PlatformNotificationListView.as_view(),
         name="notification_list",
     ),
     path(
-        "notifications/<int:pk>/read/",
+        "announcements/manage/",
+        PlatformNotificationManagementListView.as_view(),
+        name="notification_management",
+    ),
+    path(
+        "announcements/<int:pk>/dismiss/",
+        PlatformNotificationDismissView.as_view(),
+        name="notification_dismiss",
+    ),
+    path(
+        "announcements/<int:pk>/withdraw/",
+        PlatformNotificationWithdrawView.as_view(),
+        name="notification_withdraw",
+    ),
+    path(
+        "announcements/<int:pk>/read/",
         PlatformNotificationMarkAsReadView.as_view(),
         name="notification_mark_read",
     ),
     path(
-        "notifications/new/",
+        "announcements/new/",
         PlatformNotificationCreateView.as_view(),
         name="notification_create",
+    ),
+    path(
+        "notifications/",
+        PlatformNotificationListView.as_view(),
+        name="notification_list_legacy",
+    ),
+    path(
+        "notifications/manage/",
+        PlatformNotificationManagementListView.as_view(),
+        name="notification_management_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/dismiss/",
+        PlatformNotificationDismissView.as_view(),
+        name="notification_dismiss_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/withdraw/",
+        PlatformNotificationWithdrawView.as_view(),
+        name="notification_withdraw_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/read/",
+        PlatformNotificationMarkAsReadView.as_view(),
+        name="notification_mark_read_legacy",
+    ),
+    path(
+        "notifications/new/",
+        PlatformNotificationCreateView.as_view(),
+        name="notification_create_legacy",
     ),
     # Organizations Management
     path(

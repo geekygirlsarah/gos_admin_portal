@@ -532,6 +532,16 @@ class StudentDetailView(
         student = self.object
         organization = self.request.organization
         if user_is_lead_mentor(self.request.user, org=organization):
+            ctx["existing_application_responses"] = [
+                (label, value)
+                for label, value in (
+                    ("Interest reason", student.interest_reason),
+                    ("Hoped gains", student.hoped_gains),
+                    ("Prior robotics experience", student.prior_robotics_experience),
+                    ("Referral source", student.referral_source),
+                )
+                if value and value.strip()
+            ]
             ctx["application_answers"] = (
                 StudentApplicationAnswer.objects.for_organization(organization)
                 .filter(

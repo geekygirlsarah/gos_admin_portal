@@ -2,17 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-16
+
+### Added
+- Portal announcements support sanitized light formatting, separate unread and read sections, recipient dismissal, and scoped publisher management with non-destructive withdrawal.
+- Lead Mentors can add active, organization-local mentors to travel trips.
+
+### Changed
+- Announcement menus and publisher workflows consistently use “Announcements”; `/programs/announcements/` and `/platform-admin/announcements/` are canonical, with previous `/notifications/` URLs retained for existing links.
+- Travel trip forms are grouped into clearer sections, and edits notify approved participants with a summary of changed details.
+- Trip participant lists and their add controls are grouped into separate student, parent chaperone, and mentor cards.
+- Successful trip edits now show an informational notice describing who receives update emails.
+- Trip change emails also reach opted-in signed-up mentors and parent chaperones, including when no students are approved.
+
 ## 2026-11-15
 
 ### Added
 - Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
+- Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
 
 ### Changed
+- Lead Mentors can edit stored custom answers on submitted or approved applications, with stale-edit detection.
+- Application review displays stored custom questions and answers in a readable format and flags malformed snapshots.
+- The student profile's Application Answers card now also shows existing fixed profile responses and explains when no linked answers are on file.
+- Signed-document notices and access codes go to the parent or guardian rather than the student; document verification no longer changes application email verification.
 - Application forms show numbered steps instead of a percentage bar; the submission confirmation no longer displays the documents step as the current page.
 - Condensed navigation into People, Admin, and Activities menus, and grouped platform operations to leave more room in the navigation bar.
 - Mentor digital sign-out pages load individual signature images only when selected.
 - Lead Mentors can search and filter their organization's audit activity in the portal instead of Django Admin.
 - The audit log shows 50 recent actions per page by default, with options for 100, 200, or 500.
+
+### Fixed
+- Application conversion now reports missing or unreadable signed documents instead of silently omitting them from the student profile.
 
 ## 2026-11-14
 

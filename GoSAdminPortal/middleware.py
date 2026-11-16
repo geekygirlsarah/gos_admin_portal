@@ -264,7 +264,11 @@ class RootDomainGuardMiddleware:
         if (
             getattr(request, "organization", None) is None
             and getattr(request, "_is_platform_domain", False)
-            and path == reverse("notification_list")
+            and path
+            in {
+                reverse("notification_list"),
+                reverse("notification_list_legacy"),
+            }
             and request.method in {"GET", "HEAD"}
             and getattr(user, "is_authenticated", False)
             and getattr(user, "is_active", False)

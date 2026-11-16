@@ -1337,6 +1337,28 @@ class FeeForm(forms.ModelForm):
         return fee
 
 
+class ProgramApplicationQuestionForm(forms.ModelForm):
+    class Meta:
+        from applications.models import ProgramApplicationQuestion
+
+        model = ProgramApplicationQuestion
+        fields = ["text", "is_required", "is_active", "display_order"]
+        labels = {
+            "text": "Question",
+            "is_required": "Required",
+            "is_active": "Active",
+            "display_order": "Display order",
+        }
+        widgets = {
+            "text": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "is_required": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "display_order": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+        }
+
+
 class ProgramDocumentForm(forms.ModelForm):
     """Form for adding/editing a blank document attached to a Program.
 

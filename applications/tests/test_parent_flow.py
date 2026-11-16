@@ -1,5 +1,7 @@
 """Tests for parent-specific flows: handoff security, opt-in defaults, email prefill."""
 
+from unittest.mock import patch
+
 from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
@@ -10,7 +12,23 @@ from applications.models import Application
 from programs.models import Program
 
 
-class HandoffSecurityReproductionTests(TestCase):
+class BrowserVerifiedApplicationTestCase(TestCase):
+    def verify_browser_access(self, application):
+        access_url = reverse(
+            "apply_browser_verification",
+            kwargs={"app_id": application.application_id},
+        )
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email"):
+                self.client.post(access_url, {"action": "send"})
+        response = self.client.post(access_url, {"code": "123456"})
+        self.assertEqual(response.status_code, 302)
+        return response
+
+
+class HandoffSecurityReproductionTests(BrowserVerifiedApplicationTestCase):
     def test_student_cannot_bypass_handoff_by_resuming(self):
         app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,
@@ -18,6 +36,7 @@ class HandoffSecurityReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=6,
         )
+        self.verify_browser_access(app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -35,13 +54,22 @@ class HandoffSecurityReproductionTests(TestCase):
         response = self.client.post(
             reverse("apply_resume"), {"application_id": app.application_id}
         )
-        self.assertRedirects(
-            response, reverse("apply_step7", kwargs={"app_id": app.application_id})
+        step7_url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        self.assertRedirects(response, step7_url, fetch_redirect_response=False)
+        response = self.client.get(step7_url)
+        access_url = reverse(
+            "apply_browser_verification", kwargs={"app_id": app.application_id}
         )
-        response = self.client.get(response.url)
-        self.assertContains(
-            response, "This application has been handed off to an adult contact"
-        )
+        self.assertRedirects(response, access_url, fetch_redirect_response=False)
+        self.client.get(access_url)
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email") as send:
+                self.client.post(access_url, {"action": "send"})
+        self.assertEqual(send.call_args.kwargs["recipient"], "parent@example.com")
+        response = self.client.get(access_url)
+        self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Please provide the primary adult contact")
 
     def test_parent_can_access_handoff_with_token(self):
@@ -51,6 +79,7 @@ class HandoffSecurityReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=6,
         )
+        self.verify_browser_access(app)
         self.client.post(
             reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "parent@example.com"},
@@ -64,14 +93,22 @@ class HandoffSecurityReproductionTests(TestCase):
                 kwargs={"app_id": app.application_id, "token": token},
             )
         )
+        step7_url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        self.assertRedirects(response, step7_url, fetch_redirect_response=False)
+        response = self.client.get(step7_url)
         self.assertRedirects(
-            response, reverse("apply_step7", kwargs={"app_id": app.application_id})
+            response,
+            reverse(
+                "apply_browser_verification", kwargs={"app_id": app.application_id}
+            ),
+            fetch_redirect_response=False,
         )
-        response = self.client.get(response.url)
+        self.verify_browser_access(app)
+        response = self.client.get(step7_url)
         self.assertContains(response, "Please provide the primary adult contact")
 
 
-class ParentNotificationOptInReproductionTests(TestCase):
+class ParentNotificationOptInReproductionTests(BrowserVerifiedApplicationTestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Spring 2030",
@@ -87,6 +124,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
+        self.verify_browser_access(app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -101,6 +139,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
+        self.verify_browser_access(app)
         response = self.client.get(
             reverse("apply_step8", kwargs={"app_id": app.application_id})
         )
@@ -126,6 +165,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
                 },
             },
         )
+        self.verify_browser_access(app)
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
@@ -166,6 +206,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
                 },
             },
         )
+        self.verify_browser_access(app)
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
@@ -209,6 +250,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
                 },
             },
         )
+        self.verify_browser_access(app)
         response = self.client.post(
             reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {"confirm": "on"},
@@ -222,7 +264,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
         self.assertNotEqual(app.status, Application.Status.SUBMITTED)
 
 
-class Step7PrefillEmailReproductionTests(TestCase):
+class Step7PrefillEmailReproductionTests(BrowserVerifiedApplicationTestCase):
     def test_parent_initiated_prefills_email(self):
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
@@ -230,6 +272,7 @@ class Step7PrefillEmailReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=4,
         )
+        self.verify_browser_access(app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -251,6 +294,7 @@ class Step7PrefillEmailReproductionTests(TestCase):
         session = self.client.session
         session[f"handoff_token_{app.application_id}"] = app.handoff_token
         session.save()
+        self.verify_browser_access(app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

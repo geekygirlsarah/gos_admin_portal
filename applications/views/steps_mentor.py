@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -20,10 +21,12 @@ from ..services import (
     send_application_submitted_email,
     send_lead_notification_email,
 )
+from .browser import _require_browser_access
 from .utils import (
     MENTOR_TOTAL_STEPS,
     _get_application_or_404,
     _is_mentor,
+    _locked_application_redirect,
     _mentor_progress,
     _redirect_to_current_step,
     logger,
@@ -37,9 +40,12 @@ def _require_mentor(application: Application):
     return None
 
 
-def _require_mentor_verified(application: Application):
+def _require_mentor_verified(request, application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
     guard = _require_mentor(application)
+    if guard is not None:
+        return guard
+    guard = _require_browser_access(request, application)
     if guard is not None:
         return guard
     if not application.email_is_verified:
@@ -62,6 +68,9 @@ class MentorBlockedView(View):
         application = _get_application_or_404(app_id, request.organization)
         if not _is_mentor(application):
             return _redirect_to_current_step(application)
+        guard = _require_browser_access(request, application)
+        if guard is not None:
+            return guard
         return render(
             request,
             self.template_name,
@@ -79,7 +88,7 @@ class MentorInfoView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         initial = (application.data or {}).get("mentor_info") or {}
@@ -87,7 +96,7 @@ class MentorInfoView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorInfoForm(request.POST)
@@ -122,7 +131,7 @@ class MentorClearanceInterestView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         initial = (application.data or {}).get("mentor_clearance_interest") or {}
@@ -132,7 +141,7 @@ class MentorClearanceInterestView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorClearanceInterestForm(request.POST)
@@ -145,17 +154,17 @@ class MentorClearanceInterestView(View):
             "mentor_clearance_interest",
             dict(form.cleaned_data),
             next_step=7,
+            remove_keys=(
+                ("mentor_clearance_detail",)
+                if form.cleaned_data["interested"] == "no"
+                else ()
+            ),
         )
         if form.cleaned_data["interested"] == "yes":
             return redirect(
                 "apply_mentor_clearance_detail",
                 app_id=application.application_id,
             )
-        # Not interested → clear any prior detail and jump to confirm.
-        data = dict(application.data or {})
-        data.pop("mentor_clearance_detail", None)
-        application.data = data
-        application.save(update_fields=["data", "updated_at"])
         return redirect("apply_mentor_confirm", app_id=application.application_id)
 
     def _render(self, request, application, form):
@@ -178,7 +187,7 @@ class MentorClearanceDetailView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         # Don't show this page if they said "no" on the interest step.
@@ -195,7 +204,7 @@ class MentorClearanceDetailView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = MentorClearanceDetailForm(request.POST)
@@ -231,25 +240,49 @@ class MentorConfirmView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         return self._render(request, application, ConfirmSubmitForm())
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_mentor_verified(application)
+        guard = _require_mentor_verified(request, application)
         if guard is not None:
             return guard
         form = ConfirmSubmitForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
-        application.status = Application.Status.SUBMITTED
-        application.submitted_at = timezone.now()
-        application.current_step = max(application.current_step, 9)
-        application.save(
-            update_fields=["status", "submitted_at", "current_step", "updated_at"]
-        )
+
+        using = application._state.db
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update(),
+                pk=application.pk,
+            )
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_mentor_verified(request, current)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The application changed while you were confirming. "
+                    "Please review it before submitting again.",
+                )
+                return self._render(request, current, form)
+
+            current.status = Application.Status.SUBMITTED
+            current.submitted_at = timezone.now()
+            current.current_step = max(current.current_step, 9)
+            current.save(
+                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+            )
+            application = current
         from .utils import logger
 
         try:

@@ -38,6 +38,11 @@ urlpatterns = [
         name="signup_undo",
     ),
     path(
+        "events/<int:pk>/mentor-add/",
+        views.TravelMentorStaffSignupView.as_view(),
+        name="mentor_add",
+    ),
+    path(
         "events/<int:pk>/mentor-signup/",
         views.TravelMentorSignupView.as_view(),
         name="mentor_signup",

@@ -4,6 +4,7 @@ approve/decline/edit/delete, convert, and email resend."""
 from __future__ import annotations
 
 import datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -180,6 +181,34 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.client.force_login(self.user)
         mail.outbox = []
 
+    def test_decisions_preserve_newer_application_data(self):
+        for action, expected_status in (
+            ("approve", Application.Status.APPROVED),
+            ("decline", Application.Status.DECLINED),
+        ):
+            with self.subTest(action=action):
+                app = _make_application()
+                stale = Application.objects.get(pk=app.pk)
+                app.data["step6-custom"] = [{"question_text": "New question?"}]
+                app.save(update_fields=["data"])
+                with patch(
+                    "applications.views.review._get_tenant_application",
+                    return_value=stale,
+                ):
+                    response = self.client.post(
+                        reverse(
+                            f"application_review_{action}",
+                            kwargs={"app_id": app.application_id},
+                        ),
+                        {"reason": "Not eligible"},
+                    )
+                self.assertEqual(response.status_code, 302)
+                app.refresh_from_db()
+                self.assertEqual(app.status, expected_status)
+                self.assertEqual(
+                    app.data["step6-custom"][0]["question_text"], "New question?"
+                )
+
     def test_approve_sets_status_and_emails(self):
         url = reverse(
             "application_review_approve", kwargs={"app_id": self.app.application_id}
@@ -195,7 +224,7 @@ class ApproveDeclineEditDeleteTests(TestCase):
         msg = mail.outbox[0]
         recipients = {r.lower() for r in msg.to}
         self.assertIn("parent@example.com", recipients)
-        self.assertIn("ada@example.com", recipients)
+        self.assertNotIn("ada@example.com", recipients)
 
     def test_approving_already_approved_is_a_noop(self):
         self.app.status = Application.Status.APPROVED
@@ -205,6 +234,22 @@ class ApproveDeclineEditDeleteTests(TestCase):
         )
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_approval_reports_missing_parent_email(self):
+        self.app.applicant_type = Application.Type.STUDENT
+        self.app.email = "student@example.test"
+        self.app.data["step7-primaryparent"]["email"] = ""
+        self.app.save()
+        response = self.client.post(
+            reverse(
+                "application_review_approve",
+                kwargs={"app_id": self.app.application_id},
+            ),
+            follow=True,
+        )
+        self.assertContains(response, "confirmation email")
+        self.assertContains(response, "could not be sent")
         self.assertEqual(len(mail.outbox), 0)
 
     def test_decline_with_reason_saves_and_emails(self):

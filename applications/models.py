@@ -14,7 +14,8 @@ import uuid
 
 import pghistory
 from django.contrib.auth.hashers import check_password, make_password
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
@@ -295,12 +296,22 @@ class Application(models.Model):
         ``save=True``, persists the result so a stale legacy copy can never
         reappear next load. Returns the normalized ``data`` dict.
         """
-        normalized = normalize_step_keys(self.data)
-        if normalized == self.data:
-            return self.data
-        self.data = normalized
         if save:
-            self.save(update_fields=["data", "updated_at"])
+            using = self._state.db
+            with transaction.atomic(using=using):
+                current = (
+                    type(self)
+                    .objects.using(using)
+                    .select_for_update()
+                    .get(pk=self.pk, organization_id=self.organization_id)
+                )
+                normalized = normalize_step_keys(current.data)
+                if normalized != current.data:
+                    current.data = normalized
+                    current.save(update_fields=["data", "updated_at"])
+                self.data = normalized
+            return self.data
+        self.data = normalize_step_keys(self.data)
         return self.data
 
     # -- OTP ----------------------------------------------------------------
@@ -533,3 +544,41 @@ class StudentApplicationAnswer(models.Model):
             )
         ]
         ordering = ["-application__created_at", "application_id", "source_step", "id"]
+
+
+class ProgramApplicationQuestion(models.Model):
+    """A configurable question belonging to one program and organization."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_questions",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.CASCADE,
+        related_name="application_questions",
+    )
+    question_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    text = models.TextField()
+    is_required = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "pk"]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.program_id
+            and self.organization_id
+            and self.program.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                "The question and program must belong to the same organization."
+            )
+
+    def __str__(self):
+        return self.text

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 
@@ -145,10 +146,15 @@ def _redirect_after_email_verified(application: Application):
     return redirect("apply_step4", app_id=application.application_id)
 
 
-def _require_verified_email(application: Application):
+def _require_verified_email(request, application: Application):
     locked_redirect = _locked_application_redirect(application)
     if locked_redirect is not None:
         return locked_redirect
+    from .browser import _require_browser_access
+
+    guard = _require_browser_access(request, application, allow_bootstrap=True)
+    if guard is not None:
+        return guard
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
     return None
@@ -184,9 +190,9 @@ def _is_handoff_authorized(request, application: Application) -> bool:
 
     expected = application.handoff_token
     if not expected:
-        # If for some reason there is no token on file but it's awaiting
-        # parent, we allow it (best effort for legacy/corrupt records).
-        return True
+        from .browser import _has_browser_access
+
+        return _has_browser_access(request, application)
 
     session_token = request.session.get(f"handoff_token_{application.application_id}")
     return bool(session_token and session_token == expected)
@@ -229,16 +235,28 @@ def _auto_authorize_handoff(request, application: Application) -> None:
         request.session[f"handoff_token_{application.application_id}"] = token
 
 
-def _save_step_data(application: Application, key: str, payload: dict, next_step: int):
+def _save_step_data(
+    application: Application, key: str, payload: dict, next_step: int, remove_keys=()
+):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
     """
-    application.normalize_step_data(save=False)
-    data = dict(application.data or {})
-    data[key] = payload
-    application.data = data
-    application.current_step = max(application.current_step, next_step)
-    application.save(update_fields=["data", "current_step", "updated_at"])
+    using = application._state.db
+    with transaction.atomic(using=using):
+        current = (
+            Application.objects.using(using)
+            .select_for_update()
+            .get(pk=application.pk, organization_id=application.organization_id)
+        )
+        data = dict(normalize_step_keys(current.data) or {})
+        for remove_key in remove_keys:
+            data.pop(remove_key, None)
+        data[key] = payload
+        current.data = data
+        current.current_step = max(current.current_step, next_step)
+        current.save(update_fields=["data", "current_step", "updated_at"])
+        application.data = current.data
+        application.current_step = current.current_step
 
 
 def _sanitize_payload(cleaned_data: dict) -> dict:
@@ -309,12 +327,17 @@ def _require_mentor(application: Application):
     return None
 
 
-def _require_mentor_verified(application: Application):
+def _require_mentor_verified(request, application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
     locked_redirect = _locked_application_redirect(application)
     if locked_redirect is not None:
         return locked_redirect
     guard = _require_mentor(application)
+    if guard is not None:
+        return guard
+    from .browser import _require_browser_access
+
+    guard = _require_browser_access(request, application)
     if guard is not None:
         return guard
     if not application.email_is_verified:

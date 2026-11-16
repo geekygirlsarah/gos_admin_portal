@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from applications.tests.access_helpers import verify_application_browser
 from organizations.models import UserOrganizationMembership
 from programs.models import Enrollment, Program, RaceEthnicity, School, Student
 
@@ -184,6 +185,11 @@ class ApplicationIntegrationFlowTests(TestCase):
             "apply_resume_link_with_token", args=[app_id, app.handoff_token]
         )
         response = self.client.get(resume_url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        verify_application_browser(
+            self.client, app, expected_recipient="parent@example.com"
+        )
+        response = self.client.get(reverse("apply_step7", args=[app_id]))
         self.assertEqual(response.status_code, 200)
 
         # 9. Step 7: Primary Parent (Parent providing info)
@@ -654,6 +660,11 @@ class ApplicationIntegrationFlowTests(TestCase):
             "apply_resume_link_with_token", args=[app_id, app.handoff_token]
         )
         response = self.client.get(resume_url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        verify_application_browser(
+            self.client, app, expected_recipient="parent@example.com"
+        )
+        response = self.client.get(reverse("apply_step7", args=[app_id]))
         self.assertEqual(response.status_code, 200)
 
         primary_parent_data = {

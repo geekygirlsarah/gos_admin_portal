@@ -1,0 +1,23 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Verify this browser{% endblock %}
+{% block wizard_heading %}Verify this browser{% endblock %}
+{% block wizard_body %}
+  {% if missing_email %}
+    <div class="alert alert-warning">There is no email address available to verify this application. Please contact your program for assistance.</div>
+  {% else %}
+    <p>To continue this application, request a code sent to the email address already on file. For a parent handoff, the code goes to the parent or guardian.</p>
+    <form method="post" class="mb-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="send">
+      <button type="submit" class="btn btn-outline-primary">Send verification code</button>
+    </form>
+    <form method="post">
+      {% csrf_token %}
+      <label for="id_code" class="form-label">Verification code</label>
+      {{ form.code }}
+      {% for error in form.code.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      <button type="submit" class="btn btn-primary mt-3">Verify and continue</button>
+    </form>
+  {% endif %}
+{% endblock %}

@@ -410,6 +410,30 @@ class StudentInfoForm(forms.Form):
     )
 
 
+class CustomApplicationQuestionsForm(forms.Form):
+    """Render a frozen set of free-text application questions."""
+
+    def __init__(self, *args, snapshot, **kwargs):
+        from .answers import validate_custom_question_snapshot
+
+        validate_custom_question_snapshot(snapshot)
+        self.snapshot = snapshot
+        super().__init__(*args, **kwargs)
+        for item in snapshot:
+            self.fields[f"question_{item['question_id']}"] = forms.CharField(
+                label=item["question_text"],
+                required=item["required"],
+                initial=item["answer"],
+                widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
+            )
+
+    def answered_snapshot(self):
+        return [
+            {**item, "answer": self.cleaned_data[f"question_{item['question_id']}"]}
+            for item in self.snapshot
+        ]
+
+
 class StudentExperienceForm(forms.Form):
     """New Step 6: qualitative questions about student interest/experience."""
 

@@ -7,6 +7,7 @@ after the single-file ``views.py`` was split into submodules.
 
 from __future__ import annotations
 
+from .browser import BrowserVerificationView
 from .documents import (
     Step10DocumentAccessView,
     Step10DocumentDownloadView,
@@ -99,6 +100,7 @@ __all__ = [
     "_student_initial_for",
     "logger",
     # welcome
+    "BrowserVerificationView",
     "ApplicationWithdrawView",
     "ContinueView",
     "ResumeLinkView",

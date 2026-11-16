@@ -18,10 +18,21 @@ from datetime import timedelta
 
 from django.core import mail
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from applications.models import Application, OtpVerifyResult
+
+
+def _start_application(client, **fields):
+    response = client.post(reverse("apply_start"))
+    application_id = resolve(response.url).kwargs["app_id"]
+    application = Application.objects.get(application_id=application_id)
+    for field, value in fields.items():
+        setattr(application, field, value)
+    if fields:
+        application.save()
+    return application
 
 
 class OtpVerifyResultTests(TestCase):
@@ -51,7 +62,8 @@ class OtpVerifyResultTests(TestCase):
 
 class Step3ErrorMessageTests(TestCase):
     def test_wrong_code_shows_did_not_match_not_expired(self):
-        app = Application.objects.create(
+        app = _start_application(
+            self.client,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,
@@ -66,7 +78,8 @@ class Step3ErrorMessageTests(TestCase):
         self.assertNotContains(response, "expired")
 
     def test_expired_code_shows_expired_message(self):
-        app = Application.objects.create(
+        app = _start_application(
+            self.client,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,
@@ -82,7 +95,8 @@ class Step3ErrorMessageTests(TestCase):
         self.assertContains(response, "expired")
 
     def test_no_pending_code_prompts_request_new(self):
-        app = Application.objects.create(
+        app = _start_application(
+            self.client,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,
@@ -95,7 +109,8 @@ class Step3ErrorMessageTests(TestCase):
         self.assertContains(response, "request a new code")
 
     def test_success_advances(self):
-        app = Application.objects.create(
+        app = _start_application(
+            self.client,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,
@@ -110,7 +125,7 @@ class Step3ErrorMessageTests(TestCase):
 
 class Step2IssuesOtpTests(TestCase):
     def test_step2_post_issues_and_emails_otp(self):
-        app = Application.objects.create(applicant_type="parent")
+        app = _start_application(self.client, applicant_type="parent")
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
             {"applicant_type": "parent", "email": "parent@example.com"},
@@ -125,7 +140,8 @@ class Step2IssuesOtpTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
     def test_step3_get_does_not_regenerate_pending_code(self):
-        app = Application.objects.create(
+        app = _start_application(
+            self.client,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,

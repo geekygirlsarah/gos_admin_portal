@@ -33,6 +33,10 @@ and reasons, not answer text or foreign profile details. Approved applications
 without a converted student normally remain unlinked until conversion. Review
 exceptions in the organization-scoped application review workflow; do not infer
 identity from a shared email or reassign inconsistent records automatically.
+Add `--check-copied` to also list linked applications whose nonblank recognized
+historical answers are not reflected on the linked student profile. This compares
+current source data with stored answers; differences do not prove why an answer
+is missing or whether the migration ran. The command does not change records.
 Valid answers from linked applications were copied without overwriting existing
 student fields. Reversing the data migration leaves these answer records in place;
 the source application data is not changed by the backfill. Reversing the

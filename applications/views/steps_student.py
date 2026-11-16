@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import F, Q
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -46,6 +47,11 @@ from ..services import (
     student_to_prefill,
     students_for_adult,
 )
+from .browser import (
+    _grant_browser_access,
+    _require_browser_access,
+    _start_bootstrap,
+)
 from .utils import (
     TOTAL_STEPS,
     _get_application_or_404,
@@ -62,6 +68,15 @@ from .utils import (
     _student_initial_for,
 )
 
+
+def _locked_application_queryset(using, pk, organization_id):
+    return (
+        Application.objects.using(using)
+        .select_for_update()
+        .filter(pk=pk, organization_id=organization_id)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Step 2: applicant type + email
 # ---------------------------------------------------------------------------
@@ -76,6 +91,11 @@ class Step2ApplicantTypeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
+        if application.status == Application.Status.AWAITING_PARENT:
+            return _redirect_to_current_step(application)
         form = ApplicantTypeForm(
             initial={
                 "applicant_type": application.applicant_type or None,
@@ -89,21 +109,74 @@ class Step2ApplicantTypeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
+        if application.status == Application.Status.AWAITING_PARENT:
+            return _redirect_to_current_step(application)
         form = ApplicantTypeForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
 
-        application.applicant_type = form.cleaned_data["applicant_type"]
         new_email = form.cleaned_data.get("email") or ""
-        # Changing the email invalidates a prior verification.
-        if new_email and new_email.lower() != (application.email or "").lower():
-            application.email_verified_at = None
-            application.otp_hash = ""
-            application.otp_expires_at = None
-            application.otp_attempts = 0
-        application.email = new_email
-        application.current_step = max(application.current_step, 3)
-        application.save()
+        initial_type = application.applicant_type
+        initial_email = (application.email or "").strip().lower()
+        using = application._state.db
+        response = None
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using).select_for_update(),
+                pk=application.pk,
+                organization_id=application.organization_id,
+            )
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                response = locked_redirect
+            elif (
+                current.applicant_type != initial_type
+                or (current.email or "").strip().lower() != initial_email
+            ):
+                response = redirect(
+                    "apply_browser_verification", app_id=current.application_id
+                )
+            else:
+                guard = _require_browser_access(request, current, allow_bootstrap=True)
+                if guard is not None:
+                    response = guard
+                elif current.status == Application.Status.AWAITING_PARENT:
+                    response = _redirect_to_current_step(current)
+                else:
+                    old_type = current.applicant_type
+                    current.applicant_type = form.cleaned_data["applicant_type"]
+                    # Changing the email invalidates a prior verification.
+                    email_changed = new_email.lower() != (current.email or "").lower()
+                    if email_changed:
+                        _start_bootstrap(request, current)
+                        current.email_verified_at = None
+                        current.otp_hash = ""
+                        current.otp_expires_at = None
+                        current.otp_attempts = 0
+                    current.email = new_email
+                    current.current_step = max(current.current_step, 3)
+                    current.save(
+                        update_fields=[
+                            "applicant_type",
+                            "email",
+                            "email_verified_at",
+                            "otp_hash",
+                            "otp_expires_at",
+                            "otp_attempts",
+                            "current_step",
+                            "updated_at",
+                        ]
+                    )
+                    application = current
+
+        if response is not None:
+            return response
+
+        if old_type != application.applicant_type and application.email_is_verified:
+            _grant_browser_access(request, application)
 
         # If a student didn't provide an email, tell them the parent should
         # take over and stop the wizard here for now.
@@ -161,7 +234,7 @@ class Step4ProgramView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         future, current, past = get_program_buckets(request.organization)
@@ -175,16 +248,60 @@ class Step4ProgramView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         future, current, past = get_program_buckets(request.organization)
         form = ProgramSelectForm(request.POST, future_programs=future)
         if not form.is_valid():
             return self._render(request, application, form, future, current, past)
-        application.program = form.cleaned_data["program"]
-        application.current_step = max(application.current_step, 5)
-        application.save()
+
+        using = application._state.db
+        response = None
+        render_args = None
+        with transaction.atomic(using=using):
+            current_application = get_object_or_404(
+                _locked_application_queryset(
+                    using, application.pk, application.organization_id
+                )
+            )
+            guard = _require_verified_email(request, current_application)
+            if guard is not None:
+                response = guard
+            elif current_application.status == Application.Status.AWAITING_PARENT:
+                response = _redirect_to_current_step(current_application)
+            else:
+                current_future, current_programs, current_past = get_program_buckets(
+                    current_application.organization
+                )
+                selected_program = form.cleaned_data["program"]
+                if selected_program.pk not in {
+                    program.pk for program in current_future
+                }:
+                    current_form = ProgramSelectForm(
+                        request.POST, future_programs=current_future
+                    )
+                    current_form.is_valid()
+                    render_args = (
+                        current_application,
+                        current_form,
+                        current_future,
+                        current_programs,
+                        current_past,
+                    )
+                else:
+                    current_application.program_id = selected_program.pk
+                    current_application.current_step = max(
+                        current_application.current_step, 5
+                    )
+                    current_application.save(
+                        update_fields=["program", "current_step", "updated_at"]
+                    )
+
+        if response is not None:
+            return response
+        if render_args is not None:
+            return self._render(request, *render_args)
         return redirect("apply_continue", app_id=application.application_id)
 
     def _render(self, request, application, form, future, current, past):
@@ -220,6 +337,9 @@ class Step3VerifyEmailView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         if application.email_is_verified:
             # Mentors skip program selection — send them back into the mentor
             # wizard; everyone else continues to Step 4 (program selection).
@@ -251,6 +371,9 @@ class Step3VerifyEmailView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         rate_limited = check_otp_verify_limit(request, application.application_id)
         if rate_limited is not None:
             return rate_limited
@@ -279,6 +402,7 @@ class Step3VerifyEmailView(View):
             return self._render(request, application, form)
         application.current_step = max(application.current_step, 4)
         application.save(update_fields=["current_step", "updated_at"])
+        _grant_browser_access(request, application)
 
         # Check for existing draft applications with the same email.
         # If found, redirect to a page that lets them resume the old one or start over.
@@ -324,7 +448,7 @@ class Step3DuplicateFoundView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         # Find other applications with the same email that are in progress
@@ -363,7 +487,7 @@ class Step3DuplicateFoundView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
         action = request.POST.get("action")
@@ -468,6 +592,9 @@ class Step3ResendCodeView(View):
         locked_redirect = _locked_application_redirect(application)
         if locked_redirect is not None:
             return locked_redirect
+        guard = _require_browser_access(request, application, allow_bootstrap=True)
+        if guard is not None:
+            return guard
         if not application.email:
             return redirect("apply_step2", app_id=application.application_id)
         rate_limited = check_otp_send_limit(request, application.email)
@@ -504,7 +631,7 @@ class Step5StudentInfoView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -532,7 +659,7 @@ class Step5StudentInfoView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -764,7 +891,7 @@ class Step6ExperienceView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -776,7 +903,7 @@ class Step6ExperienceView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -815,7 +942,7 @@ class Step7PrimaryParentView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -833,7 +960,7 @@ class Step7PrimaryParentView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -853,16 +980,86 @@ class Step7PrimaryParentView(View):
                 return self._render(
                     request, application, form, handoff_form, mode, existing_adult
                 )
-            parent_email = handoff_form.cleaned_data["parent_email"]
-            data = dict(application.data or {})
-            data["step7_handoff"] = {"parent_email": parent_email}
-            application.data = data
-            application.status = Application.Status.AWAITING_PARENT
-            application.current_step = max(application.current_step, 7)
-            application.issue_handoff_token()
-            application.save(
-                update_fields=["data", "status", "current_step", "updated_at"]
-            )
+            using = application._state.db
+            response = None
+            render_args = None
+            handoff_saved = False
+            with transaction.atomic(using=using):
+                current = get_object_or_404(
+                    _locked_application_queryset(
+                        using, application.pk, application.organization_id
+                    )
+                )
+                guard = _require_verified_email(request, current)
+                if guard is not None:
+                    response = guard
+                elif not _is_handoff_authorized(request, current):
+                    render_args = (current, None, None, None, None)
+                else:
+                    current.normalize_step_data(save=False)
+                    (
+                        current_form,
+                        current_handoff_form,
+                        current_mode,
+                        current_adult,
+                    ) = self._build_forms(current, request.POST)
+                    if current_mode != "handoff" or not current_handoff_form.is_valid():
+                        render_args = (
+                            current,
+                            current_form,
+                            current_handoff_form,
+                            current_mode,
+                            current_adult,
+                        )
+                    else:
+                        parent_email = current_handoff_form.cleaned_data["parent_email"]
+                        data = dict(current.data or {})
+                        data["step7_handoff"] = {"parent_email": parent_email}
+                        current.data = data
+                        current.status = Application.Status.AWAITING_PARENT
+                        current.current_step = max(current.current_step, 7)
+                        current.issue_handoff_token()
+                        current.save(
+                            update_fields=[
+                                "data",
+                                "status",
+                                "current_step",
+                                "updated_at",
+                            ]
+                        )
+                        application.data = current.data
+                        application.status = current.status
+                        application.current_step = current.current_step
+                        application.handoff_token = current.handoff_token
+                        handoff_saved = True
+
+            if response is not None:
+                return response
+            if render_args is not None:
+                (
+                    current,
+                    current_form,
+                    current_handoff_form,
+                    current_mode,
+                    current_adult,
+                ) = render_args
+                if current_mode is None:
+                    return render(
+                        request,
+                        "applications/handoff_required.html",
+                        {"application": current},
+                    )
+                return self._render(
+                    request,
+                    current,
+                    current_form,
+                    current_handoff_form,
+                    current_mode,
+                    current_adult,
+                )
+            if not handoff_saved:
+                return _redirect_to_current_step(application)
+
             from ..services import send_parent_handoff_email
 
             send_parent_handoff_email(application, parent_email, request=request)
@@ -1161,7 +1358,7 @@ class SwapParentsView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1172,57 +1369,83 @@ class SwapParentsView(View):
                 {"application": application},
             )
 
-        data = dict(application.data or {})
-        step7 = data.get("step7-primaryparent") or {}
-        step8 = data.get("step8-secondaryparent") or {}
-
-        # For returning students the wizard prefills from the Student record
-        # but doesn't save to application.data until the user submits each
-        # step.  If either side is empty, hydrate it from the Student record
-        # so the swap has something to work with.
-        existing_student_id = (data.get("step5-student") or {}).get(
-            "_existing_student_id"
-        )
-        if existing_student_id and (not step7 or not step8):
-            student = (
-                Student.objects.for_organization(application.organization)
-                .filter(pk=existing_student_id)
-                .first()
+        using = application._state.db
+        response = None
+        handoff_required = None
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                _locked_application_queryset(
+                    using, application.pk, application.organization_id
+                )
             )
-            if student:
-                primary_relationship = student.primary_contact_relationship
-                if (
-                    not step7
-                    and primary_relationship is not None
-                    and primary_relationship.organization_id
-                    == application.organization_id
-                    and primary_relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    step7 = adult_to_prefill(
-                        primary_relationship.adult, student=student
+            guard = _require_verified_email(request, current)
+            if guard is not None:
+                response = guard
+            elif not _is_handoff_authorized(request, current):
+                handoff_required = current
+            else:
+                current.normalize_step_data(save=False)
+                data = dict(current.data or {})
+                step7 = data.get("step7-primaryparent") or {}
+                step8 = data.get("step8-secondaryparent") or {}
+
+                # Returning-student prefills aren't saved until each step is
+                # submitted, so hydrate missing sides before swapping.
+                existing_student_id = (data.get("step5-student") or {}).get(
+                    "_existing_student_id"
+                )
+                if existing_student_id and (not step7 or not step8):
+                    student = (
+                        Student.objects.for_organization(current.organization)
+                        .filter(pk=existing_student_id)
+                        .first()
                     )
-                secondary_relationship = student.secondary_contact_relationship
-                if (
-                    not step8
-                    and secondary_relationship is not None
-                    and secondary_relationship.organization_id
-                    == application.organization_id
-                    and secondary_relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    step8 = adult_to_prefill(
-                        secondary_relationship.adult, student=student
+                    if student:
+                        primary_relationship = student.primary_contact_relationship
+                        if (
+                            not step7
+                            and primary_relationship is not None
+                            and primary_relationship.organization_id
+                            == current.organization_id
+                            and primary_relationship.adult.organization_id
+                            == current.organization_id
+                        ):
+                            step7 = adult_to_prefill(
+                                primary_relationship.adult, student=student
+                            )
+                        secondary_relationship = student.secondary_contact_relationship
+                        if (
+                            not step8
+                            and secondary_relationship is not None
+                            and secondary_relationship.organization_id
+                            == current.organization_id
+                            and secondary_relationship.adult.organization_id
+                            == current.organization_id
+                        ):
+                            step8 = adult_to_prefill(
+                                secondary_relationship.adult, student=student
+                            )
+
+                if step7 or step8:
+                    data["step7-primaryparent"], data["step8-secondaryparent"] = (
+                        step8,
+                        step7,
+                    )
+                    current.data = data
+                    current.save(update_fields=["data", "updated_at"])
+                    application.data = current.data
+                    messages.success(
+                        request,
+                        "Primary and secondary parent / guardian information has been swapped.",
                     )
 
-        # Only swap when both sides have content.
-        if step7 or step8:
-            data["step7-primaryparent"], data["step8-secondaryparent"] = step8, step7
-            application.data = data
-            application.save(update_fields=["data", "updated_at"])
-            messages.success(
+        if response is not None:
+            return response
+        if handoff_required is not None:
+            return render(
                 request,
-                "Primary and secondary parent / guardian information has been swapped.",
+                "applications/handoff_required.html",
+                {"application": handoff_required},
             )
 
         next_step = request.POST.get("next", "7")
@@ -1242,7 +1465,7 @@ class Step8SecondaryParentView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1264,7 +1487,7 @@ class Step8SecondaryParentView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1390,7 +1613,7 @@ class Step9ConfirmView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1405,7 +1628,7 @@ class Step9ConfirmView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(application)
+        guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
@@ -1420,24 +1643,55 @@ class Step9ConfirmView(View):
         if not form.is_valid():
             return self._render(request, application, form)
 
-        # Ensure at least one parent opted in to notifications (only for students/parents)
-        data = application.data or {}
-        p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
-        p2_opt = (data.get("step8-secondaryparent") or {}).get("email_updates", False)
-        if not p1_opt and not p2_opt:
-            form.add_error(
-                None,
-                "At least one parent or guardian must opt in to receiving email "
-                "updates from this organization.",
+        using = application._state.db
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update(),
+                pk=application.pk,
             )
-            return self._render(request, application, form)
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_verified_email(request, current)
+            if guard is not None:
+                return guard
+            if not _is_handoff_authorized(request, current):
+                return render(
+                    request,
+                    "applications/handoff_required.html",
+                    {"application": current},
+                )
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while you were confirming. "
+                    "Please review the application before submitting again.",
+                )
+                return self._render(request, current, form)
 
-        application.status = Application.Status.SUBMITTED
-        application.submitted_at = timezone.now()
-        application.current_step = 10
-        application.save(
-            update_fields=["status", "submitted_at", "current_step", "updated_at"]
-        )
+            # Ensure at least one parent opted in to notifications.
+            data = current.data or {}
+            p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
+            p2_opt = (data.get("step8-secondaryparent") or {}).get(
+                "email_updates", False
+            )
+            if not p1_opt and not p2_opt:
+                form.add_error(
+                    None,
+                    "At least one parent or guardian must opt in to receiving email "
+                    "updates from this organization.",
+                )
+                return self._render(request, current, form)
+
+            current.status = Application.Status.SUBMITTED
+            current.submitted_at = timezone.now()
+            current.current_step = 10
+            current.save(
+                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+            )
+            application = current
 
         try:
             send_application_submitted_email(application, request=request)

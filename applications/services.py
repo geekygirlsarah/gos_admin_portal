@@ -168,9 +168,12 @@ def _send_html_email(
         _do_send()
 
 
-def send_otp_email(application: Application, code: str, request=None) -> None:
-    """Email the OTP code to the application's email, including resume info."""
-    if not application.email:
+def send_otp_email(
+    application: Application, code: str, request=None, recipient=None
+) -> None:
+    """Email an OTP code to the specified recipient or application email."""
+    email = recipient if recipient is not None else application.email
+    if not email:
         logger.warning(
             "Refusing to send OTP for application %s: no email on file",
             application.application_id,
@@ -194,7 +197,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         subject=subject,
         text_body=text_body,
         html_body=html_body,
-        recipients=[application.email],
+        recipients=[email],
         organization=application.organization,
         request=request,
         history_category="otp",
@@ -600,6 +603,25 @@ def get_primary_parent_email(application: Application) -> Optional[str]:
     return None
 
 
+def document_recipient(application: Application) -> str:
+    """Find the parent address eligible for a document challenge."""
+    if application.applicant_type == Application.Type.PARENT:
+        return (application.email or "").strip().lower()
+    if application.applicant_type != Application.Type.STUDENT:
+        return ""
+    data = application.data
+    if not isinstance(data, dict):
+        return ""
+    handoff = data.get("step7_handoff")
+    primary = data.get("step7-primaryparent") or data.get("step7")
+    for record, key in ((handoff, "parent_email"), (primary, "email")):
+        if isinstance(record, dict):
+            email = record.get(key)
+            if isinstance(email, str) and email.strip():
+                return email.strip().lower()
+    return ""
+
+
 def _collect_applicant_recipients(application: Application) -> List[str]:
     """Return the list of email addresses for the submission-confirmation
     email: the student's email (if any) and the primary parent/guardian's
@@ -678,12 +700,17 @@ def send_application_approved_email(application: Application, request=None) -> N
     """Notify the applicant that their application was approved and that
     they have signed documents to download/upload (Step 9).
 
-    Recipients are the student + primary parent/guardian (or just the
-    parent when the student has no email), matching the submission
-    confirmation behavior. Called by the lead-mentor admin (to be built
-    in a follow-up phase) when an application is marked APPROVED.
+    Student document notices go to the parent responsible for document access.
     """
-    recipients = _collect_applicant_recipients(application)
+    if application.is_mentor:
+        recipients = _collect_applicant_recipients(application)
+    else:
+        recipient = document_recipient(application)
+        recipients = [recipient] if recipient else []
+        if not recipient:
+            raise ValueError(
+                "A parent or guardian email is required to send the document notice."
+            )
     if not recipients:
         return
     organization_name = (
@@ -1097,15 +1124,6 @@ def convert_application_to_student(application: Application, request=None):
             )
         return application.converted_student
 
-    answers = []
-    if application.applicant_type != Application.Type.MENTOR:
-        from .answers import extract_experience_answers
-
-        try:
-            answers = extract_experience_answers(application.data)
-        except ValueError as exc:
-            raise ApplicationConversionError(str(exc)) from exc
-
     # Mentors don't produce a Student record, so idempotency is tracked by
     # the CONVERTED status plus a lookup of the created mentor Adult.
     if (
@@ -1166,6 +1184,18 @@ def convert_application_to_student(application: Application, request=None):
                 )
 
     with transaction.atomic():
+        current = Application.objects.select_for_update().get(
+            pk=application.pk, organization_id=organization_id
+        )
+        application.data = current.data
+        answers = []
+        if application.applicant_type != Application.Type.MENTOR:
+            from .answers import extract_experience_answers
+
+            try:
+                answers = extract_experience_answers(application.data)
+            except ValueError as exc:
+                raise ApplicationConversionError(str(exc)) from exc
         application.normalize_step_data(save=True)
         data = application.data or {}
         if application.applicant_type == Application.Type.MENTOR:
@@ -1310,19 +1340,24 @@ def convert_application_to_student(application: Application, request=None):
         from programs.models import StudentDocument
 
         for submission in document_submissions:
-            if submission.file:
+            if not submission.file:
+                raise ApplicationConversionError(
+                    "A signed document could not be copied to the student profile. "
+                    "Please check the application document and try again."
+                )
+            try:
+                with submission.file.open("rb") as f:
+                    contents = f.read()
                 student_doc, _ = StudentDocument.objects.get_or_create(
                     student=student, program_document=submission.document
                 )
                 filename = os.path.basename(submission.file.name)
-                try:
-                    with submission.file.open("rb") as f:
-                        student_doc.file.save(
-                            filename, ContentFile(f.read()), save=True
-                        )
-                except (FileNotFoundError, IOError):
-                    # Skip if the original file is missing or unreadable
-                    pass
+                student_doc.file.save(filename, ContentFile(contents), save=True)
+            except OSError as exc:
+                raise ApplicationConversionError(
+                    "A signed document could not be copied to the student profile. "
+                    "Please check the application document and try again."
+                ) from exc
 
         log_event(
             request=request,
