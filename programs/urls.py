@@ -133,41 +133,81 @@ from .views.org_emails import (
 )
 
 urlpatterns = [
-    path("notifications/", NotificationListView.as_view(), name="notification_list"),
+    path("announcements/", NotificationListView.as_view(), name="notification_list"),
     path(
-        "notifications/unread-count/",
+        "announcements/unread-count/",
         NotificationUnreadCountView.as_view(),
         name="notification_unread_count",
     ),
     path(
-        "notifications/badge/",
+        "announcements/badge/",
         NotificationBadgeView.as_view(),
         name="notification_badge",
     ),
     path(
-        "notifications/new/",
+        "announcements/new/",
         NotificationCreateView.as_view(),
         name="notification_create",
     ),
     path(
-        "notifications/manage/",
+        "announcements/manage/",
         NotificationManagementListView.as_view(),
         name="notification_management",
     ),
     path(
-        "notifications/<int:pk>/dismiss/",
+        "announcements/<int:pk>/dismiss/",
         NotificationDismissView.as_view(),
         name="notification_dismiss",
     ),
     path(
-        "notifications/<int:pk>/withdraw/",
+        "announcements/<int:pk>/withdraw/",
         NotificationWithdrawView.as_view(),
         name="notification_withdraw",
     ),
     path(
-        "notifications/<int:pk>/read/",
+        "announcements/<int:pk>/read/",
         NotificationMarkAsReadView.as_view(),
         name="notification_mark_read",
+    ),
+    path(
+        "notifications/",
+        NotificationListView.as_view(),
+        name="notification_list_legacy",
+    ),
+    path(
+        "notifications/unread-count/",
+        NotificationUnreadCountView.as_view(),
+        name="notification_unread_count_legacy",
+    ),
+    path(
+        "notifications/badge/",
+        NotificationBadgeView.as_view(),
+        name="notification_badge_legacy",
+    ),
+    path(
+        "notifications/new/",
+        NotificationCreateView.as_view(),
+        name="notification_create_legacy",
+    ),
+    path(
+        "notifications/manage/",
+        NotificationManagementListView.as_view(),
+        name="notification_management_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/dismiss/",
+        NotificationDismissView.as_view(),
+        name="notification_dismiss_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/withdraw/",
+        NotificationWithdrawView.as_view(),
+        name="notification_withdraw_legacy",
+    ),
+    path(
+        "notifications/<int:pk>/read/",
+        NotificationMarkAsReadView.as_view(),
+        name="notification_mark_read_legacy",
     ),
     # Programs
     path("", login_required(ProgramListView.as_view()), name="program_list"),

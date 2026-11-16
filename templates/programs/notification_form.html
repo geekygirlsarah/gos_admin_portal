@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Send an update | Momentum{% endblock %}
+{% block title %}Send an announcement | Momentum{% endblock %}
 
 {% block extra_head %}
 {% load static %}
@@ -11,12 +11,12 @@
 <div class="row justify-content-center">
     <div class="col-lg-8 col-xl-7">
         <p class="text-uppercase small fw-semibold text-primary mb-1">Announcements</p>
-        <h1 class="h2 mb-2">Send an update</h1>
+        <h1 class="h2 mb-2">Send an announcement</h1>
         <p class="text-body-secondary mb-4">
             {% if request.organization %}
-            Share a portal update with active members of {{ request.organization.name }}.
+            Share a portal announcement with active members of {{ request.organization.name }}.
             {% else %}
-            Share an update with portal users across organizations.
+            Share an announcement with portal users across organizations.
             {% endif %}
         </p>
 
@@ -49,13 +49,13 @@
                 <div class="mb-0">
                     <label class="form-label" for="{{ form.expires_at.id_for_label }}">{{ form.expires_at.label }}</label>
                     {{ form.expires_at }}
-                    <div class="form-text">Leave blank for an update that stays visible until deactivated.</div>
+                    <div class="form-text">Leave blank for an announcement that stays visible until deactivated.</div>
                     {% for error in form.expires_at.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                 </div>
             </div>
             <div class="card-footer bg-transparent d-flex flex-wrap justify-content-end gap-2">
                 <a class="btn btn-outline-secondary" href="{% if is_platform_admin %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}">Cancel</a>
-                <button class="btn btn-primary" type="submit">Publish update</button>
+                <button class="btn btn-primary" type="submit">Publish announcement</button>
             </div>
         </form>
     </div>

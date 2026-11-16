@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}Portal Updates | Momentum{% endblock %}
+{% block title %}Portal Announcements | Momentum{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
         <p class="text-uppercase small fw-semibold text-primary mb-1">Announcements</p>
-        <h1 class="h2 mb-2">Portal updates</h1>
-        <p class="text-body-secondary mb-0">Feature news and important portal updates.</p>
+        <h1 class="h2 mb-2">Portal announcements</h1>
+        <p class="text-body-secondary mb-0">Feature news and important portal announcements.</p>
     </div>
     {% if platform_scope %}
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary" href="{% url 'platform_admin:notification_create' %}">Send a platform update</a>
-        <a class="btn btn-outline-primary" href="{% url 'platform_admin:notification_management' %}">Manage updates</a>
+        <a class="btn btn-primary" href="{% url 'platform_admin:notification_create' %}">Send a platform announcement</a>
+        <a class="btn btn-outline-primary" href="{% url 'platform_admin:notification_management' %}">Manage announcements</a>
     </div>
     {% elif current_navbar_user_role == "LeadMentor" and request.organization %}
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary" href="{% url 'notification_create' %}">Send an organization update</a>
-        <a class="btn btn-outline-primary" href="{% url 'notification_management' %}">Manage updates</a>
+        <a class="btn btn-primary" href="{% url 'notification_create' %}">Send an organization announcement</a>
+        <a class="btn btn-outline-primary" href="{% url 'notification_management' %}">Manage announcements</a>
     </div>
     {% endif %}
 </div>
@@ -51,7 +51,7 @@
 {% if not notifications %}
 <div class="card border-0 bg-body-tertiary">
     <div class="card-body py-5 text-center">
-        <h2 class="h5">No updates right now</h2>
+        <h2 class="h5">No announcements right now</h2>
         <p class="text-body-secondary mb-0">New announcements for your roles will appear here.</p>
     </div>
 </div>

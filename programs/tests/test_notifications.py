@@ -228,7 +228,7 @@ class NotificationTests(TestCase):
         response.render()
 
         self.assertContains(response, notice.title)
-        self.assertContains(response, 'aria-label="Updates, 1 unread"')
+        self.assertContains(response, 'aria-label="Announcements, 1 unread"')
         self.assertContains(response, 'class="bi bi-bell"')
         self.assertContains(response, 'aria-hidden="true">1</span>')
         self.assertNotContains(response, "Review updates")
@@ -537,21 +537,26 @@ class NotificationTests(TestCase):
         )
         self.client.force_login(self.staff)
 
-        response = self.client.get(
-            reverse("platform_admin:notification_list"), HTTP_HOST="localhost"
-        )
+        for route_name in ("notification_list", "notification_list_legacy"):
+            with self.subTest(route=route_name):
+                response = self.client.get(
+                    reverse(f"platform_admin:{route_name}"), HTTP_HOST="localhost"
+                )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Platform notice")
-        self.assertNotContains(response, "Organization notice")
-        self.assertContains(response, 'aria-label="Updates, 1 unread"')
-        self.assertContains(response, "bi-bell")
-        self.assertNotContains(response, "Review updates")
-        self.assertContains(response, 'href="/platform-admin/notifications/"')
-        self.assertContains(
-            response,
-            reverse("platform_admin:notification_create"),
-        )
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Platform notice")
+                self.assertNotContains(response, "Organization notice")
+                self.assertContains(response, 'aria-label="Announcements, 1 unread"')
+                self.assertContains(response, "bi-bell")
+                self.assertNotContains(response, "Review updates")
+                self.assertContains(
+                    response,
+                    f'href="{reverse("platform_admin:notification_list")}"',
+                )
+                self.assertContains(
+                    response,
+                    reverse("platform_admin:notification_create"),
+                )
 
         response = self.client.post(
             reverse(
@@ -583,6 +588,150 @@ class NotificationTests(TestCase):
                 user=self.staff, notification=notice
             ).is_seen
         )
+
+    def test_announcement_routes_are_canonical_and_keep_legacy_aliases(self):
+        tenant_routes = (
+            ("notification_list", "notification_list_legacy", {}, ""),
+            (
+                "notification_unread_count",
+                "notification_unread_count_legacy",
+                {},
+                "unread-count/",
+            ),
+            (
+                "notification_badge",
+                "notification_badge_legacy",
+                {},
+                "badge/",
+            ),
+            (
+                "notification_create",
+                "notification_create_legacy",
+                {},
+                "new/",
+            ),
+            (
+                "notification_management",
+                "notification_management_legacy",
+                {},
+                "manage/",
+            ),
+            (
+                "notification_dismiss",
+                "notification_dismiss_legacy",
+                {"pk": 123},
+                "123/dismiss/",
+            ),
+            (
+                "notification_withdraw",
+                "notification_withdraw_legacy",
+                {"pk": 123},
+                "123/withdraw/",
+            ),
+            (
+                "notification_mark_read",
+                "notification_mark_read_legacy",
+                {"pk": 123},
+                "123/read/",
+            ),
+        )
+        for canonical_name, legacy_name, kwargs, suffix in tenant_routes:
+            with self.subTest(route=canonical_name):
+                canonical_path = reverse(canonical_name, kwargs=kwargs or None)
+                legacy_path = reverse(legacy_name, kwargs=kwargs or None)
+                self.assertEqual(canonical_path, f"/programs/announcements/{suffix}")
+                self.assertEqual(legacy_path, f"/programs/notifications/{suffix}")
+                self.assertIs(
+                    resolve(canonical_path).func.view_class,
+                    resolve(legacy_path).func.view_class,
+                )
+
+        platform_routes = (
+            ("notification_list", ""),
+            ("notification_management", "manage/"),
+            ("notification_create", "new/"),
+            ("notification_dismiss", "123/dismiss/"),
+            ("notification_withdraw", "123/withdraw/"),
+            ("notification_mark_read", "123/read/"),
+        )
+        for route_name, suffix in platform_routes:
+            kwargs = {"pk": 123} if "123" in suffix else None
+            canonical_name = f"platform_admin:{route_name}"
+            legacy_name = f"platform_admin:{route_name}_legacy"
+            with self.subTest(route=canonical_name):
+                canonical_path = reverse(canonical_name, kwargs=kwargs)
+                legacy_path = reverse(legacy_name, kwargs=kwargs)
+                self.assertEqual(
+                    canonical_path, f"/platform-admin/announcements/{suffix}"
+                )
+                self.assertEqual(legacy_path, f"/platform-admin/notifications/{suffix}")
+                self.assertIs(
+                    resolve(canonical_path).func.view_class,
+                    resolve(legacy_path).func.view_class,
+                )
+
+    def test_legacy_tenant_announcement_actions_still_accept_posts(self):
+        self.organization.subdomain = self.organization.slug
+        self.organization.save(update_fields=["subdomain"])
+        read_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Read announcement",
+            message="Read through the legacy URL.",
+            target_roles=["student"],
+        )
+        dismiss_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Dismissed announcement",
+            message="Dismiss through the legacy URL.",
+            target_roles=["student"],
+        )
+        withdraw_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Withdrawn announcement",
+            message="Withdraw through the legacy URL.",
+            target_roles=[],
+        )
+        host = f"{self.organization.slug}.localhost"
+
+        self.client.force_login(self.student)
+        response = self.client.post(
+            reverse("notification_mark_read_legacy", kwargs={"pk": read_notice.pk}),
+            HTTP_HOST=host,
+        )
+        self.assertRedirects(
+            response, reverse("notification_list"), fetch_redirect_response=False
+        )
+        self.assertTrue(
+            UserNotificationStatus.objects.get(
+                user=self.student, notification=read_notice
+            ).is_seen
+        )
+
+        response = self.client.post(
+            reverse("notification_dismiss_legacy", kwargs={"pk": dismiss_notice.pk}),
+            HTTP_HOST=host,
+        )
+        self.assertRedirects(
+            response, reverse("notification_list"), fetch_redirect_response=False
+        )
+        self.assertTrue(
+            UserNotificationStatus.objects.get(
+                user=self.student, notification=dismiss_notice
+            ).is_dismissed
+        )
+
+        self.client.force_login(self.lead)
+        response = self.client.post(
+            reverse("notification_withdraw_legacy", kwargs={"pk": withdraw_notice.pk}),
+            HTTP_HOST=host,
+        )
+        self.assertRedirects(
+            response,
+            reverse("notification_management"),
+            fetch_redirect_response=False,
+        )
+        withdraw_notice.refresh_from_db()
+        self.assertFalse(withdraw_notice.is_active)
 
     def test_legacy_notification_url_routes_root_admin_to_platform_updates(self):
         notice = self.create_platform_notice(
@@ -635,14 +784,16 @@ class NotificationTests(TestCase):
         )
         self.client.force_login(self.student)
 
-        response = self.client.get(
-            reverse("notification_list"),
-            HTTP_HOST=f"{self.organization.slug}.localhost",
-        )
+        for route_name in ("notification_list", "notification_list_legacy"):
+            with self.subTest(route=route_name):
+                response = self.client.get(
+                    reverse(route_name),
+                    HTTP_HOST=f"{self.organization.slug}.localhost",
+                )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, organization_notice.title)
-        self.assertNotContains(response, "Admin-only platform notice")
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, organization_notice.title)
+                self.assertNotContains(response, "Admin-only platform notice")
 
     def test_legacy_notification_url_does_not_redirect_root_posts_to_platform(self):
         self.client.force_login(self.staff)
@@ -1088,14 +1239,20 @@ class NotificationTests(TestCase):
         )
         self.client.force_login(self.staff)
 
-        response = self.client.get(
-            reverse("platform_admin:notification_management"),
-            HTTP_HOST="localhost",
-        )
+        for route_name in (
+            "notification_management",
+            "notification_management_legacy",
+        ):
+            with self.subTest(route=route_name):
+                response = self.client.get(
+                    reverse(f"platform_admin:{route_name}"),
+                    HTTP_HOST="localhost",
+                )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, platform_notice.title)
-        self.assertNotContains(response, tenant_notice.title)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, platform_notice.title)
+                self.assertNotContains(response, tenant_notice.title)
+                self.assertContains(response, "Manage active announcements")
 
         response = self.client.post(
             reverse(
@@ -1154,6 +1311,8 @@ class NotificationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Send an announcement")
+        self.assertContains(response, "Announcement type")
         self.assertContains(response, 'data-email-editor-mode="announcement"')
 
     def test_established_program_routes_remain_reversible(self):
@@ -1162,4 +1321,4 @@ class NotificationTests(TestCase):
         self.assertEqual(
             reverse("students_sample_csv"), "/programs/imports/samples/students.csv"
         )
-        self.assertEqual(reverse("notification_list"), "/programs/notifications/")
+        self.assertEqual(reverse("notification_list"), "/programs/announcements/")

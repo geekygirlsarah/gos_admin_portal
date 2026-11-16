@@ -43,7 +43,7 @@ class NotificationForm(forms.Form):
     notification_type = forms.ChoiceField(
         choices=Notification.TYPE_CHOICES,
         initial="info",
-        label="Update type",
+        label="Announcement type",
     )
     audience = forms.MultipleChoiceField(
         choices=TENANT_AUDIENCE_CHOICES,

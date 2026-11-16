@@ -6,14 +6,14 @@
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
         <p class="text-uppercase small fw-semibold text-primary mb-1">Announcements</p>
-        <h1 class="h2 mb-2">Manage active updates</h1>
+        <h1 class="h2 mb-2">Manage active announcements</h1>
         <p class="text-body-secondary mb-0">
-            Withdraw an update to hide it from everyone in its audience. Dismissals only affect the individual recipient.
+            Withdraw an announcement to hide it from everyone in its audience. Dismissals only affect the individual recipient.
         </p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-secondary" href="{% if platform_scope %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}">Back to updates</a>
-        <a class="btn btn-primary" href="{% if platform_scope %}{% url 'platform_admin:notification_create' %}{% else %}{% url 'notification_create' %}{% endif %}">Send an update</a>
+        <a class="btn btn-outline-secondary" href="{% if platform_scope %}{% url 'platform_admin:notification_list' %}{% else %}{% url 'notification_list' %}{% endif %}">Back to announcements</a>
+        <a class="btn btn-primary" href="{% if platform_scope %}{% url 'platform_admin:notification_create' %}{% else %}{% url 'notification_create' %}{% endif %}">Send an announcement</a>
     </div>
 </div>
 
@@ -46,9 +46,9 @@
                         {% endif %}
                     </p>
                 </div>
-                <form method="post" class="js-confirm" data-confirm="Withdraw this update for all recipients?" action="{% if platform_scope %}{% url 'platform_admin:notification_withdraw' notification.pk %}{% else %}{% url 'notification_withdraw' notification.pk %}{% endif %}">
+                <form method="post" class="js-confirm" data-confirm="Withdraw this announcement for all recipients?" action="{% if platform_scope %}{% url 'platform_admin:notification_withdraw' notification.pk %}{% else %}{% url 'notification_withdraw' notification.pk %}{% endif %}">
                     {% csrf_token %}
-                    <button class="btn btn-outline-danger btn-sm" type="submit">Withdraw update</button>
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Withdraw announcement</button>
                 </form>
             </div>
         </div>
@@ -58,8 +58,8 @@
 {% else %}
 <div class="card border-0 bg-body-tertiary">
     <div class="card-body py-5 text-center">
-        <h2 class="h5">No active updates to manage</h2>
-        <p class="text-body-secondary mb-0">Updates that have expired or been withdrawn are not listed here.</p>
+        <h2 class="h5">No active announcements to manage</h2>
+        <p class="text-body-secondary mb-0">Announcements that have expired or been withdrawn are not listed here.</p>
     </div>
 </div>
 {% endif %}
