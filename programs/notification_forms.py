@@ -2,6 +2,10 @@ from django import forms
 from django.utils import timezone
 
 from programs.models import Notification
+from programs.notification_rendering import (
+    notification_html_has_text,
+    sanitize_notification_html,
+)
 
 TENANT_AUDIENCE_CHOICES = [
     ("all", "All active members of this organization"),
@@ -27,7 +31,14 @@ class NotificationForm(forms.Form):
     title = forms.CharField(max_length=255, label="Title")
     message = forms.CharField(
         label="Message",
-        widget=forms.Textarea(attrs={"rows": 6}),
+        widget=forms.Textarea(
+            attrs={
+                "rows": 6,
+                "data-email-editor": "",
+                "data-email-editor-mode": "announcement",
+                "data-email-editor-placeholder": "Write your announcement...",
+            }
+        ),
     )
     notification_type = forms.ChoiceField(
         choices=Notification.TYPE_CHOICES,
@@ -68,6 +79,12 @@ class NotificationForm(forms.Form):
             )
         return audience
 
+    def clean_message(self):
+        message = sanitize_notification_html(self.cleaned_data["message"])
+        if not notification_html_has_text(message):
+            raise forms.ValidationError("Enter a message with visible text.")
+        return message
+
     def clean_expires_at(self):
         expires_at = self.cleaned_data["expires_at"]
         if expires_at and expires_at <= timezone.now():
@@ -83,6 +100,7 @@ class NotificationForm(forms.Form):
             created_by=created_by,
             title=self.cleaned_data["title"],
             message=self.cleaned_data["message"],
+            message_is_html=True,
             notification_type=self.cleaned_data["notification_type"],
             target_roles=target_roles,
             expires_at=self.cleaned_data["expires_at"],

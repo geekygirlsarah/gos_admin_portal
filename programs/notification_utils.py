@@ -60,10 +60,19 @@ def visible_notifications_for_user(user, organization):
         notification_id=OuterRef("pk"),
         is_seen=True,
     )
+    dismissal = UserNotificationStatus.objects.filter(
+        user=user,
+        notification_id=OuterRef("pk"),
+        is_dismissed=True,
+    )
     queryset = (
         queryset.filter(is_active=True)
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
-        .annotate(is_seen=Exists(read_receipt))
+        .annotate(
+            is_seen=Exists(read_receipt),
+            is_dismissed=Exists(dismissal),
+        )
+        .filter(is_dismissed=False)
         .select_related("created_by", "organization")
         .order_by("-created_at")
     )

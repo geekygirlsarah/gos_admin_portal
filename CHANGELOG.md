@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-16
+
+### Added
+- Portal announcements support sanitized light formatting, separate unread and read sections, recipient dismissal, and scoped publisher management with non-destructive withdrawal.
+
 ## 2026-11-15
 
 ### Added

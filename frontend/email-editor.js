@@ -34,6 +34,16 @@ const TOOLBAR = [
   { icon: "bi-arrow-clockwise", title: "Redo", run: (e) => e.chain().focus().redo().run() },
 ];
 
+const ANNOUNCEMENT_TOOLBAR_TITLES = new Set([
+  "Bold",
+  "Italic",
+  "Underline",
+  "Bulleted list",
+  "Numbered list",
+  "Undo",
+  "Redo",
+]);
+
 function promptForLink(editor) {
   const previous = editor.getAttributes("link").href || "";
   const url = window.prompt("Link URL (https://...)", previous);
@@ -191,12 +201,15 @@ function wordListHtmlToHtml(html) {
   return container.innerHTML;
 }
 
-function createToolbar(editor) {
+function createToolbar(editor, announcementMode = false) {
   const bar = document.createElement("div");
   bar.className = "btn-toolbar gap-1 flex-wrap";
 
   const buttons = [];
-  for (const item of TOOLBAR) {
+  const toolbarItems = announcementMode
+    ? TOOLBAR.filter((item) => ANNOUNCEMENT_TOOLBAR_TITLES.has(item.title))
+    : TOOLBAR;
+  for (const item of toolbarItems) {
     if (item.type === "separator") {
       const sep = document.createElement("div");
       sep.className = "vr mx-1";
@@ -282,6 +295,7 @@ function updateSizeStatus(bytes, statusEl, counterEl) {
 }
 
 function initEditor(textarea) {
+  const announcementMode = textarea.dataset.emailEditorMode === "announcement";
   const wrap = document.createElement("div");
   wrap.className = "email-editor border rounded";
   textarea.parentNode.insertBefore(wrap, textarea);
@@ -362,30 +376,33 @@ function initEditor(textarea) {
     textarea.removeEventListener("email-editor-insert", insertMergeText);
   });
 
-  const toolbar = createToolbar(editor);
+  const toolbar = createToolbar(editor, announcementMode);
   wrap.insertBefore(toolbar, editor.view.dom);
 
-  const footer = document.createElement("div");
-  footer.className =
-    "email-editor-footer d-flex justify-content-between align-items-center px-2 py-1 small border-top bg-light text-muted";
+  let refreshSize = () => {};
+  if (!announcementMode) {
+    const footer = document.createElement("div");
+    footer.className =
+      "email-editor-footer d-flex justify-content-between align-items-center px-2 py-1 small border-top bg-light text-muted";
 
-  const statusEl = document.createElement("div");
-  statusEl.className = "email-editor-status d-flex align-items-center gap-1 flex-wrap";
-  statusEl.setAttribute("role", "status");
-  statusEl.setAttribute("aria-live", "polite");
+    const statusEl = document.createElement("div");
+    statusEl.className = "email-editor-status d-flex align-items-center gap-1 flex-wrap";
+    statusEl.setAttribute("role", "status");
+    statusEl.setAttribute("aria-live", "polite");
 
-  const counterEl = document.createElement("div");
-  counterEl.className = "email-editor-size-counter text-nowrap ms-auto";
+    const counterEl = document.createElement("div");
+    counterEl.className = "email-editor-size-counter text-nowrap ms-auto";
 
-  footer.appendChild(statusEl);
-  footer.appendChild(counterEl);
-  wrap.appendChild(footer);
+    footer.appendChild(statusEl);
+    footer.appendChild(counterEl);
+    wrap.appendChild(footer);
 
-  const refreshSize = () => {
-    const html = editor.getHTML();
-    const bytes = estimateHtmlPayloadSize(html);
-    updateSizeStatus(bytes, statusEl, counterEl);
-  };
+    refreshSize = () => {
+      const html = editor.getHTML();
+      const bytes = estimateHtmlPayloadSize(html);
+      updateSizeStatus(bytes, statusEl, counterEl);
+    };
+  }
 
   // Keep the hidden textarea in sync so the form submits the generated HTML,
   // and mark it touched so client-side "you have unsaved changes" still sees edits.

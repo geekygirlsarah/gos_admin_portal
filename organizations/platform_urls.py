@@ -4,8 +4,11 @@ from django.urls import path
 
 from programs.views.notifications import (
     PlatformNotificationCreateView,
+    PlatformNotificationDismissView,
     PlatformNotificationListView,
+    PlatformNotificationManagementListView,
     PlatformNotificationMarkAsReadView,
+    PlatformNotificationWithdrawView,
 )
 
 from . import platform_views as views
@@ -18,6 +21,21 @@ urlpatterns = [
         "notifications/",
         PlatformNotificationListView.as_view(),
         name="notification_list",
+    ),
+    path(
+        "notifications/manage/",
+        PlatformNotificationManagementListView.as_view(),
+        name="notification_management",
+    ),
+    path(
+        "notifications/<int:pk>/dismiss/",
+        PlatformNotificationDismissView.as_view(),
+        name="notification_dismiss",
+    ),
+    path(
+        "notifications/<int:pk>/withdraw/",
+        PlatformNotificationWithdrawView.as_view(),
+        name="notification_withdraw",
     ),
     path(
         "notifications/<int:pk>/read/",

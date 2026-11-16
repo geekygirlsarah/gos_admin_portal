@@ -120,9 +120,12 @@ from .views.email_issues import (
 from .views.notifications import (
     NotificationBadgeView,
     NotificationCreateView,
+    NotificationDismissView,
     NotificationListView,
+    NotificationManagementListView,
     NotificationMarkAsReadView,
     NotificationUnreadCountView,
+    NotificationWithdrawView,
 )
 from .views.org_emails import (
     andrew_id_management_view,
@@ -145,6 +148,21 @@ urlpatterns = [
         "notifications/new/",
         NotificationCreateView.as_view(),
         name="notification_create",
+    ),
+    path(
+        "notifications/manage/",
+        NotificationManagementListView.as_view(),
+        name="notification_management",
+    ),
+    path(
+        "notifications/<int:pk>/dismiss/",
+        NotificationDismissView.as_view(),
+        name="notification_dismiss",
+    ),
+    path(
+        "notifications/<int:pk>/withdraw/",
+        NotificationWithdrawView.as_view(),
+        name="notification_withdraw",
     ),
     path(
         "notifications/<int:pk>/read/",

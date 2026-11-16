@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -14,14 +15,19 @@ from GoSAdminPortal.test_runner import install_default_test_org_hook
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Notification, UserNotificationStatus
 from programs.notification_forms import NotificationForm
+from programs.notification_rendering import notification_message_for_display
 from programs.notification_utils import visible_notifications_for_user
 from programs.views.notifications import (
     NotificationBadgeView,
     NotificationCreateView,
+    NotificationDismissView,
     NotificationListView,
+    NotificationManagementListView,
     NotificationMarkAsReadView,
     NotificationUnreadCountView,
+    NotificationWithdrawView,
     PlatformNotificationCreateView,
+    PlatformNotificationManagementListView,
 )
 
 
@@ -738,6 +744,417 @@ class NotificationTests(TestCase):
                 ).context_data["notifications"]
             ],
         )
+
+    def test_notification_form_sanitizes_limited_html_and_rejects_empty_markup(self):
+        form = NotificationForm(
+            data={
+                "title": "Formatted update",
+                "message": (
+                    "<p>Bring <strong>closed-toe shoes</strong>.</p>"
+                    '<ul><li onclick="bad()">Safety glasses</li></ul>'
+                    "<script>bad()</script>"
+                ),
+                "notification_type": "info",
+                "audience": ["student"],
+                "expires_at": "",
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        notice = form.save(organization=self.organization, created_by=self.lead)
+
+        self.assertIn("<strong>closed-toe shoes</strong>", notice.message)
+        self.assertIn("<ul><li>Safety glasses</li></ul>", notice.message)
+        self.assertNotIn("onclick", notice.message)
+        self.assertNotIn("<script", notice.message)
+        self.assertTrue(notice.message_is_html)
+
+        empty_form = NotificationForm(
+            data={
+                "title": "Empty update",
+                "message": "<p><br></p>",
+                "notification_type": "info",
+                "audience": ["student"],
+                "expires_at": "",
+            }
+        )
+        self.assertFalse(empty_form.is_valid())
+        self.assertIn("message", empty_form.errors)
+
+    def test_notification_page_separates_new_and_previous_updates_and_escapes_legacy(
+        self,
+    ):
+        new_notice = Notification.objects.create(
+            organization=self.organization,
+            title="New formatted update",
+            message="<p><strong>New</strong> update</p>",
+            message_is_html=True,
+            target_roles=["student"],
+        )
+        previous_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Previous legacy update",
+            message="<img src=x onerror=alert(1)>",
+            target_roles=["student"],
+        )
+        UserNotificationStatus.objects.create(
+            user=self.student,
+            notification=previous_notice,
+            is_seen=True,
+        )
+        request = self.make_request(
+            "/programs/notifications/",
+            self.student,
+            self.organization,
+        )
+
+        response = NotificationListView.as_view()(request)
+        response.render()
+
+        self.assertContains(response, "New announcements")
+        self.assertContains(response, "Previous announcements")
+        self.assertContains(response, "<strong>New</strong> update", html=True)
+        self.assertContains(response, "&lt;img src=x onerror=alert(1)&gt;")
+        self.assertNotContains(response, '<img src="x"')
+        self.assertLess(
+            response.content.index(new_notice.title.encode()),
+            response.content.index(previous_notice.title.encode()),
+        )
+
+    def test_notification_display_rebuilds_only_escaped_allowlisted_markup(self):
+        notice = Notification(
+            message="Stored announcement",
+            message_is_html=True,
+        )
+        sanitized_markup = (
+            '<p class="notice" onclick="run()">One '
+            '<strong onmouseover="run()">two</strong> '
+            "&lt;img src=x onerror=run()&gt;</p>"
+            "<p><b>B</b><em>E</em><i>I</i><u>U &amp; V</u></p>"
+            "<br><ul><li>Safe</li></ul><ol><li>Numbered</li></ol>"
+            "<script>run()</script><svg onload=run()>markup</svg>"
+        )
+
+        with patch(
+            "programs.notification_rendering.sanitize_notification_html",
+            return_value=sanitized_markup,
+        ):
+            display_message = notification_message_for_display(notice)
+
+        self.assertEqual(
+            display_message,
+            "<p>One <strong>two</strong> &lt;img src=x onerror=run()&gt;</p>"
+            "<p><b>B</b><em>E</em><i>I</i><u>U &amp; V</u></p>"
+            "<br><ul><li>Safe</li></ul><ol><li>Numbered</li></ol>run()markup",
+        )
+
+    def test_sanitized_announcement_renders_for_recipient_and_publisher(self):
+        notice = Notification.objects.create(
+            organization=self.organization,
+            title="Safe formatted update",
+            message=(
+                "<p title='unsafe'>Read &lt;img src=x onerror=run()&gt; and "
+                "<strong>follow along</strong>.</p>"
+                "<script>run()</script><ul><li onclick='run()'>First item</li>"
+                "<li>Second item</ul>"
+            ),
+            message_is_html=True,
+            target_roles=["student"],
+        )
+
+        recipient_response = NotificationListView.as_view()(
+            self.make_request(
+                "/programs/notifications/",
+                self.student,
+                self.organization,
+            )
+        )
+        recipient_response.render()
+
+        publisher_response = NotificationManagementListView.as_view()(
+            self.make_request(
+                "/programs/notifications/manage/",
+                self.lead,
+                self.organization,
+            )
+        )
+        publisher_response.render()
+
+        for response in (recipient_response, publisher_response):
+            self.assertContains(response, "<strong>follow along</strong>", html=True)
+            self.assertContains(response, "&lt;img src=x onerror=run()&gt;")
+            self.assertContains(response, "<li>First item</li>", html=True)
+            self.assertNotContains(response, "<script>")
+            self.assertNotContains(response, "onclick")
+            self.assertNotContains(response, 'title="unsafe"')
+
+    def test_notification_dismissal_is_per_user_and_scoped_to_visible_updates(self):
+        notice = self.create_platform_notice(
+            title="Dismissible platform update",
+            message="Visible in each member organization.",
+            target_roles=["student"],
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.student,
+            organization=self.other_organization,
+            role="Student",
+        )
+        other_student = get_user_model().objects.create_user(
+            username="other-student",
+        )
+        UserOrganizationMembership.objects.create(
+            user=other_student,
+            organization=self.organization,
+            role="Student",
+        )
+
+        request = self.make_request(
+            f"/programs/notifications/{notice.pk}/dismiss/",
+            self.student,
+            self.organization,
+            method="post",
+        )
+        response = NotificationDismissView.as_view()(request, pk=notice.pk)
+
+        self.assertEqual(response.status_code, 302)
+        status = UserNotificationStatus.objects.get(
+            user=self.student,
+            notification=notice,
+        )
+        self.assertTrue(status.is_dismissed)
+        self.assertFalse(status.is_seen)
+        self.assertNotIn(
+            notice,
+            visible_notifications_for_user(self.student, self.organization),
+        )
+        self.assertNotIn(
+            notice,
+            visible_notifications_for_user(self.student, self.other_organization),
+        )
+        self.assertIn(
+            notice,
+            visible_notifications_for_user(other_student, self.organization),
+        )
+
+    def test_notification_dismissal_rejects_another_organizations_update(self):
+        notice = Notification.objects.create(
+            organization=self.other_organization,
+            title="Private organization update",
+            message="Must remain scoped.",
+            target_roles=["student"],
+        )
+        request = self.make_request(
+            f"/programs/notifications/{notice.pk}/dismiss/",
+            self.student,
+            self.organization,
+            method="post",
+        )
+
+        with self.assertRaises(Http404):
+            NotificationDismissView.as_view()(request, pk=notice.pk)
+        self.assertFalse(
+            UserNotificationStatus.objects.filter(
+                user=self.student,
+                notification=notice,
+            ).exists()
+        )
+
+    def test_tenant_management_and_withdrawal_require_a_lead_mentor(self):
+        notice = Notification.objects.create(
+            organization=self.organization,
+            title="Protected tenant update",
+            message="Only a publisher can withdraw this.",
+            target_roles=[],
+        )
+        list_request = self.make_request(
+            "/programs/notifications/manage/",
+            self.student,
+            self.organization,
+        )
+        list_response = NotificationManagementListView.as_view()(list_request)
+        self.assertEqual(list_response.status_code, 302)
+        self.assertEqual(list_response["Location"], reverse("home"))
+
+        withdraw_request = self.make_request(
+            f"/programs/notifications/{notice.pk}/withdraw/",
+            self.student,
+            self.organization,
+            method="post",
+        )
+        withdraw_response = NotificationWithdrawView.as_view()(
+            withdraw_request,
+            pk=notice.pk,
+        )
+        self.assertEqual(withdraw_response.status_code, 302)
+        self.assertEqual(withdraw_response["Location"], reverse("home"))
+
+        notice.refresh_from_db()
+        self.assertTrue(notice.is_active)
+
+    def test_tenant_management_includes_dismissed_and_role_targeted_updates_only_in_scope(
+        self,
+    ):
+        dismissed_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Dismissed lead update",
+            message="Still manageable.",
+            target_roles=["lead_mentor"],
+            created_by=self.lead,
+        )
+        role_targeted_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Student-only update",
+            message="Not addressed to the publisher.",
+            target_roles=["student"],
+            created_by=self.lead,
+        )
+        foreign_notice = Notification.objects.create(
+            organization=self.other_organization,
+            title="Other organization update",
+            message="Must stay private.",
+            target_roles=[],
+        )
+        self.client.force_login(self.lead)
+
+        dismiss_request = self.make_request(
+            f"/programs/notifications/{dismissed_notice.pk}/dismiss/",
+            self.lead,
+            self.organization,
+            method="post",
+        )
+        NotificationDismissView.as_view()(dismiss_request, pk=dismissed_notice.pk)
+        request = self.make_request(
+            "/programs/notifications/manage/",
+            self.lead,
+            self.organization,
+        )
+        response = NotificationManagementListView.as_view()(request)
+        response.render()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, dismissed_notice.title)
+        self.assertContains(response, role_targeted_notice.title)
+        self.assertNotContains(response, foreign_notice.title)
+
+        request = self.make_request(
+            f"/programs/notifications/{foreign_notice.pk}/withdraw/",
+            self.lead,
+            self.organization,
+            method="post",
+        )
+
+        with self.assertRaises(Http404):
+            NotificationWithdrawView.as_view()(request, pk=foreign_notice.pk)
+        dismissed_notice.refresh_from_db()
+        foreign_notice.refresh_from_db()
+        self.assertTrue(dismissed_notice.is_active)
+        self.assertTrue(foreign_notice.is_active)
+
+    def test_tenant_publisher_can_withdraw_own_scope_without_deleting_announcement(
+        self,
+    ):
+        notice = Notification.objects.create(
+            organization=self.organization,
+            title="Retire this update",
+            message="Keep its history.",
+            target_roles=[],
+            created_by=self.lead,
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(
+            reverse("notification_withdraw", kwargs={"pk": notice.pk}),
+            HTTP_HOST=f"{self.organization.slug}.localhost",
+        )
+
+        self.assertEqual(response.status_code, 302)
+        notice.refresh_from_db()
+        self.assertFalse(notice.is_active)
+        self.assertTrue(Notification.objects.filter(pk=notice.pk).exists())
+
+    def test_platform_management_is_root_superuser_only_and_withdraws_without_deleting(
+        self,
+    ):
+        platform_notice = self.create_platform_notice(
+            title="Global update to manage",
+            message="Visible only on the platform list.",
+            target_roles=["admin"],
+        )
+        tenant_notice = Notification.objects.create(
+            organization=self.organization,
+            title="Tenant update not on platform list",
+            message="Must remain scoped.",
+            target_roles=[],
+        )
+        self.client.force_login(self.staff)
+
+        response = self.client.get(
+            reverse("platform_admin:notification_management"),
+            HTTP_HOST="localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, platform_notice.title)
+        self.assertNotContains(response, tenant_notice.title)
+
+        response = self.client.post(
+            reverse(
+                "platform_admin:notification_withdraw",
+                kwargs={"pk": platform_notice.pk},
+            ),
+            HTTP_HOST="localhost",
+        )
+
+        self.assertEqual(response.status_code, 302)
+        platform_notice.refresh_from_db()
+        self.assertFalse(platform_notice.is_active)
+        self.assertTrue(Notification.objects.filter(pk=platform_notice.pk).exists())
+
+        self.client.force_login(self.lead)
+        response = self.client.get(
+            reverse("platform_admin:notification_management"),
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(response.status_code, 403)
+
+        tenant_request = self.make_request(
+            "/platform-admin/notifications/manage/",
+            self.staff,
+            self.organization,
+        )
+        tenant_request.META["HTTP_HOST"] = f"{self.organization.slug}.localhost"
+        with self.assertRaises(Http404):
+            PlatformNotificationManagementListView.as_view()(tenant_request)
+
+    def test_notification_badge_preview_contains_text_not_announcement_markup(self):
+        self.create_platform_notice(
+            title="List preview",
+            message="<p>First line</p><ul><li>Next step</li></ul>",
+            message_is_html=True,
+            target_roles=["student"],
+        )
+        self.client.force_login(self.student)
+
+        response = self.client.get(
+            reverse("notification_badge"),
+            HTTP_HOST=f"{self.organization.slug}.localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertNotIn("<p>", payload["notifications"][0]["message"])
+        self.assertNotIn("<li>", payload["notifications"][0]["message"])
+
+    def test_announcement_editor_uses_only_basic_formatting_controls(self):
+        self.client.force_login(self.lead)
+
+        response = self.client.get(
+            reverse("notification_create"),
+            HTTP_HOST=f"{self.organization.slug}.localhost",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-email-editor-mode="announcement"')
 
     def test_established_program_routes_remain_reversible(self):
         self.assertEqual(reverse("program_list"), "/programs/")
