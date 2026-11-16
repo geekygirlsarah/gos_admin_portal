@@ -9,9 +9,10 @@ from django.urls import reverse
 
 from audit.events import AuditEvent
 from audit.models import AuditLog
+from orders.forms import OrderItemForm
 from orders.models import Order, OrderItem, ShippingCarrier
 from organizations.models import Organization, UserOrganizationMembership
-from programs.models import Program, ProgramFeature
+from programs.models import Group, Program, ProgramFeature
 
 
 class OrderTenantIsolationTests(TestCase):
@@ -77,6 +78,61 @@ class OrderTenantIsolationTests(TestCase):
                 response = self.tenant_get(path)
                 self.assertNotEqual(response.status_code, 200)
                 self.assertNotIn(b"Beta private order request", response.content)
+
+    def test_group_selection_is_scoped_for_new_and_existing_items(self):
+        other_alpha_program = Program.objects.create(
+            organization=self.alpha, name="Other Alpha Program", active=True
+        )
+        alpha_group = Group.objects.create(
+            organization=self.alpha,
+            program=self.alpha_program,
+            name="Alpha Group",
+        )
+        other_program_group = Group.objects.create(
+            organization=self.alpha,
+            program=other_alpha_program,
+            name="Different Program Group",
+        )
+        beta_group = Group.objects.create(
+            organization=self.beta,
+            program=self.beta_program,
+            name="Beta Group",
+        )
+        forged_group_ids = [str(other_program_group.pk), str(beta_group.pk)]
+        form_data = {
+            "item_name": "Alpha item",
+            "quantity": "1",
+            "groups": forged_group_ids,
+            "vendor_choice": "",
+        }
+
+        new_item_form = OrderItemForm(
+            data=form_data,
+            program=self.alpha_program,
+            organization=self.alpha,
+        )
+        self.assertIn(alpha_group, new_item_form.fields["groups"].queryset)
+        self.assertNotIn(other_program_group, new_item_form.fields["groups"].queryset)
+        self.assertNotIn(beta_group, new_item_form.fields["groups"].queryset)
+        self.assertFalse(new_item_form.is_valid())
+        self.assertIn("groups", new_item_form.errors)
+
+        existing_item = OrderItem.objects.create(
+            organization=self.alpha,
+            program=self.alpha_program,
+            item_name="Existing alpha item",
+            quantity=1,
+        )
+        existing_item.groups.add(alpha_group)
+        edit_form = OrderItemForm(
+            data=form_data,
+            instance=existing_item,
+            program=existing_item.program,
+            organization=self.alpha,
+        )
+        self.assertIn(alpha_group, edit_form.fields["groups"].queryset)
+        self.assertFalse(edit_form.is_valid())
+        self.assertIn("groups", edit_form.errors)
 
     def test_shipping_carriers_are_scoped_for_display_and_post(self):
         order = Order.objects.create(

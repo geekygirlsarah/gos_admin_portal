@@ -478,7 +478,7 @@ class Student(models.Model):
         blank=True,
         null=True,
         verbose_name="Interest reason",
-        help_text="Why are you interested in participating in this Girls of Steel program this season?",
+        help_text="Why are you interested in participating in this program this season?",
     )
     hoped_gains = models.TextField(
         blank=True,
@@ -496,7 +496,7 @@ class Student(models.Model):
         blank=True,
         null=True,
         verbose_name="Referral source",
-        help_text="How did you hear about Girls of Steel Robotics?",
+        help_text="How did you hear about this program?",
     )
 
     graduated = models.BooleanField(

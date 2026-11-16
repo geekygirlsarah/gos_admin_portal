@@ -21,7 +21,7 @@ class PlatformOrganizationForm(forms.ModelForm):
     portal_title = forms.CharField(
         max_length=150,
         required=False,
-        help_text="Custom title for this organization's portal (e.g. 'Girls of Steel Robotics').",
+        help_text="Custom title for this organization's portal.",
     )
     footer_tagline = forms.CharField(
         max_length=255,
@@ -55,24 +55,24 @@ class PlatformOrganizationForm(forms.ModelForm):
     )
     org_account_enabled = forms.BooleanField(
         required=False,
-        initial=True,
+        initial=False,
         help_text="Enable organization/school email accounts and identifiers.",
     )
     org_account_name = forms.CharField(
         max_length=100,
         required=False,
-        initial="Andrew ID",
-        help_text="Display name for org/school accounts (e.g. 'Andrew ID', 'Sciencey SSO').",
+        initial="",
+        help_text="Display name for organization or school accounts (e.g. 'School Account').",
     )
     org_email_domain = forms.CharField(
         max_length=255,
         required=False,
-        initial="andrew.cmu.edu",
-        help_text="Primary email domain(s) for organization accounts (e.g. 'andrew.cmu.edu').",
+        initial="",
+        help_text="Primary email domain(s) for organization accounts.",
     )
     force_mentor_org_email = forms.BooleanField(
         required=False,
-        initial=True,
+        initial=False,
         help_text="Require mentors to log in using an email matching the organization domain.",
     )
     force_student_org_email = forms.BooleanField(
@@ -121,16 +121,16 @@ class PlatformOrganizationForm(forms.ModelForm):
             self.fields["theme_color"].initial = settings.get("theme_color", "#0056b3")
             self.fields["allowed_domains"].initial = settings.get("allowed_domains", "")
             self.fields["org_account_enabled"].initial = settings.get(
-                "org_account_enabled", True
+                "org_account_enabled", False
             )
             self.fields["org_account_name"].initial = settings.get(
-                "org_account_name", "Andrew ID"
+                "org_account_name", ""
             )
             self.fields["org_email_domain"].initial = settings.get(
-                "org_email_domain", "andrew.cmu.edu"
+                "org_email_domain", ""
             )
             self.fields["force_mentor_org_email"].initial = settings.get(
-                "force_mentor_org_email", True
+                "force_mentor_org_email", False
             )
             self.fields["force_student_org_email"].initial = settings.get(
                 "force_student_org_email", False
@@ -275,7 +275,7 @@ class PlatformUserSearchForm(forms.Form):
         required=False,
         widget=forms.TextInput(
             attrs={
-                "placeholder": "Search by name, email, username, phone, or Andrew ID...",
+                "placeholder": "Search by name, email, username, phone, or organization account ID...",
                 "class": "form-control",
             }
         ),

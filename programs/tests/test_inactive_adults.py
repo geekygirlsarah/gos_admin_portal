@@ -181,7 +181,7 @@ class InactiveAdultTest(TestCase):
         self.assertTrue(user.is_active)
 
         self.assertFalse(
-            user_is_mentor(user),
+            user_is_mentor(user, org=self.inactive_mentor.organization),
             "Inactive mentor (mentor_active=False) should not be recognized as a mentor",
         )
 
@@ -221,7 +221,7 @@ class InactiveAdultTest(TestCase):
         active_user = User.objects.create_user(
             username="active_m_user", password="password"
         )  # nosec B106
-        Adult.objects.create(
+        active_adult = Adult.objects.create(
             legal_first_name="Active",
             last_name="MentorUser",
             is_mentor=True,
@@ -229,13 +229,13 @@ class InactiveAdultTest(TestCase):
             login_enabled=True,
             user=active_user,
         )
-        self.assertTrue(user_is_mentor(active_user))
+        self.assertTrue(user_is_mentor(active_user, org=active_adult.organization))
 
         # Create a mentor with mentor_active=False (but login_enabled=True so they can log in)
         inactive_user = User.objects.create_user(
             username="inactive_m_user", password="password"
         )  # nosec B106
-        Adult.objects.create(
+        inactive_adult = Adult.objects.create(
             legal_first_name="Inactive",
             last_name="MentorUser",
             is_mentor=True,
@@ -244,7 +244,7 @@ class InactiveAdultTest(TestCase):
             user=inactive_user,
         )
         # user_is_mentor checks mentor_active directly, bypassing the group fallback
-        self.assertFalse(user_is_mentor(inactive_user))
+        self.assertFalse(user_is_mentor(inactive_user, org=inactive_adult.organization))
 
     def test_mentor_active_false_excluded_from_email_recipients(self):
         """Mentors with mentor_active=False should not appear in email recipient lists."""
@@ -272,4 +272,4 @@ class InactiveAdultTest(TestCase):
         # But not recognized as mentor
         from programs.permission_views import user_is_mentor
 
-        self.assertFalse(user_is_mentor(user))
+        self.assertFalse(user_is_mentor(user, org=mentor.organization))

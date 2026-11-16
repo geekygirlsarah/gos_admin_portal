@@ -316,6 +316,7 @@ def _record_verified_event_audit(event):
     )
     try:
         AuditLog.objects.create(
+            organization=event.organization,
             event=audit_event,
             resource_type="EmailDeliveryEvent",
             resource_id=str(event.pk),

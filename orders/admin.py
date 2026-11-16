@@ -10,8 +10,6 @@ class OrderItemInline(admin.TabularInline):
         "item_name",
         "program",
         "team",
-        "crew",
-        "subteam",
         "quantity",
         "unit_price",
         "url",
@@ -69,8 +67,7 @@ class OrderItemAdmin(admin.ModelAdmin):
         "program",
         "vendor",
         "team",
-        "crew",
-        "subteam",
+        "groups_display",
         "quantity",
         "unit_price",
         "total",
@@ -82,10 +79,15 @@ class OrderItemAdmin(admin.ModelAdmin):
         "program",
         "vendor",
         "team",
-        "crew",
-        "subteam",
         "requested_by",
     )
-    list_filter = ("order__status", "program", "vendor", "team", "crew", "subteam")
+    list_filter = ("order__status", "program", "vendor", "team", "groups")
     search_fields = ("item_name", "vendor_name", "notes", "url")
     readonly_fields = ("requested_by", "requested_at")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("groups")
+
+    @admin.display(description="Groups")
+    def groups_display(self, obj):
+        return ", ".join(group.name for group in obj.groups.all())

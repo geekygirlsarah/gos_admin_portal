@@ -1,14 +1,9 @@
 {% load form_tags %}
-{# Team / crew / subteam color pills, shared by every page that lists them. #}
-{# Pass the group objects directly, e.g.: #}
-{#   {% include "students/_group_badges.html" with team=e.team crew=e.crew subteam=e.subteam %} #}
+{# Team and program-group color pills, shared by every page that lists them. #}
 {# Callers own the surrounding markup/spacing. #}
 {% if team %}
   <span class="badge rounded-pill team-badge" data-color="{{ team.color }}" style="background-color: {{ team.color }}; color: {{ team.color|contrast_color }};">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
 {% endif %}
-{% if crew %}
-  <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}" style="background-color: {{ crew.color }}; color: {{ crew.color|contrast_color }};">{{ crew.name }}</span>
-{% endif %}
-{% if subteam %}
-  <span class="badge rounded-pill subteam-badge" data-color="{{ subteam.color }}" style="background-color: {{ subteam.color }}; color: {{ subteam.color|contrast_color }};">{{ subteam.name }}</span>
-{% endif %}
+{% for group in groups %}
+  <span class="badge rounded-pill group-badge" data-color="{{ group.color }}" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">{{ group.name }}</span>
+{% endfor %}

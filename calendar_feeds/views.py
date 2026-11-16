@@ -65,7 +65,7 @@ class CalendarView(View):
         )
 
         if request.user.is_authenticated and not can_user_read(
-            request.user, "calendar"
+            request.user, "calendar", org=org
         ):
             messages.error(
                 request, "You do not have permission to access the calendar."

@@ -368,30 +368,32 @@ def organization_context(request):
     """Provide organization settings and branding variables to templates."""
     try:
         from organizations.utils import (
-            get_default_organization,
             get_organization_email_settings,
             get_organization_setting,
         )
 
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
     except Exception:
         org = None
 
+    email_cfg = {}
+    if org:
+        try:
+            email_cfg = get_organization_email_settings(org)
+        except Exception as e:
+            logger.debug("Failed to resolve organization email settings: %s", e)
+
     org_account_enabled = (
-        get_organization_setting(org, "org_account_enabled", True) if org else True
+        get_organization_setting(org, "org_account_enabled", False) if org else False
     )
     org_account_name = (
-        get_organization_setting(org, "org_account_name", "Andrew ID")
-        if org
-        else "Andrew ID"
+        get_organization_setting(org, "org_account_name", "") if org else ""
     )
     org_email_domain = (
-        get_organization_setting(org, "org_email_domain", "andrew.cmu.edu")
-        if org
-        else "andrew.cmu.edu"
+        get_organization_setting(org, "org_email_domain", "") if org else ""
     )
     force_mentor_org_email = (
-        get_organization_setting(org, "force_mentor_org_email", True) if org else True
+        get_organization_setting(org, "force_mentor_org_email", False) if org else False
     )
     force_student_org_email = (
         get_organization_setting(org, "force_student_org_email", False)
@@ -405,22 +407,29 @@ def organization_context(request):
         get_organization_setting(org, "force_alumni_org_email", False) if org else False
     )
 
-    org_contact_email = None
-    try:
-        if org:
-            email_cfg = get_organization_email_settings(org)
-            org_contact_email = email_cfg.get("contact_email") or email_cfg.get(
-                "reply_to_email"
-            )
-    except Exception as e:
-        logger.debug("Failed to resolve organization email settings: %s", e)
-    if not org_contact_email:
-        org_contact_email = getattr(
-            settings, "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
-        )
+    org_contact_email = (
+        email_cfg.get("contact_email")
+        or email_cfg.get("reply_to_email")
+        or getattr(settings, "DEFAULT_REPLY_TO_EMAIL", "")
+    )
+    organization_footer_tagline = (
+        get_organization_setting(org, "footer_tagline", "") if org else ""
+    )
 
     return {
         "organization": org,
+        "organization_name": org.name if org else "Momentum",
+        "organization_email_name": email_cfg.get("organization_name", "Momentum"),
+        "organization_logo_url": email_cfg.get("logo_url", ""),
+        "organization_wordmark_url": email_cfg.get("wordmark_url")
+        or email_cfg.get("logo_url", ""),
+        "organization_host_logo_url": email_cfg.get("host_logo_url")
+        or email_cfg.get("logo_url", ""),
+        "organization_address_line1": email_cfg.get("address_line1", ""),
+        "organization_address_line2": email_cfg.get("address_line2", ""),
+        "organization_tax_id": email_cfg.get("tax_id", ""),
+        "organization_website": email_cfg.get("website", ""),
+        "organization_footer_tagline": organization_footer_tagline,
         "org_account_enabled": org_account_enabled,
         "org_account_name": org_account_name,
         "org_email_domain": org_email_domain,

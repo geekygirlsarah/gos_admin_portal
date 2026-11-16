@@ -119,12 +119,17 @@ class AuditLogTest(TestCase):
     def test_audit_admin_access(self):
         url = "/admin/audit/auditlog/"
 
-        # Regular lead mentor should have access
+        # A tenant role has no organization context on the global admin route.
         self.client.force_login(self.lead_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+        # Only platform superusers can view the cross-organization audit log.
+        self.client.force_login(self.admin_user)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
-        # Random user (even if staff) should NOT unless lead mentor
+        # A staff account without platform-superuser access remains denied.
         other_user = User.objects.create_user(
             username="other", email="other@example.com", is_staff=True
         )

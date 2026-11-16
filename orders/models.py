@@ -383,6 +383,13 @@ class OrderItem(models.Model):
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
+    groups = models.ManyToManyField(
+        "programs.Group",
+        blank=True,
+        related_name="order_items",
+        verbose_name="Groups",
+        help_text="Optional program groups this item is for.",
+    )
     crew = models.ForeignKey(
         "programs.Crew",
         on_delete=models.SET_NULL,

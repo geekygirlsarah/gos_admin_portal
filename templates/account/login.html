@@ -2,9 +2,8 @@
 {% load i18n %}
 {% load account %}
 {% load form_tags %}
-{% load static %}
 
-{% block title %}Login | GoS Portal{% endblock %}
+{% block title %}Login | {{ organization_name }} Portal{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -15,8 +14,8 @@
 {% block content %}
 <div class="login-card">
   <div class="text-center mb-4">
-    <img src="{% static 'img/gos_logo.png' %}" alt="Girls of Steel logo" class="img-fluid mb-2" style="max-width: 80%;">
-    <h1 class="h3 mb-0">Girls of Steel Portal</h1>
+    {% if organization_wordmark_url %}<img src="{{ organization_wordmark_url }}" alt="{{ organization_name }} logo" class="img-fluid mb-2" style="max-width: 80%; max-height: 220px;">{% endif %}
+    <h1 class="h3 mb-0">{{ organization_name }} Portal</h1>
   </div>
 
   <div class="card shadow-sm border-0">
@@ -49,7 +48,7 @@
             {% if force_mentor_org_email and force_student_org_email %}
               <div class="form-text">Mentors and Students: use your {{ org_account_name|default:"organization" }} (<em>@{{ org_email_domain }}</em>) email address.</div>
             {% elif force_mentor_org_email %}
-              <div class="form-text">Mentors: use your {{ org_account_name|default:"Andrew ID" }} (<em>@{{ org_email_domain }}</em>) email address.</div>
+              <div class="form-text">Mentors: use your {{ org_account_name|default:"organization account" }} (<em>@{{ org_email_domain }}</em>) email address.</div>
             {% elif force_student_org_email %}
               <div class="form-text">Students: use your {{ org_account_name|default:"school/organization" }} (<em>@{{ org_email_domain }}</em>) email address.</div>
             {% elif org_account_name %}
@@ -70,7 +69,7 @@
           <a href="/admin/" class="text-secondary small text-decoration-none">Staff/Admin Password Login</a>
         </div>
         <div class="small text-muted">
-          Issues with your account? Please email <a href="mailto:leads@girlsofsteelrobotics.org" class="text-secondary small text-decoration-none">leads@girlsofsteelrobotics.org</a>.
+          {% if org_contact_email %}Issues with your account? Please email <a href="mailto:{{ org_contact_email }}" class="text-secondary small text-decoration-none">{{ org_contact_email }}</a>.{% endif %}
         </div>
       </div>
     </div>

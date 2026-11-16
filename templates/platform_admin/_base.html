@@ -39,6 +39,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link text-white-50 px-3 py-2 rounded-2 {% if request.resolver_match.view_name == 'platform_admin:notification_list' or request.resolver_match.view_name == 'platform_admin:notification_create' %}active bg-danger text-white fw-bold{% endif %}" href="{% url 'platform_admin:notification_list' %}">
+                        <i class="bi bi-bell me-1"></i> Updates
+                        {% if unread_notification_count %}<span class="badge rounded-pill text-bg-warning">{{ unread_notification_count }}</span>{% endif %}
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link text-white-50 px-3 py-2 rounded-2 {% if 'organization' in request.resolver_match.view_name %}active bg-danger text-white fw-bold{% endif %}" href="{% url 'platform_admin:organization_list' %}">
                         <i class="bi bi-buildings me-1"></i> Organizations
                     </a>

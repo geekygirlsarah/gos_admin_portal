@@ -66,6 +66,7 @@ from .portal_settings import (
     PortalCrewView,
     PortalDomainView,
     PortalEmailSettingsView,
+    PortalGroupView,
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
@@ -75,6 +76,7 @@ from .portal_settings import (
     PortalSlidingScaleSettingsView,
     PortalSubteamView,
     PortalTeamView,
+    ProgramGroupsView,
 )
 from .programs import (
     ProgramAssignmentView,
@@ -155,6 +157,8 @@ __all__ = [
     "PortalCrewView",
     "PortalDomainView",
     "PortalEmailSettingsView",
+    "PortalGroupView",
+    "ProgramGroupsView",
     "PortalKioskView",
     "PortalPaymentInstructionsView",
     "PortalPermissionsUpdateView",

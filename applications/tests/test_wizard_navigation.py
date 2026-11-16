@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from applications.tests.access_helpers import grant_applicant_document_access
 from programs.models import Program
 
 
@@ -84,6 +85,69 @@ class WizardBackNavigationReproductionTests(TestCase):
         self.assertNotContains(
             response, reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
+
+    def test_student_progress_shows_current_page_without_claiming_completion(self):
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            email_verified_at=timezone.now(),
+            program=self.program,
+            current_step=5,
+        )
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+        self.assertContains(response, 'aria-label="Application steps"')
+        self.assertContains(response, 'aria-current="step"', count=1)
+        self.assertContains(response, 'aria-label="Current step: 5"')
+        self.assertContains(response, 'class="wizard-step-marker', count=10)
+        self.assertNotContains(response, 'role="progressbar"')
+
+    def test_mentor_progress_uses_mentor_step_count(self):
+        app = Application.objects.create(
+            email="mentor@example.com",
+            applicant_type="mentor",
+            email_verified_at=timezone.now(),
+            current_step=5,
+        )
+        response = self.client.get(
+            reverse("apply_mentor_info", kwargs={"app_id": app.application_id})
+        )
+        self.assertContains(response, 'class="wizard-step-marker', count=6)
+        self.assertContains(response, 'aria-label="Current step: 3"')
+        self.assertContains(response, 'aria-current="step"', count=1)
+
+    def test_submitted_page_does_not_imply_document_step_is_complete(self):
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            program=self.program,
+            status=Application.Status.SUBMITTED,
+            current_step=10,
+        )
+        response = self.client.get(
+            reverse("apply_submitted", kwargs={"app_id": app.application_id})
+        )
+        self.assertNotContains(response, 'aria-label="Application steps"')
+        self.assertNotContains(response, "Step 10 of 10")
+        self.assertContains(response, "has been submitted")
+
+    def test_document_page_marks_current_step_not_completed(self):
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            email_verified_at=timezone.now(),
+            program=self.program,
+            status=Application.Status.APPROVED,
+            current_step=10,
+        )
+        grant_applicant_document_access(self.client, app)
+        response = self.client.get(
+            reverse("apply_step10", kwargs={"app_id": app.application_id})
+        )
+        self.assertContains(response, 'class="wizard-step-marker', count=10)
+        self.assertContains(response, 'aria-label="Current step: 10"')
+        self.assertContains(response, "not whether all requirements are complete")
 
 
 class Step2LabelReproductionTest(TestCase):

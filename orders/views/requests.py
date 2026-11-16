@@ -54,7 +54,7 @@ class ItemUpdateView(
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["program"] = self.object.program or self.program
+        kwargs["program"] = self.object.program
         kwargs["organization"] = getattr(self.request, "organization", None)
         return kwargs
 

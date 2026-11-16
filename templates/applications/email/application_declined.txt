@@ -1,6 +1,6 @@
 Hello {{ application.applicant_name|default:"" }},
 
-Thank you for applying to Girls of Steel Robotics. After review, we are
+Thank you for applying to {{ org_email_settings.organization_name|default:"Momentum" }}. After review, we are
 unable to approve your application at this time.
 {% if application.is_mentor %}
 Mentor:         {{ application.mentor_name|default:"(not specified)" }}
@@ -12,7 +12,7 @@ Note from the lead mentors:
 
 {{ reason }}
 {% endif %}
-If you have questions, please reply to this email or contact us at
-leads@girlsofsteelrobotics.org.
+{% if org_email_settings.contact_email %}If you have questions, please reply to this email or contact us at
+{{ org_email_settings.contact_email }}.{% endif %}
 
-— Girls of Steel Robotics
+— {{ org_email_settings.organization_name|default:"Momentum" }}

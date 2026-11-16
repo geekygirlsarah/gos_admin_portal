@@ -168,6 +168,8 @@ class Command(BaseCommand):
                         recipient_list=[recip_email],
                         from_email=get_balance_email_from_address(org_settings),
                         organization=organization,
+                        history_category="monthly_balance_statement",
+                        retain_history_body=True,
                     )
                     total_sent += 1
                     logger.info("Sent monthly balance statement.")

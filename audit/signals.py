@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 @receiver(pre_save, sender=User)
 def track_user_changes(sender, instance, **kwargs):
+    from .context import get_current_request
+
     if not instance.pk:
         return
 
@@ -36,6 +38,7 @@ def track_user_changes(sender, instance, **kwargs):
         log_event(
             event=AuditEvent.ACCOUNT_DEACTIVATED,
             resource=instance,
+            request=get_current_request(),
             before={"is_active": True},
             after={"is_active": False},
         )
@@ -61,6 +64,7 @@ def track_user_changes(sender, instance, **kwargs):
         log_event(
             event=AuditEvent.ROLE_CHANGED,
             resource=instance,
+            request=get_current_request(),
             before=before_roles,
             after=after_roles,
         )
@@ -71,6 +75,7 @@ def track_user_changes(sender, instance, **kwargs):
         log_event(
             event=AuditEvent.PASSWORD_RESET,
             resource=instance,
+            request=get_current_request(),
             notes="Password hash changed.",
         )
 
@@ -145,6 +150,11 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
 
         # I'll just log it manually to AuditLog if log_event is too restrictive.
         AuditLog.objects.create(
+            organization=(
+                getattr(request, "organization", None)
+                if not getattr(request, "_is_platform_domain", False)
+                else None
+            ),
             event=AuditEvent.LOGIN_FAILED,
             resource_type="User",
             resource_id="0",

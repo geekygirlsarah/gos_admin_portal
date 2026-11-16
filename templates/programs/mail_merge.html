@@ -30,7 +30,7 @@
       <details class="mb-3" id="merge-how-it-works">
         <summary class="small fw-semibold">How it works</summary>
         <ol class="small text-muted mt-2 mb-0">
-          <li><strong>Choose students:</strong> pick a program, and a team, crew or subteam if you want to narrow it down, then load the list.</li>
+          <li><strong>Choose students:</strong> pick a program, and teams or groups if you want to narrow it down, then load the list.</li>
           <li><strong>Check the table:</strong> each row is one student and each column is a piece of information about them. Untick anyone who shouldn't get the email. To include information the portal doesn't have, such as a due date or a note, add your own column and type or paste it in.</li>
           <li><strong>Write the email:</strong> use the Insert field menus to add placeholders such as <code>{% templatetag openvariable %} first_name {% templatetag closevariable %}</code>. Each placeholder is replaced with that student's value from the table.</li>
           <li><strong>Preview and test:</strong> step through students to see exactly what each will receive, and send yourself a test copy.</li>
@@ -88,20 +88,13 @@
               </select>
             </div>
             <div class="col-lg-3">
-              <label for="merge-crews" class="form-label">Crew / project filter</label>
-              <select id="merge-crews" name="crews" class="form-select" multiple size="3">
-                {% for crew in crews %}
-                  <option value="{{ crew.pk }}" {% if crew.pk|stringformat:'s' in selected_crews %}selected{% endif %}>{{ crew.name }}</option>
+              <label for="merge-groups" class="form-label">Group filter</label>
+              <select id="merge-groups" name="groups" class="form-select" multiple size="3" aria-describedby="merge-groups-help">
+                {% for group in groups %}
+                  <option value="{{ group.pk }}" {% if group.pk|stringformat:'s' in selected_groups %}selected{% endif %}>{{ group.name }}</option>
                 {% endfor %}
               </select>
-            </div>
-            <div class="col-lg-3">
-              <label for="merge-subteams" class="form-label">Subteam filter</label>
-              <select id="merge-subteams" name="subteams" class="form-select" multiple size="3">
-                {% for subteam in subteams %}
-                  <option value="{{ subteam.pk }}" {% if subteam.pk|stringformat:'s' in selected_subteams %}selected{% endif %}>{{ subteam.name }}</option>
-                {% endfor %}
-              </select>
+              <div id="merge-groups-help" class="form-text">No groups selected means no group restriction. When multiple groups are selected, include students assigned to ANY of them. The team filter applies separately.</div>
             </div>
             <div class="col-12 d-flex justify-content-between align-items-center">
               <span class="small text-muted">Only students enrolled in your organization's programs are listed. Leave the filters empty to include every current student in the program. Hold Ctrl (or Cmd on a Mac) to select more than one option.</span>
@@ -113,14 +106,13 @@
 
       {% if program %}
         {% if student_limit_exceeded %}
-          <div class="alert alert-warning">This program has more than {{ max_merge_rows }} matching students, and only the first {{ max_merge_rows }} are shown. Use the team, crew or subteam filters above to send to smaller groups, up to {{ max_merge_rows }} students at a time.</div>
+          <div class="alert alert-warning">This program has more than {{ max_merge_rows }} matching students, and only the first {{ max_merge_rows }} are shown. Use the team or group filters above to send to smaller groups, up to {{ max_merge_rows }} students at a time.</div>
         {% endif %}
         <form method="post" id="mailMergeForm" class="js-mail-merge-form">
           {% csrf_token %}
           <input type="hidden" name="program" value="{{ program.pk }}">
           {% for team_id in selected_teams %}<input type="hidden" name="teams" value="{{ team_id }}">{% endfor %}
-          {% for crew_id in selected_crews %}<input type="hidden" name="crews" value="{{ crew_id }}">{% endfor %}
-          {% for subteam_id in selected_subteams %}<input type="hidden" name="subteams" value="{{ subteam_id }}">{% endfor %}
+          {% for group_id in selected_groups %}<input type="hidden" name="groups" value="{{ group_id }}">{% endfor %}
           <input type="hidden" name="merge_data" id="merge-data" value="{{ merge_data_json }}">
           <input type="hidden" name="preview_index" id="preview-index" value="{{ preview_index }}">
 

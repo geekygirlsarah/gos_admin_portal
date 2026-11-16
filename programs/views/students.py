@@ -29,6 +29,7 @@ from django.views.generic import (
     View,
 )
 
+from applications.models import StudentApplicationAnswer
 from applications.rate_limiting import rate_limited_response
 from audit.mixins import SensitiveDataViewMixin
 
@@ -40,6 +41,7 @@ from ..models import (
     BackgroundCheck,
     EmailDeliveryEvent,
     Enrollment,
+    Group,
     Program,
     Student,
     StudentDocument,
@@ -49,6 +51,7 @@ from ..permission_views import (
     PassUserToFormMixin,
     can_user_read,
     get_user_role,
+    user_is_lead_mentor,
     user_is_mentor_or_lead,
     user_is_parent,
 )
@@ -466,10 +469,6 @@ class StudentDetailView(
             )
             .prefetch_related(
                 Prefetch(
-                    "adults",
-                    queryset=Adult.objects.for_organization(organization),
-                ),
-                Prefetch(
                     "adultstudentrelationship_set",
                     queryset=AdultStudentRelationship.objects.for_organization(
                         organization
@@ -501,14 +500,20 @@ class StudentDetailView(
                     "enrollment_set",
                     queryset=Enrollment.objects.for_organization(organization)
                     .filter(program__organization=organization)
-                    .select_related("program", "team", "crew", "subteam")
+                    .select_related("program", "team")
                     .prefetch_related(
+                        Prefetch(
+                            "groups",
+                            queryset=Group.objects.for_organization(
+                                organization
+                            ).filter(program__organization=organization),
+                        ),
                         Prefetch(
                             "program__features",
                             queryset=ProgramFeature.objects.for_organization(
                                 organization
                             ),
-                        )
+                        ),
                     ),
                 ),
                 Prefetch("email_delivery_events", queryset=email_delivery_events),
@@ -525,6 +530,22 @@ class StudentDetailView(
 
         ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         student = self.object
+        organization = self.request.organization
+        if user_is_lead_mentor(self.request.user, org=organization):
+            ctx["application_answers"] = (
+                StudentApplicationAnswer.objects.for_organization(organization)
+                .filter(
+                    student=student,
+                    student__organization=organization,
+                    application__organization=organization,
+                    application__converted_student=student,
+                )
+                .filter(
+                    models.Q(application__program__isnull=True)
+                    | models.Q(application__program__organization=organization)
+                )
+                .select_related("application", "application__program")
+            )
         enrollments = list(student.enrollment_set.all())
         keys = set()
         for e in enrollments:
@@ -1101,7 +1122,7 @@ class StudentDocumentDownloadView(LoginRequiredMixin, View):
                 has_access = True
         elif hasattr(user, "student_profile") and user.student_profile == student:
             has_access = True
-        elif user_is_mentor_or_lead(user):
+        elif user_is_mentor_or_lead(user, org=organization):
             if can_user_read(
                 user, "students", student, org=organization
             ) or can_user_read(

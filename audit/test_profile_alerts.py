@@ -92,6 +92,7 @@ class ProfileAccessAlertTests(TestCase):
         )
         self.assertEqual(alerts.count(), 1)
         alert = alerts.get()
+        self.assertEqual(alert.organization_id, self.organization.pk)
         self.assertEqual(alert.after["organization_id"], self.organization.pk)
         self.assertEqual(alert.after["distinct_student_count"], 3)
         self.assertEqual(alert.after["reason"], "profile_views")

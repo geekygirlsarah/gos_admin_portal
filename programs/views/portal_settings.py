@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -21,7 +22,6 @@ from organizations.domain_forms import OrganizationDomainRequestForm
 from organizations.domain_verification import verify_domain_txt
 from organizations.models import Organization, OrganizationDomain, OrganizationSettings
 from organizations.utils import (
-    get_default_organization,
     get_organization_email_settings,
     get_organization_momentum_url,
     get_organization_payment_settings,
@@ -34,6 +34,7 @@ from programs.models import (
     BackgroundCheckType,
     Crew,
     Enrollment,
+    Group,
     MentorAgreement,
     Program,
     RolePermission,
@@ -45,6 +46,9 @@ from programs.models import (
 from programs.permission_views import (
     ORDERS_SECTIONS,
     LeadMentorRequiredMixin,
+    can_user_read,
+    can_user_write,
+    user_is_lead_mentor,
 )
 
 try:
@@ -112,7 +116,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_read": orders_ok,
                         "can_write": orders_ok,
                     }
-                elif section_code == "mail_merge":
+                elif section_code in ("mail_merge", "program_groups"):
                     defaults = {"can_read": False, "can_write": False}
                 RolePermission.objects.get_or_create(
                     organization=org,
@@ -128,6 +132,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         for section_code, section_name in sections:
             active_column = ORDERS_SECTIONS.get(section_code)
             is_mail_merge = section_code == "mail_merge"
+            mentor_only = section_code in ("mail_merge", "program_groups")
             uses_read = (
                 is_mail_merge or active_column is None or active_column == "view"
             )
@@ -142,14 +147,14 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     ).first(),
                     "parent": (
                         None
-                        if is_mail_merge
+                        if mentor_only
                         else permissions.filter(
                             section=section_code, role="Parent"
                         ).first()
                     ),
                     "student": (
                         None
-                        if is_mail_merge
+                        if mentor_only
                         else permissions.filter(
                             section=section_code, role="Student"
                         ).first()
@@ -172,6 +177,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .filter(program__organization=org)
             .select_related("program")
         )
+        groups = (
+            Group.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
         programs = (
             Program.objects.for_organization(org)
             .prefetch_related(
@@ -184,6 +194,12 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 Prefetch(
                     "subteams",
                     queryset=SubTeam.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.for_organization(org).filter(
                         program__organization=org
                     ),
                 ),
@@ -254,6 +270,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if org
             else OrganizationDomain.objects.none()
         )
+        active_tab = request.GET.get("tab", "teams")
+        if active_tab in {"crews", "subteams"}:
+            active_tab = "groups"
 
         context = {
             "grouped_permissions": grouped_permissions,
@@ -261,6 +280,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "team_types": team_types,
             "crews": crews,
             "subteams": subteams,
+            "groups": groups,
             "programs": programs,
             "attendance_programs": attendance_programs,
             "kiosk_configs": kiosk_configs,
@@ -285,7 +305,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "notification_from_override": _stored_notification_sender(org),
             "payment_settings": get_organization_payment_settings(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
-            "active_tab": request.GET.get("tab", "permissions"),
+            "active_tab": active_tab,
             "sections": sections,
         }
         return render(request, self.template_name, context)
@@ -357,7 +377,10 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     """Handles the 'update_permissions' action from the settings page."""
 
     def post(self, request):
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=permissions")
         permissions = RolePermission.objects.for_organization(org)
         for perm in permissions:
             perm_key = f"perm_{perm.id}"
@@ -539,6 +562,229 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect("/programs/settings/?tab=crews")
 
         return redirect("/programs/settings/?tab=crews")
+
+
+class ProgramGroupsView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization), pk=kwargs["pk"]
+        )
+        if not can_user_read(request.user, "programs", self.program, org=organization):
+            messages.error(request, "You do not have permission to view this program.")
+            return redirect("home")
+        if not can_user_read(
+            request.user, "program_groups", self.program, org=organization
+        ):
+            messages.error(
+                request, "You do not have permission to view program groups."
+            )
+            return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        organization = request.organization
+        return render(
+            request,
+            "programs/groups.html",
+            {
+                "program": self.program,
+                "groups": Group.objects.for_organization(organization).filter(
+                    program=self.program, program__organization=organization
+                ),
+                "can_edit_groups": can_user_write(
+                    request.user, "program_groups", self.program, org=organization
+                ),
+                "can_delete_groups": user_is_lead_mentor(
+                    request.user, org=organization
+                ),
+            },
+        )
+
+    def post(self, request, pk):
+        organization = request.organization
+        destination = redirect("program_groups", pk=pk)
+        action = request.POST.get("action")
+        if not can_user_write(
+            request.user, "program_groups", self.program, org=organization
+        ):
+            messages.error(
+                request, "You do not have permission to edit program groups."
+            )
+            return destination
+        if action not in ("add_group", "update_group", "delete_group"):
+            messages.error(request, "Unknown group action.")
+            return destination
+        group = None
+        if action != "add_group":
+            group_id = request.POST.get("group_id", "")
+            if (
+                not group_id.isascii()
+                or not group_id.isdecimal()
+                or len(group_id) > 19
+                or int(group_id) > 9223372036854775807
+            ):
+                messages.error(request, "That group could not be found.")
+                return destination
+            group = get_object_or_404(
+                Group.objects.for_organization(organization),
+                pk=group_id,
+                program=self.program,
+                program__organization=organization,
+            )
+        if action == "delete_group":
+            if not user_is_lead_mentor(request.user, org=organization):
+                messages.error(request, "Only Lead Mentors can delete groups.")
+                return destination
+            from orders.models import OrderItem
+
+            if (
+                _has_foreign_enrollments(
+                    "groups", group, organization, program=self.program
+                )
+                or OrderItem.objects.filter(groups=group)
+                .exclude(organization=organization)
+                .exists()
+            ):
+                messages.error(
+                    request,
+                    "This group is linked to records owned by another organization and cannot be deleted.",
+                )
+                return destination
+            log_deletion(
+                resource=group,
+                request=request,
+                before={
+                    "name": group.name,
+                    "color": group.color,
+                    "program_id": group.program_id,
+                },
+                notes="Program group deleted from program settings.",
+            )
+            group.delete()
+            messages.success(request, "Group deleted.")
+            return destination
+
+        name = request.POST.get("name", "").strip()
+        color = request.POST.get("color", "")
+        if not name or len(name) > 100 or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            messages.error(request, "Enter a group name and a valid color.")
+            return destination
+        duplicates = Group.objects.for_organization(organization).filter(
+            program=self.program, name=name
+        )
+        if group is not None:
+            duplicates = duplicates.exclude(pk=group.pk)
+        if duplicates.exists():
+            messages.error(
+                request, "A group with that name already exists in this program."
+            )
+            return destination
+        try:
+            with transaction.atomic():
+                if group is None:
+                    Group.objects.create(
+                        organization=organization,
+                        program=self.program,
+                        name=name,
+                        color=color,
+                    )
+                else:
+                    group.name = name
+                    group.color = color
+                    group.save()
+        except IntegrityError:
+            messages.error(
+                request, "The group could not be saved. Check its name and try again."
+            )
+            return destination
+        messages.success(request, "Group saved.")
+        return destination
+
+
+class PortalGroupView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Manage program-specific groups from Portal Settings."""
+
+    def post(self, request):
+        organization = _request_organization(request)
+        action = request.POST.get("action")
+        group_id = request.POST.get("group_id")
+        program_id = request.POST.get("program_id")
+
+        if action == "add_group":
+            name = request.POST.get("name", "").strip()
+            color = request.POST.get("color")
+            program = (
+                Program.objects.for_organization(organization)
+                .filter(pk=program_id)
+                .first()
+            )
+            if program is None or not name:
+                messages.error(request, "Choose a program and enter a group name.")
+                return redirect("/programs/settings/?tab=groups")
+            Group.objects.create(
+                organization=organization,
+                program=program,
+                name=name,
+                color=color,
+            )
+            messages.success(request, f"Group {name} added.")
+            return redirect("/programs/settings/?tab=groups")
+
+        if action in ("update_group", "delete_group"):
+            group = (
+                Group.objects.for_organization(organization)
+                .filter(program__organization=organization, pk=group_id)
+                .first()
+            )
+            if group is None:
+                messages.error(request, "That group could not be found.")
+                return redirect("/programs/settings/?tab=groups")
+
+            if action == "update_group":
+                name = request.POST.get("name", "").strip()
+                if not name:
+                    messages.error(request, "Group names cannot be blank.")
+                else:
+                    group.name = name
+                    group.color = request.POST.get("color")
+                    group.save()
+                    messages.success(request, "Group updated.")
+                return redirect("/programs/settings/?tab=groups")
+
+            from orders.models import OrderItem
+
+            if (
+                _has_foreign_enrollments(
+                    "groups", group, organization, program=group.program
+                )
+                or OrderItem.objects.filter(groups=group)
+                .exclude(organization=organization)
+                .exists()
+            ):
+                messages.error(
+                    request,
+                    "This group is linked to records owned by another organization and cannot be deleted.",
+                )
+                return redirect("/programs/settings/?tab=groups")
+            log_deletion(
+                resource=group,
+                request=request,
+                before={
+                    "name": group.name,
+                    "color": group.color,
+                    "program_id": group.program_id,
+                },
+                notes="Program group deleted from Portal Settings.",
+            )
+            group.delete()
+            messages.success(request, "Group deleted.")
+            return redirect("/programs/settings/?tab=groups")
+
+        messages.error(request, "Unknown group action.")
+        return redirect("/programs/settings/?tab=groups")
 
 
 class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
@@ -854,13 +1100,10 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
     """Handles updating organization email settings and sender identities from Portal Settings."""
 
     def post(self, request):
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
         if not org:
-            org = Organization.objects.filter(is_active=True).first()
-            if not org:
-                org, _ = Organization.objects.get_or_create(
-                    slug="gos", defaults={"name": "Girls of Steel"}
-                )
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=branding")
 
         action = request.POST.get("action")
         email_cfg = get_organization_email_settings(org)
@@ -870,7 +1113,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             primary_color = (
                 request.POST.get("primary_color", "").strip()
                 or email_cfg.get("primary_color")
-                or "#4a154b"
+                or "#334155"
             )
             secondary_color = (
                 request.POST.get("secondary_color", "").strip()
@@ -893,55 +1136,55 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             contact_name = request.POST.get("contact_name", "").strip()
             contact_email = request.POST.get("contact_email", "").strip()
 
-            logo_url = request.POST.get("logo_url", "").strip()
-            remove_logo = request.POST.get("remove_logo") in (
-                "1",
-                "true",
-                "on",
-                True,
-            )
+            for role in ("logo", "wordmark", "host_logo"):
+                url_key = f"{role}_url"
+                logo_url = request.POST.get(url_key, "").strip()
+                remove_logo = request.POST.get(f"remove_{role}") in (
+                    "1",
+                    "true",
+                    "on",
+                    True,
+                )
+                logo_file = request.FILES.get(f"{role}_file")
+                if remove_logo:
+                    logo_url = ""
+                elif logo_file:
+                    try:
+                        from django.utils.text import slugify
+                        from PIL import Image
 
-            if remove_logo:
-                logo_url = ""
-            elif "logo_file" in request.FILES and request.FILES["logo_file"]:
-                logo_file = request.FILES["logo_file"]
-                try:
-                    from django.utils.text import slugify
-                    from PIL import Image
+                        img = Image.open(logo_file)
+                        img.verify()
+                        logo_file.seek(0)
 
-                    # Open and verify image with Pillow
-                    img = Image.open(logo_file)
-                    img.verify()
-                    logo_file.seek(0)
+                        fmt = (getattr(img, "format", "") or "").upper()
+                        allowed_formats = {
+                            "PNG": ".png",
+                            "JPEG": ".jpg",
+                            "GIF": ".gif",
+                            "WEBP": ".webp",
+                        }
+                        if fmt not in allowed_formats:
+                            raise ValueError(
+                                f"Unsupported image format: {fmt or 'unknown'}"
+                            )
 
-                    # Strictly validate image format against allowlist
-                    fmt = (getattr(img, "format", "") or "").upper()
-                    allowed_formats = {
-                        "PNG": ".png",
-                        "JPEG": ".jpg",
-                        "GIF": ".gif",
-                        "WEBP": ".webp",
-                    }
-                    if fmt not in allowed_formats:
-                        raise ValueError(
-                            f"Unsupported image format: {fmt or 'unknown'}"
+                        ext = allowed_formats[fmt]
+                        safe_slug = slugify(org.slug) or "org"
+                        filename = (
+                            f"org_logos/{safe_slug}_{role}_{uuid.uuid4().hex[:8]}{ext}"
                         )
-
-                    ext = allowed_formats[fmt]
-                    safe_slug = slugify(org.slug) or "org"
-                    filename = f"org_logos/{safe_slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
-                    saved_path = default_storage.save(filename, logo_file)
-                    raw_url = default_storage.url(saved_path)
-                    logo_url = (
-                        request.build_absolute_uri(raw_url) if request else raw_url
-                    )
-                except Exception as e:
-                    messages.error(request, f"Invalid logo image file: {e}")
-                    return redirect("/programs/settings/?tab=branding")
-            elif not logo_url and "logo_url" not in request.POST:
-                logo_url = email_cfg.get("logo_url", "")
-            elif logo_url and logo_url.startswith("/") and request:
-                logo_url = request.build_absolute_uri(logo_url)
+                        saved_path = default_storage.save(filename, logo_file)
+                        raw_url = default_storage.url(saved_path)
+                        logo_url = request.build_absolute_uri(raw_url)
+                    except Exception as e:
+                        messages.error(request, f"Invalid logo image file: {e}")
+                        return redirect("/programs/settings/?tab=branding")
+                elif url_key not in request.POST:
+                    logo_url = email_cfg.get(url_key, "")
+                elif logo_url.startswith("/"):
+                    logo_url = request.build_absolute_uri(logo_url)
+                email_cfg[url_key] = logo_url
 
             email_cfg["primary_color"] = primary_color
             email_cfg["secondary_color"] = secondary_color
@@ -952,7 +1195,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             email_cfg["footer_text"] = footer_text
             email_cfg["contact_name"] = contact_name
             email_cfg["contact_email"] = contact_email
-            email_cfg["logo_url"] = logo_url
 
             update_organization_email_settings(org, email_cfg)
             messages.success(
@@ -1113,27 +1355,16 @@ class PortalOrgAccountSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, 
 
     def post(self, request):
         from organizations.utils import (
-            get_default_organization,
             update_organization_settings,
         )
 
         org = getattr(request, "organization", None)
-        if not org and request.user.is_authenticated:
-            membership = getattr(request.user, "organization_memberships", None)
-            if membership:
-                active_mem = membership.filter(is_active=True).first()
-                if active_mem:
-                    org = active_mem.organization
-        if not org:
-            org = get_default_organization()
         if not org:
             messages.error(request, "No active organization found.")
             return redirect("/programs/settings/?tab=org_accounts")
 
         org_account_enabled = request.POST.get("org_account_enabled") == "on"
-        org_account_name = (
-            request.POST.get("org_account_name", "").strip() or "Andrew ID"
-        )
+        org_account_name = request.POST.get("org_account_name", "").strip()
         org_email_domain = (
             request.POST.get("org_email_domain", "").strip().lower().lstrip("@")
         )
@@ -1184,7 +1415,10 @@ class PortalBackgroundCheckTypeView(LoginRequiredMixin, LeadMentorRequiredMixin,
 
     def post(self, request):
         action = request.POST.get("action")
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=background_checks")
 
         if action == "add_type":
             name = request.POST.get("name", "").strip()
@@ -1418,7 +1652,10 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         from organizations.services import send_invitation_email
 
         User = get_user_model()
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = getattr(request, "organization", None)
+        if not org:
+            messages.error(request, "No organization is selected.")
+            return redirect("/programs/settings/?tab=lead_mentors")
         action = request.POST.get("action")
 
         def report_failed_invitation(invitation, change):

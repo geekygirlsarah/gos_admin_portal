@@ -5,7 +5,7 @@
 
 {% block content %}
 <p>Hi {{ application.applicant_name|default:"" }},</p>
-<p>Thanks for applying to <strong>{{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}</strong>!</p>
+<p>Thanks for applying to <strong>{{ org_email_settings.organization_name|default:"Momentum" }}</strong>!</p>
 <p>
     {% if not application.is_mentor %}
     <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
@@ -22,8 +22,8 @@
     You can check back at any time using
     <a href="{{ resume_url }}">your application link</a>.{% endif %}
 </p>
-<p style="color:#666;font-size:0.9em">
+{% if org_email_settings.contact_email %}<p style="color:#666;font-size:0.9em">
     Questions? Email
-    <a href="mailto:{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}">{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</a>.
-</p>
+    <a href="mailto:{{ org_email_settings.contact_email }}">{{ org_email_settings.contact_email }}</a>.
+</p>{% endif %}
 {% endblock %}

@@ -235,6 +235,40 @@ Audit records must:
 - Be retained and protected according to the project’s approved retention and
   backup policy.
 
+`EmailHistoryBatch`, `EmailHistory`, and `EmailHistoryAddress` are protected
+from cascading organization deletion. Resolve email-history retention through
+the approved retention process before deleting an organization. Notifications
+with `organization=None` are platform-wide messages and remain supported.
+
+The global Django Admin audit view and CSV exports are restricted to active
+platform superusers. Tenant Lead Mentors can use Menu > Admin > Audit Logs to
+search and filter their organization's attributed activity. The page shows
+the person, activity, affected record, result, and notes, but not raw snapshots,
+IP addresses, or session identifiers. It is not a complete record of every
+action.
+
+Audit records carry an optional organization identifier. Tenant pages require
+an explicit organization and filter on that identifier; unassigned and
+platform-wide records remain visible only to platform superusers. The audit
+service uses the resolved tenant request when present, rejects conflicting
+resource or explicitly supplied ownership, and accepts an explicit organization
+for trusted background operations. User-targeted events require an organization
+membership for the affected user; otherwise they remain unassigned. Direct
+audit writers must supply an organization only when ownership is verified.
+Platform or ambiguous events must remain unassigned rather than being inferred
+from a user's membership.
+
+The one-time audit backfill assumes the first organization was the only tenant
+before this release. It selects the organization with the lowest ID, but assigns
+unattributed historical records only if it is the sole organization in the
+database. Platform-specific events and security
+alerts without matching organization metadata are left unassigned. Historical
+user-targeted events are assigned only when the affected user has a matching
+membership. If other organizations exist, the backfill leaves all old records
+unassigned; review their provenance before considering any separate, approved
+backfill. Other fields on historical records are unchanged. The migration role
+must be permitted to update the organization column on existing audit rows.
+
 Audit logging is not a substitute for authorization checks. A valid audit event
 must never make an otherwise unauthorized action permissible.
 

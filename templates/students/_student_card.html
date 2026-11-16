@@ -1,5 +1,5 @@
 {% load form_tags %}
-{% with s=item.student|default:item team=item.team crew=item.crew subteam=item.subteam %}
+{% with s=item.student|default:item team=item.team groups=item.groups.all %}
   <div class="col">
     <div class="card h-100 text-center">
       {% if role == 'Student' %}
@@ -28,7 +28,7 @@
           <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.display_name }}</a>
         {% endif %}
         <div class="mt-1 d-flex flex-wrap justify-content-center gap-1">
-          {% include 'students/_group_badges.html' %}
+          {% include 'students/_group_badges.html' with team=team groups=groups %}
           {% if show_inactive %}
             <span class="badge bg-secondary ms-2">Inactive</span>
           {% endif %}

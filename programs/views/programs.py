@@ -25,6 +25,7 @@ from ..models import (
     AdultStudentRelationship,
     Crew,
     Enrollment,
+    Group,
     Program,
     ProgramDocument,
     Student,
@@ -67,6 +68,27 @@ except ImportError:
     StudentPresence = None
     _set_unlocked = _clear_unlocked = _is_unlocked = None
     _active_students = None
+
+
+def _log_enrollment_group_change(
+    request, enrollment, before_group_ids, after_group_ids
+):
+    before_ids = sorted(before_group_ids)
+    after_ids = sorted(after_group_ids)
+    if before_ids == after_ids:
+        return
+
+    from audit.events import AuditEvent
+    from audit.service import log_event
+
+    log_event(
+        request=request,
+        event=AuditEvent.ENROLLMENT_CHANGED,
+        resource=enrollment,
+        before={"group_ids": before_ids},
+        after={"group_ids": after_ids},
+        notes=f"Program group assignments changed for enrollment {enrollment.pk}.",
+    )
 
 
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
@@ -218,6 +240,14 @@ class ProgramStudentPhotoListView(
             Enrollment.objects.for_organization(org)
             .filter(program=self.program, student__organization=org)
             .select_related("student", "team", "crew", "subteam")
+            .prefetch_related(
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.for_organization(org).filter(
+                        program=self.program
+                    ),
+                )
+            )
         )
 
         role = get_user_role(self.request.user, org=self.request.organization)
@@ -456,6 +486,14 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             Enrollment.objects.for_organization(org)
             .filter(program=program)
             .select_related("student", "student__user", "team", "crew", "subteam")
+            .prefetch_related(
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.for_organization(org).filter(
+                        program=program
+                    ),
+                )
+            )
             .annotate(
                 sort_first=Lower(
                     Coalesce(
@@ -568,7 +606,9 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["bg_checks_needed_count"] = 0
 
         # Health & Medical Alert Count
-        ctx["can_view_medical"] = can_user_read(self.request.user, "health_medical")
+        ctx["can_view_medical"] = can_user_read(
+            self.request.user, "health_medical", org=org
+        )
         if ctx["can_view_medical"]:
             ctx["medical_alerts_count"] = sum(
                 1
@@ -906,6 +946,8 @@ class ProgramEnrollmentUpdateView(
         team_id = request.POST.get("team_id")
         crew_id = request.POST.get("crew_id")
         subteam_id = request.POST.get("subteam_id")
+        group_ids_present = "group_ids" in request.POST
+        group_ids = request.POST.getlist("group_ids")
         active = request.POST.get("active")
         enrollment = get_object_or_404(
             Enrollment.objects.for_organization(request.organization),
@@ -961,7 +1003,34 @@ class ProgramEnrollmentUpdateView(
                 enrollment.subteam = None
             updated_fields.append("SubTeam")
 
+        selected_groups = None
+        current_group_ids = None
+        if group_ids_present:
+            selected_groups = list(
+                Group.objects.for_organization(request.organization).filter(
+                    id__in=group_ids,
+                    program_id=pk,
+                )
+            )
+            if len(selected_groups) != len(set(group_ids)):
+                messages.error(
+                    request, "One or more selected groups are not in this program."
+                )
+                return redirect("program_detail", pk=pk)
+            current_group_ids = set(enrollment.groups.values_list("id", flat=True))
+            selected_group_ids = {group.id for group in selected_groups}
+            if current_group_ids != selected_group_ids:
+                updated_fields.append("Groups")
+
         enrollment.save()
+        if selected_groups is not None and "Groups" in updated_fields:
+            enrollment.groups.set(selected_groups)
+            _log_enrollment_group_change(
+                request,
+                enrollment,
+                current_group_ids,
+                selected_group_ids,
+            )
         if updated_fields:
             messages.success(
                 request,
@@ -1076,7 +1145,15 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
         enrollments = (
             Enrollment.objects.for_organization(request.organization)
             .filter(program=program, student__organization=request.organization)
-            .select_related("student", "team", "crew", "subteam")
+            .select_related("student", "team")
+            .prefetch_related(
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.for_organization(
+                        request.organization
+                    ).filter(program=program),
+                )
+            )
             .annotate(
                 sort_first=Lower(
                     Coalesce(
@@ -1088,13 +1165,8 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             )
         )
         teams = Team.objects.for_organization(request.organization).order_by("number")
-        crews = (
-            Crew.objects.for_organization(request.organization)
-            .filter(program=program)
-            .order_by("name")
-        )
-        subteams = (
-            SubTeam.objects.for_organization(request.organization)
+        groups = (
+            Group.objects.for_organization(request.organization)
             .filter(program=program)
             .order_by("name")
         )
@@ -1112,10 +1184,10 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
         active_students_count = len(active_enrollments_list)
         assigned_team_count = sum(1 for e in active_enrollments_list if e.team_id)
         unassigned_team_count = active_students_count - assigned_team_count
-        assigned_crew_count = sum(1 for e in active_enrollments_list if e.crew_id)
-        unassigned_crew_count = active_students_count - assigned_crew_count
-        assigned_subteam_count = sum(1 for e in active_enrollments_list if e.subteam_id)
-        unassigned_subteam_count = active_students_count - assigned_subteam_count
+        assigned_group_count = sum(
+            1 for e in active_enrollments_list if e.groups.exists()
+        )
+        unassigned_group_count = active_students_count - assigned_group_count
 
         return render(
             request,
@@ -1126,15 +1198,12 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 "active_enrollments": active_enrollments,
                 "inactive_enrollments": inactive_enrollments,
                 "teams": teams,
-                "crews": crews,
-                "subteams": subteams,
+                "groups": groups,
                 "active_students_count": active_students_count,
                 "assigned_team_count": assigned_team_count,
                 "unassigned_team_count": unassigned_team_count,
-                "assigned_crew_count": assigned_crew_count,
-                "unassigned_crew_count": unassigned_crew_count,
-                "assigned_subteam_count": assigned_subteam_count,
-                "unassigned_subteam_count": unassigned_subteam_count,
+                "assigned_group_count": assigned_group_count,
+                "unassigned_group_count": unassigned_group_count,
             },
         )
 
@@ -1159,10 +1228,14 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 cleared.append("crew")
             if enrollment.subteam_id:
                 cleared.append("subteam")
+            group_ids = list(enrollment.groups.values_list("id", flat=True))
+            if group_ids:
+                cleared.append("groups")
             enrollment.team = None
             enrollment.crew = None
             enrollment.subteam = None
             enrollment.save()
+            enrollment.groups.clear()
             name = enrollment.student.display_name
             messages.success(
                 request,
@@ -1176,6 +1249,7 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
 
         assignment_type = request.POST.get("assignment_type")
         target_id = request.POST.get("target_id")
+        target_ids = request.POST.getlist("target_id")
         student_ids = request.POST.getlist("student_ids")
 
         if not student_ids:
@@ -1187,6 +1261,7 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             student__organization=request.organization,
             student_id__in=student_ids,
         )
+        enrollment_count = enrollments.count()
 
         if not target_id:
             if assignment_type == "team":
@@ -1205,7 +1280,34 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 enrollments.update(subteam=None)
                 messages.success(
                     request,
-                    f"Unassigned subteam from {len(student_ids)} student(s).",
+                    f"Unassigned subteam from {enrollment_count} student(s).",
+                )
+            elif assignment_type == "group":
+                selected_enrollments = list(
+                    enrollments.select_related("student", "program")
+                )
+                enrollment_ids = [enrollment.pk for enrollment in selected_enrollments]
+                group_assignments = Enrollment.groups.through.objects.filter(
+                    enrollment_id__in=enrollment_ids
+                ).values_list("enrollment_id", "group_id")
+                group_ids_by_enrollment = {}
+                for enrollment_id, group_id in group_assignments:
+                    group_ids_by_enrollment.setdefault(enrollment_id, set()).add(
+                        group_id
+                    )
+                Enrollment.groups.through.objects.filter(
+                    enrollment_id__in=enrollment_ids
+                ).delete()
+                for enrollment in selected_enrollments:
+                    _log_enrollment_group_change(
+                        request,
+                        enrollment,
+                        group_ids_by_enrollment.get(enrollment.pk, set()),
+                        set(),
+                    )
+                messages.success(
+                    request,
+                    f"Removed all groups from {enrollment_count} student(s).",
                 )
         elif assignment_type == "team":
             team = get_object_or_404(
@@ -1234,6 +1336,51 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             enrollments.update(subteam=subteam)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to subteam {subteam}."
+            )
+        elif assignment_type == "group":
+            groups = list(
+                Group.objects.for_organization(request.organization).filter(
+                    program=program, id__in=target_ids
+                )
+            )
+            if len(groups) != len(set(target_ids)):
+                messages.error(
+                    request, "One or more selected groups are not in this program."
+                )
+                return redirect("program_assignment", pk=pk)
+            selected_enrollments = list(
+                enrollments.select_related("student", "program")
+            )
+            enrollment_ids = [enrollment.pk for enrollment in selected_enrollments]
+            group_assignments = Enrollment.groups.through.objects.filter(
+                enrollment_id__in=enrollment_ids
+            ).values_list("enrollment_id", "group_id")
+            group_ids_by_enrollment = {}
+            for enrollment_id, group_id in group_assignments:
+                group_ids_by_enrollment.setdefault(enrollment_id, set()).add(group_id)
+            Enrollment.groups.through.objects.bulk_create(
+                [
+                    Enrollment.groups.through(
+                        enrollment_id=enrollment_id,
+                        group_id=group.pk,
+                    )
+                    for enrollment_id in enrollment_ids
+                    for group in groups
+                ],
+                ignore_conflicts=True,
+            )
+            added_group_ids = {group.pk for group in groups}
+            for enrollment in selected_enrollments:
+                _log_enrollment_group_change(
+                    request,
+                    enrollment,
+                    group_ids_by_enrollment.get(enrollment.pk, set()),
+                    group_ids_by_enrollment.get(enrollment.pk, set()) | added_group_ids,
+                )
+            group_names = ", ".join(group.name for group in groups)
+            messages.success(
+                request,
+                f"Added {group_names} to {enrollment_count} student(s).",
             )
 
         return redirect("program_assignment", pk=pk)
@@ -1379,8 +1526,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
             groups = form.cleaned_data.get("recipient_groups") or []
             teams = form.cleaned_data.get("teams")
-            crews = form.cleaned_data.get("crews")
-            subteams = form.cleaned_data.get("subteams")
+            selected_groups = form.cleaned_data.get("groups")
             subject = form.cleaned_data["subject"]
             html_body = form.cleaned_data["body"]
             # Sanitize + normalize the fragment, wrap it in an email document
@@ -1404,17 +1550,11 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 )
                 if teams:
                     enrollments = enrollments.filter(team__in=teams)
-                if crews:
+                if selected_groups:
                     enrollments = enrollments.filter(
-                        crew__in=crews,
-                        crew__organization=organization,
-                        crew__program=prog,
-                    )
-                if subteams:
-                    enrollments = enrollments.filter(
-                        subteam__in=subteams,
-                        subteam__organization=organization,
-                        subteam__program=prog,
+                        groups__in=selected_groups,
+                        groups__organization=organization,
+                        groups__program=prog,
                     )
 
                 filtered_student_ids = enrollments.values_list(
@@ -1500,7 +1640,12 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 for inline_img in inline_images:
                     email.attach(inline_img.to_mime())
                 _mark_delivery_tracking(
-                    email, delivery_organization, enabled=not test_email
+                    email,
+                    delivery_organization,
+                    enabled=not test_email,
+                    history_category="program_message",
+                    history_initiated_by=request.user,
+                    retain_history_body=True,
                 )
                 messages_to_send.append(email)
 
@@ -1562,21 +1707,12 @@ class ProgramEmailView(LoginRequiredMixin, View):
             .distinct()
             .order_by("team_type", "number")
         )
-        crews = (
-            Crew.objects.for_organization(organization)
+        groups = (
+            Group.objects.for_organization(organization)
             .select_related("program")
             .filter(
                 program__organization=organization,
-                enrollments__in=active_assignments,
-            )
-            .distinct()
-            .order_by("name")
-        )
-        subteams = (
-            SubTeam.objects.for_organization(organization)
-            .select_related("program")
-            .filter(
-                program__organization=organization,
+                program__in=form.fields["program"].queryset,
                 enrollments__in=active_assignments,
             )
             .distinct()
@@ -1586,8 +1722,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             "form": form,
             "program": program,
             "teams": teams,
-            "crews": crews,
-            "subteams": subteams,
+            "groups": groups,
             "is_program_scoped": bool(pk),
             "can_mail_merge": bool(
                 program
@@ -1893,6 +2028,13 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
                 program=program,
                 student__organization=program.organization,
                 active=True,
+            ).prefetch_related(
+                Prefetch(
+                    "groups",
+                    queryset=Group.objects.filter(
+                        organization=program.organization, program=program
+                    ),
+                )
             )
         )
         teams = {

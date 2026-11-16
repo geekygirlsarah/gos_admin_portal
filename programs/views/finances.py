@@ -1512,7 +1512,14 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 email.attach(inline_img.to_mime())
             from programs.utils.notifications import _mark_delivery_tracking
 
-            _mark_delivery_tracking(email, org, enabled=not test_email)
+            _mark_delivery_tracking(
+                email,
+                org,
+                enabled=not test_email,
+                history_category="balance_statement",
+                history_initiated_by=request.user,
+                retain_history_body=True,
+            )
             messages_to_send.append(email)
 
         try:

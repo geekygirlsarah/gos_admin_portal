@@ -51,8 +51,8 @@
             <span>
               {{ s.display_name }}
               {% with e=s.program_enrollment %}
-                {% if e.team or e.crew or e.subteam %}
-                  <span class="ms-1 me-1 d-inline-flex flex-wrap gap-1 align-items-center">{% include 'students/_group_badges.html' with team=e.team crew=e.crew subteam=e.subteam %}</span>
+                {% if e.team or e.groups.all %}
+                  <span class="ms-1 me-1 d-inline-flex flex-wrap gap-1 align-items-center">{% include 'students/_group_badges.html' with team=e.team groups=e.groups.all %}</span>
                 {% endif %}
               {% endwith %}
               {% if s.today_presence.status == 'present' %}
@@ -105,7 +105,7 @@
                 <td>{{ s.signed_at|date:"M j, Y g:i A" }}</td>
                 <td>{{ s.student.display_name|default:"Unknown" }}</td>
                 <td>{{ s.signed_by_name|default:"" }}</td>
-                <td>{% if s.signature %}<a href="{% url 'program_digital_signout_signature' program.id s.pk %}" target="_blank" rel="noopener"><img src="{% url 'program_digital_signout_signature' program.id s.pk %}" alt="Signature of {{ s.signed_by_name|default:'parent' }}" loading="lazy" style="max-height: 48px; max-width: 160px; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></a>{% endif %}</td>
+                <td>{% if s.signature %}<a class="js-signature" href="{% url 'program_digital_signout_signature' program.id s.pk %}" target="_blank" rel="noopener"><span>View signature</span><img hidden alt="Signature of {{ s.signed_by_name|default:'parent' }}" style="max-height: 48px; max-width: 160px; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></a>{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -129,6 +129,16 @@
       try { navigator.clipboard.writeText(input.value); } catch (e) { /* ignore */ }
     });
   }
+  document.querySelectorAll(".js-signature").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      var image = link.querySelector("img");
+      if (image.hasAttribute("src") || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      image.setAttribute("src", link.getAttribute("href"));
+      image.hidden = false;
+      link.querySelector("span").hidden = true;
+    });
+  });
 }());
 </script>
 {% endblock %}

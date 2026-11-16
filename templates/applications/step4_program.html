@@ -17,9 +17,9 @@
         <div class="alert alert-info d-flex gap-2 align-items-start" role="note">
             <i class="bi bi-info-circle mt-1"></i>
             <div>
-                Every kid in our community should be able to join if interested.
-                Our <a href="mailto:slidingscale@girlsofsteelrobotics.org">sliding scale
-                program</a> can bring costs as low as $0.
+                If cost is a concern, contact your organization for information about
+                available financial assistance.
+                {% if org_contact_email %}<a href="mailto:{{ org_contact_email }}">Contact us</a>.{% endif %}
             </div>
         </div>
         {% if future_programs %}
@@ -77,8 +77,8 @@
         {% else %}
             <div class="alert alert-info" role="status">
                 There are no upcoming programs accepting applications right now.
-                Please check back soon, or contact us at
-                <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+                Please check back soon.
+                {% if org_contact_email %}For questions, contact <a href="mailto:{{ org_contact_email }}">{{ org_contact_email }}</a>.{% endif %}
             </div>
         {% endif %}
     </fieldset>
@@ -87,8 +87,8 @@
     <fieldset class="mb-4">
         <legend class="form-label fw-semibold text-muted">Current programs</legend>
         <div class="alert alert-secondary mb-3" role="note">
-            Applications for these programs are closed. Please contact us to
-            see if it's possible to join.
+            Applications for these programs are closed. Ask your organization
+            whether it's possible to join.
         </div>
         <ul class="list-unstyled mb-0">
             {% for prog in current_programs %}

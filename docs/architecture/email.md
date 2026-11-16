@@ -30,6 +30,10 @@ the sending provider, DNS, or HTTPS.
 
 ## Bulk Email Pipeline & Background Dispatch
 
+Program email filters can target multiple Groups and match students assigned
+to **any** selected Group. A selected Team filter applies in addition to the
+Group filter; Group targeting includes students and their parents, not mentors.
+
 Bulk email views (`ProgramEmailView`, `ApplicationEmailView`, `ProgramEmailBalancesView`) avoid request timeouts and spam filter penalties:
 - **Individual Dispatch**: Constructs individual messages per recipient instead of large BCC lists.
 - **Threaded Background Execution**: Uses `send_messages_in_background()` to dispatch batches asynchronously via an in-process thread pool.
@@ -53,6 +57,8 @@ details. Parent submission and decision notices retain their local content
 and tenant branding.
 
 Program Messaging offers the deployment-configured default sender and named identities saved by the current organization, not the legacy global named-account fallback. An organization's notification-from override replaces the default; otherwise `NOTIFICATION_FROM_EMAIL` or `DEFAULT_FROM_EMAIL` supplies it. Email Settings shows the saved override separately from the effective address and does not pin the fallback when saving other settings. Existing saved overrides are not changed automatically.
+
+For the default sender's display name, an explicitly saved email sender name takes precedence over the organization's saved portal title, followed by its organization name. Named sender identities retain their own display names. Organizations with an existing sender-name override must clear it to use the portal title instead.
 
 The operator must configure a verified shared Momentum sender with the delivery provider and DNS before relying on it; changing an address here does not configure or verify delivery. Existing deployment defaults may still be GoS-specific and should be reviewed during that transition.
 
@@ -105,3 +111,26 @@ After signature verification, the handler matches both provider message ID and e
 Profile and application resolution is limited to unique, ownership-consistent records in the verified organization; shared email addresses do not select a first match. Verified critical alerts go only to active local Lead Mentors with valid account email addresses and contain a generic notice, not recipient, profile, or provider diagnostic data. Audit records likewise omit addresses, payloads, and raw provider reasons.
 
 Existing delivery events default to unverified and remain unchanged; they are hidden from tenant issue lists, profile badges, counts, resolution actions, and audit summaries until separately reviewed. New unmatched, ambiguous, malformed, or early events are retained in an encrypted quarantine available only to platform superusers on the root domain. Review is read-only. `cleanup_email_delivery_quarantine` is dry-run by default; `--execute` deletes only records received at least 30 days earlier. A separately approved scheduled execution is a release prerequisite; this implementation does not configure a scheduler, and retention is not operationally guaranteed until one is configured.
+
+---
+
+## Organization Email History
+
+Outgoing messages recorded by the history integration are retained per recipient
+for 30 days. Lead Mentors can view history only for their current organization;
+recipient addresses, subjects, and retained bodies are encrypted in the database.
+Exact recipient lookup uses a keyed fingerprint, not a plaintext address index.
+
+Ordinary messages and reviewed bulk categories retain the final rendered body so
+personalized values remain available after source data changes. OTP and other
+credential messages keep only generic category/status metadata and recipient
+address; their subject and body are not retained. Attachments and embedded image
+bytes are not included. Saved HTML is displayed as escaped source, not rendered.
+Each access to a history entry is audited without including message content or
+addresses in audit metadata.
+
+History status distinguishes a recorded attempt, backend acceptance, failure,
+and unknown outcome. Acceptance is not proof of delivery or reading, and a
+multi-message backend count cannot identify individual outcomes reliably. The
+history integration applies only to send paths that provide trusted organization
+context; unscoped messages are not assigned to a tenant by guessing.

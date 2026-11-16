@@ -60,6 +60,19 @@
 
 <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #dee2e6;">
     <h4 style="font-size: 16px; margin-bottom: 8px;">How to Pay:</h4>
-    <p style="margin: 4px 0; font-size: 14px;">Please contact the program for payment instructions.</p>
+    {% if org_email_settings.payment_link %}
+        {% if org_email_settings.payment_instructions %}
+            <p style="margin: 4px 0; font-size: 14px;">{{ org_email_settings.payment_instructions }}</p>
+        {% else %}
+            <p style="margin: 4px 0; font-size: 14px;">Please contact the program for payment instructions.</p>
+        {% endif %}
+        <p style="margin: 4px 0; font-size: 14px;"><a href="{{ org_email_settings.payment_link }}" target="_blank">Make a payment online</a></p>
+    {% else %}
+        {% if org_email_settings.payment_instructions %}
+            <p style="margin: 4px 0; font-size: 14px;">{{ org_email_settings.payment_instructions }}</p>
+        {% else %}
+            <p style="margin: 4px 0; font-size: 14px;">Please contact the program for payment instructions.</p>
+        {% endif %}
+    {% endif %}
 </div>
 {% endblock %}

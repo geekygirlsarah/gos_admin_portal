@@ -16,13 +16,22 @@ class AuditLog(models.Model):
 
     Rules:
       - Never UPDATE or DELETE rows — enforced by overriding save() and delete().
-      - Only lead mentors (or superusers) may view records.
+      - Tenant leads may view records attributed to their organization;
+        platform superusers may view the global history.
       - Every save() mirrors the record to the Python 'audit' logger so it
         also appears on stdout/stderr via the configured log handlers.
     """
 
     # 1. Timestamp — auto_now_add gives UTC; DateTimeField stores microsecond precision.
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_logs",
+    )
 
     # 2. Actor identity — FK by user ID; NULL for system/anonymous actions.
     actor = models.ForeignKey(

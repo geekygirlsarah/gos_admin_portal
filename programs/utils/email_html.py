@@ -775,13 +775,10 @@ def wrap_email_document(
     """Normalize ``fragment`` and wrap it in a complete HTML email document."""
     from django.template.loader import render_to_string
 
-    from organizations.utils import (
-        get_default_organization,
-        get_organization_email_settings,
-    )
+    from organizations.utils import get_organization_email_settings
 
     content = normalize_email_html(fragment)
-    org = organization or get_default_organization()
+    org = organization
     org_settings = get_organization_email_settings(org)
     context = {
         "body_content": content,

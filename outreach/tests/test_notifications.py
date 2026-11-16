@@ -344,7 +344,7 @@ class OutreachNotificationsTest(TestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
-        self.assertIn("Log in to the Custom Robotics Org Portal", email.body)
+        self.assertIn("Log in to the Custom Org Portal", email.body)
         html_body, _ = email.alternatives[0]
         expected_url = (
             f"https://custom.momentumteam.app/programs/{self.program.id}/outreach/"

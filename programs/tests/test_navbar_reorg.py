@@ -26,8 +26,7 @@ except ImportError:
 
 
 class LeadMentorAdminDropdownSplitTests(TestCase):
-    """The old single "Admin" dropdown (~15 flat items) is now split into
-    topical dropdowns so no single menu is overwhelming."""
+    """Related administration links are grouped into People and Admin."""
 
     def setUp(self):
         self.lead_mentor = User.objects.create_user(
@@ -45,15 +44,42 @@ class LeadMentorAdminDropdownSplitTests(TestCase):
     def _login(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
 
-    def test_admin_menu_is_split_into_topical_dropdowns(self):
+    def test_admin_menu_is_grouped_into_people_and_admin(self):
         self._login()
         response = self.client.get(reverse("program_list"))
-        # New topical dropdowns exist.
-        self.assertContains(response, 'id="studentsAdminDropdown"')
-        self.assertContains(response, 'id="adultsAdminDropdown"')
-        self.assertContains(response, 'id="applicationsAdminDropdown"')
-        self.assertContains(response, 'id="manageDataAdminDropdown"')
+        self.assertContains(response, 'id="peopleDropdown"')
         self.assertContains(response, 'id="adminDropdown"')
+        for old_id in (
+            "studentsAdminDropdown",
+            "adultsAdminDropdown",
+            "applicationsAdminDropdown",
+            "manageDataAdminDropdown",
+        ):
+            self.assertNotContains(response, f'id="{old_id}"')
+
+        content = response.content.decode()
+        people = content.split('aria-labelledby="peopleDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        admin = content.split('aria-labelledby="adminDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        for name in ("All Students", "All Adults", "Schools"):
+            self.assertIn(name, people)
+        for name in ("Sliding Scale Applications", "Manage Guest Forms", "Settings"):
+            self.assertIn(name, admin)
+
+    def test_email_history_link_is_in_admin_dropdown(self):
+        self._login()
+        response = self.client.get(reverse("program_list"))
+        admin_menu_start = response.content.find(
+            b'<ul class="dropdown-menu" aria-labelledby="adminDropdown">'
+        )
+        admin_menu_end = response.content.find(b"</ul>", admin_menu_start)
+        admin_menu = response.content[admin_menu_start:admin_menu_end]
+
+        self.assertIn(reverse("email_history_list").encode(), admin_menu)
+        self.assertIn(b"Email History", admin_menu)
 
     def test_redundant_all_programs_link_removed(self):
         self._login()
@@ -200,10 +226,8 @@ class PreviouslyOrphanedPagesNowLinkedTests(TestCase):
 
 class StudentDashboardAndCarpoolMapLinkTests(TestCase):
     """The "Carpool Map" page previously had no navbar link for Students
-    (only a button on the Dashboard); it's now reachable from its own
-    standalone "Carpool Map" navbar dropdown. "Dashboard" is now also a
-    top-level link for Students instead of being tucked away in the account
-    menu only."""
+    (only a button on the Dashboard); it is now in Activities. Dashboard
+    remains a top-level link."""
 
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)
@@ -235,12 +259,7 @@ class StudentDashboardAndCarpoolMapLinkTests(TestCase):
 
 
 class ParentDashboardAndProgramDropdownTests(TestCase):
-    """Parents already have permission to read a program's Outreach events
-    and view the Carpool Map (the Dashboard already surfaces both), but the
-    navbar's program dropdown left Parents out of the Outreach link, and
-    there was no Carpool Map link at all. Outreach now shows in the current
-    program dropdown, Carpool Map is its own standalone dropdown, and
-    "Dashboard" is a top-level link like it is for Students."""
+    """Parents can reach their program's outreach and carpool map links."""
 
     def setUp(self):
         self.outreach_feature = ProgramFeature.objects.get(key="outreach")
@@ -272,6 +291,8 @@ class ParentDashboardAndProgramDropdownTests(TestCase):
         response = self.client.get(reverse("profile_dashboard"))
         self.assertContains(response, reverse("profile_dashboard"))
         self.assertContains(response, "Dashboard")
+        self.assertNotContains(response, reverse("email_history_list"))
+        self.assertNotContains(response, "Email History")
 
     def test_outreach_link_shown_in_program_dropdown_for_parent(self):
         self._login()
@@ -287,11 +308,31 @@ class ParentDashboardAndProgramDropdownTests(TestCase):
         self.assertContains(response, map_url)
         self.assertContains(response, "Carpool Map")
 
+    def test_parent_mentor_keeps_parent_and_mentor_navigation(self):
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.parent_user,
+            organization=self.program.organization,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
+        self.program.features.add(ProgramFeature.objects.get(key="travel"))
+        self._login()
+        response = self.client.get(reverse("profile_dashboard"))
+        nav = response.content.decode().split("</nav>", 1)[0]
+        activities = nav.split('aria-labelledby="activitiesDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        self.assertIn(reverse("travel:event_list", args=[self.program.pk]), activities)
+        self.assertIn(
+            reverse("program_student_map", args=[self.program.pk]), activities
+        )
+        self.assertIn(reverse("parent_payments"), nav)
+        self.assertIn('id="attendanceDropdown"', nav)
+        self.assertNotIn('id="peopleDropdown"', nav)
+
 
 class CarpoolMapStandaloneDropdownTests(TestCase):
-    """ "Carpool Map" is its own top-level navbar dropdown (instead of a
-    scattered/context-dependent link), listing only the Student's/Parent's
-    currently-active (not past, not inactive) programs as menu items."""
+    """Activities lists only maps for currently active enrollments."""
 
     def setUp(self):
         self.past_program = Program.objects.create(name="Past Program", active=False)
@@ -325,12 +366,51 @@ class CarpoolMapStandaloneDropdownTests(TestCase):
         nav_end = response.content.find(b"</nav>", nav_start)
         return response.content[nav_start:nav_end]
 
-    def test_carpool_map_is_a_standalone_dropdown(self):
+    def test_carpool_map_is_in_activities_dropdown(self):
         self._login()
         response = self.client.get(reverse("profile_dashboard"))
         nav_content = self._nav_content(response)
-        self.assertIn(b'id="carpoolMapDropdown"', nav_content)
-        self.assertIn(b">Carpool Map<", nav_content)
+        self.assertIn(b'id="activitiesDropdown"', nav_content)
+        self.assertIn(b"Carpool Map (Current Program)", nav_content)
+
+    def test_student_activities_group_links_for_each_enabled_program(self):
+        for feature in ProgramFeature.objects.filter(
+            key__in=["outreach", "orders", "travel"]
+        ):
+            self.current_program.features.add(feature)
+            self.second_current_program.features.add(feature)
+        self._login()
+        response = self.client.get(reverse("profile_dashboard"))
+        content = self._nav_content(response).decode()
+        activities = content.split('aria-labelledby="activitiesDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        for program in (self.current_program, self.second_current_program):
+            for url_name in (
+                "outreach:event_list",
+                "orders:order_list",
+                "travel:event_list",
+                "program_student_map",
+            ):
+                self.assertIn(reverse(url_name, args=[program.pk]), activities)
+        self.assertNotIn(
+            reverse("program_student_map", args=[self.past_program.pk]), activities
+        )
+
+    def test_student_activities_do_not_show_disabled_features(self):
+        self._login()
+        response = self.client.get(reverse("profile_dashboard"))
+        nav = self._nav_content(response).decode()
+        activities = nav.split('aria-labelledby="activitiesDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        for program in (self.current_program, self.second_current_program):
+            for url_name in (
+                "outreach:event_list",
+                "orders:order_list",
+                "travel:event_list",
+            ):
+                self.assertNotIn(reverse(url_name, args=[program.pk]), activities)
 
     def test_carpool_map_dropdown_lists_only_currently_active_programs(self):
         self._login()
@@ -364,7 +444,7 @@ class CarpoolMapStandaloneDropdownTests(TestCase):
         self._login()
         response = self.client.get(reverse("profile_dashboard"))
         nav_content = self._nav_content(response)
-        self.assertNotIn(b"carpoolMapDropdown", nav_content)
+        self.assertNotIn(b"activitiesDropdown", nav_content)
 
 
 class NavbarBadgeCountTests(TestCase):

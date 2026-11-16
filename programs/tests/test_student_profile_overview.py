@@ -6,11 +6,15 @@ from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
+from organizations.models import Organization
 from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
 from programs.models import (
     Adult,
     AdultStudentRelationship,
     Enrollment,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     ProgramFeature,
     Student,
@@ -143,6 +147,33 @@ class StudentProfileOverviewTests(TestCase):
         # Contact details exist inside the personal details container
         self.assertContains(response, "123 Innovation Way")
         self.assertContains(response, "Mary Smith")
+
+    def test_student_profile_displays_program_groups(self):
+        group = ProgramGroup.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Mechanical",
+            color="#198754",
+        )
+        foreign_organization = Organization.objects.create(
+            name="Foreign Organization",
+            slug="foreign-organization",
+            subdomain="foreign-organization",
+        )
+        foreign_group = ProgramGroup.objects.create(
+            organization=foreign_organization,
+            program=self.program,
+            name="Foreign Group",
+        )
+        self.enrollment.groups.add(group, foreign_group)
+
+        self.client.force_login(self.lead_user)
+        response = self.client.get(reverse("student_detail", args=[self.student.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mechanical")
+        self.assertNotContains(response, "Foreign Group")
+        self.assertContains(response, "#198754")
 
     def test_student_profile_action_buttons_scoped_to_personal_records_card(self):
         self.client.force_login(self.lead_user)

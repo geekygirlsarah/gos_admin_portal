@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Notifications - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Notifications</h2>
+        
+        {% if notifications %}
+            <div class="row">
+                {% for notification in notifications %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-header bg-{{ notification.notification_type }} text-white">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">{{ notification.title }}</h5>
+                                    <span class="badge bg-light text-dark">{{ notification.get_notification_type_display }}</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">{{ notification.message|linebreaks }}</p>
+                                <small class="text-muted">Posted on {{ notification.created_at|date:"M d, Y g:i A" }}</small>
+                                
+                                {% if user.is_authenticated %}
+                                    {% with status=notification.usernotificationstatus_set.filter(user=user).first %}
+                                        {% if status and status.is_seen %}
+                                            <span class="badge bg-success">Seen</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Unread</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                No notifications at this time.
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

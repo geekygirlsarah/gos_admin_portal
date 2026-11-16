@@ -75,6 +75,7 @@ class AcceptInvitationView(View):
                 request=request,
                 event=AuditEvent.ROLE_CHANGED,
                 resource=request.user,
+                organization=invitation.organization,
                 notes=f"User {request.user} accepted invitation for role {invitation.role} in {invitation.organization.name}.",
             )
             messages.success(

@@ -120,6 +120,7 @@ def check_profile_access_anomaly(
             resource=actor,
             actor=actor,
             request=request,
+            organization=organization,
             after={
                 "organization_id": organization_id,
                 "distinct_student_count": distinct_count,

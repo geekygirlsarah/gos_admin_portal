@@ -501,3 +501,35 @@ class ApplicationDocumentSubmission(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"Submission for {self.document} on {self.application.application_id}"
+
+
+class StudentApplicationAnswer(models.Model):
+    """A question and answer associated with a particular application."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="student_application_answers",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    student = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.CASCADE,
+        related_name="application_answers",
+    )
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, related_name="student_answers"
+    )
+    source_step = models.CharField(max_length=32)
+    question_key = models.CharField(max_length=100)
+    question_text = models.TextField()
+    answer = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "source_step", "question_key"),
+                name="unique_student_application_answer",
+            )
+        ]
+        ordering = ["-application__created_at", "application_id", "source_step", "id"]

@@ -167,13 +167,13 @@ def _vevent_lines(event, exdates):
     return lines
 
 
-def _build_ics_response(events, feed_name="GoS Calendar"):
+def _build_ics_response(events, feed_name="Momentum Calendar"):
     """Build an ICS HTTP response from a list of CalendarEvent objects."""
     tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//GoS Admin Portal//calendar_feeds//EN",
+        "PRODID:-//Momentum Portal//calendar_feeds//EN",
         f"X-WR-CALNAME:{feed_name}",
         f"X-WR-TIMEZONE:{tz_name}",
         "CALSCALE:GREGORIAN",
@@ -235,7 +235,7 @@ class PublicICSFeedView(View):
                 unique_events.append(event)
 
         return _build_ics_response(
-            unique_events, feed_name="Girls of Steel Public Calendar"
+            unique_events, feed_name=f"{organization.name} Public Calendar"
         )
 
 
@@ -348,4 +348,6 @@ class PersonalICSFeedView(View):
                 seen_pks.add(event.pk)
                 unique_events.append(event)
 
-        return _build_ics_response(unique_events, feed_name="Girls of Steel Calendar")
+        return _build_ics_response(
+            unique_events, feed_name=f"{organization.name} Calendar"
+        )

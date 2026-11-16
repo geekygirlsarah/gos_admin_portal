@@ -38,6 +38,7 @@ class RolePermission(models.Model):
         ("programs", "Programs - General"),
         ("mail_merge", "Messaging - Mail Merge"),
         ("team_assignments", "Programs - Team Assignments"),
+        ("program_groups", "Programs - Groups"),
         ("badge_award", "Badges - Award"),
         ("badge_manage", "Badges - Create / Manage"),
         ("orders-view", "Orders - See requested orders"),

@@ -190,6 +190,8 @@ class Command(BaseCommand):
                         context=data,
                         recipient_list=[recip_email],
                         organization=organization,
+                        history_category="weekly_digest",
+                        retain_history_body=True,
                     )
                     total_sent += 1
                     logger.info("Sent %s weekly digest.", recip_role)

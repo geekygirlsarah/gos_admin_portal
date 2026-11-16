@@ -27,6 +27,7 @@ from .models import (
     Crew,
     Fee,
     FeeAssignment,
+    Group,
     Payment,
     Program,
     School,
@@ -797,17 +798,14 @@ class ProgramEmailForm(forms.Form):
         widget=forms.CheckboxSelectMultiple(),
         help_text="Optionally limit to students on specific teams.",
     )
-    crews = forms.ModelMultipleChoiceField(
-        queryset=Crew.objects.all(),
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple(),
-        help_text="Optionally limit to students in specific crews/projects.",
-    )
-    subteams = forms.ModelMultipleChoiceField(
-        queryset=SubTeam.objects.all(),
-        required=False,
-        widget=forms.CheckboxSelectMultiple(),
-        help_text="Optionally limit to students on specific subteams.",
+        help_text=(
+            "No groups selected means no group restriction. When multiple groups "
+            "are checked, include students assigned to ANY of them."
+        ),
     )
     subject = forms.CharField(max_length=255)
     body = forms.CharField(
@@ -854,20 +852,25 @@ class ProgramEmailForm(forms.Form):
             self.fields["teams"].queryset = Team.objects.for_organization(
                 organization
             ).order_by("team_type", "number")
-            self.fields["crews"].queryset = (
-                Crew.objects.for_organization(organization)
-                .filter(program__organization=organization)
-                .order_by("name")
-            )
-            self.fields["subteams"].queryset = (
-                SubTeam.objects.for_organization(organization)
-                .filter(program__organization=organization)
-                .order_by("name")
-            )
         else:
             self.fields["teams"].queryset = Team.objects.none()
-            self.fields["crews"].queryset = Crew.objects.none()
-            self.fields["subteams"].queryset = SubTeam.objects.none()
+
+        selected_program_id = (
+            self.data.get(self.add_prefix("program")) if self.is_bound else None
+        ) or (program.pk if program and not self.is_bound else None)
+        if organization and selected_program_id:
+            try:
+                selected_program = (
+                    self.fields["program"]
+                    .queryset.filter(pk=selected_program_id)
+                    .first()
+                )
+            except (TypeError, ValueError, ValidationError):
+                selected_program = None
+            if selected_program:
+                self.fields["groups"].queryset = Group.objects.for_organization(
+                    organization
+                ).filter(program=selected_program, program__organization=organization)
 
         # Build sender choices from organization settings
         from organizations.utils import get_organization_email_settings

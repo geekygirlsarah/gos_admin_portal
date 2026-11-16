@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import render_to_string
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
@@ -56,15 +56,19 @@ class OrganizationEmailBrandingTests(TestCase):
         self.url = reverse("portal_email_settings")
 
     def test_default_branding_settings(self):
-        cfg = get_organization_email_settings(self.org)
+        organization = Organization.objects.create(
+            name="Nova Robotics", slug="nova-branding-defaults"
+        )
+        cfg = get_organization_email_settings(organization)
         self.assertEqual(cfg["primary_color"], "#334155")
         self.assertEqual(cfg["header_text_color"], "#ffffff")
-        self.assertEqual(cfg["organization_name"], self.org.name)
+        self.assertEqual(cfg["organization_name"], organization.name)
         self.assertEqual(cfg["address_line1"], "")
         self.assertEqual(cfg["address_line2"], "")
         self.assertEqual(cfg["footer_text"], "")
         self.assertEqual(cfg["contact_name"], "")
         self.assertEqual(cfg["contact_email"], settings.DEFAULT_REPLY_TO_EMAIL)
+        self.assertEqual(cfg["reply_to_email"], settings.DEFAULT_REPLY_TO_EMAIL)
         self.assertIn("portal_url", cfg)
 
     def test_custom_branding_settings(self):
@@ -199,6 +203,157 @@ class OrganizationEmailBrandingTests(TestCase):
         cfg = self.org_settings.data.get("email_settings", {})
         self.assertEqual(cfg.get("logo_url"), "")
 
+    def test_optional_logos_are_saved_preserved_and_removed_independently(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            self.url,
+            {
+                "action": "update_branding",
+                "logo_url": "https://example.com/icon.png",
+                "wordmark_url": "https://example.com/wordmark.png",
+                "host_logo_url": "https://example.com/host.png",
+            },
+        )
+        cfg = get_organization_email_settings(self.org)
+        self.assertEqual(cfg["wordmark_url"], "https://example.com/wordmark.png")
+        self.assertEqual(cfg["host_logo_url"], "https://example.com/host.png")
+
+        self.client.post(
+            self.url, {"action": "update_branding", "remove_wordmark": "1"}
+        )
+        cfg = get_organization_email_settings(self.org)
+        self.assertEqual(cfg["wordmark_url"], "")
+        self.assertEqual(cfg["host_logo_url"], "https://example.com/host.png")
+        self.assertEqual(cfg["logo_url"], "https://example.com/icon.png")
+
+    def test_logo_context_is_organization_scoped_with_icon_fallbacks(self):
+        from GoSAdminPortal.context_processors import organization_context
+
+        update_organization_email_settings(
+            self.org,
+            {
+                "logo_url": "https://example.com/icon.png",
+                "wordmark_url": "https://example.com/wordmark.png",
+                "host_logo_url": "https://example.com/host.png",
+            },
+        )
+        request = RequestFactory().get("/")
+        request.organization = self.org
+        context = organization_context(request)
+        self.assertEqual(
+            context["organization_wordmark_url"], "https://example.com/wordmark.png"
+        )
+        self.assertEqual(
+            context["organization_host_logo_url"], "https://example.com/host.png"
+        )
+        other = Organization.objects.create(name="Other", slug="other-branding")
+        update_organization_email_settings(
+            other, {"logo_url": "https://example.com/other.png"}
+        )
+        request.organization = other
+        context = organization_context(request)
+        self.assertEqual(
+            context["organization_wordmark_url"], "https://example.com/other.png"
+        )
+        self.assertEqual(
+            context["organization_host_logo_url"], "https://example.com/other.png"
+        )
+
+    def test_account_and_receipt_render_their_respective_logos(self):
+        from GoSAdminPortal.context_processors import organization_context
+
+        update_organization_email_settings(
+            self.org,
+            {
+                "logo_url": "https://example.com/icon.png",
+                "wordmark_url": "https://example.com/wordmark.png",
+                "host_logo_url": "https://example.com/host.png",
+            },
+        )
+        request = RequestFactory().get("/")
+        request.organization = self.org
+        context = organization_context(request)
+        for template in (
+            "account/login.html",
+            "account/confirm_login_code.html",
+            "account/logout.html",
+        ):
+            html = render_to_string(template, context)
+            self.assertIn('src="https://example.com/wordmark.png"', html)
+            self.assertIn('rel="icon" href="https://example.com/icon.png"', html)
+        context.update(
+            {"student": {"preferred_first_name": "Test"}, "program": {}, "payment": {}}
+        )
+        html = render_to_string("programs/payment_print.html", context)
+        self.assertIn('src="https://example.com/host.png"', html)
+
+    def test_printable_balance_sheet_uses_host_logo_with_icon_fallback(self):
+        from GoSAdminPortal.context_processors import organization_context
+
+        request = RequestFactory().get("/")
+        request.organization = self.org
+        for host, icon, expected in (
+            (
+                "https://example.com/host.png",
+                "https://example.com/icon.png",
+                "https://example.com/host.png",
+            ),
+            ("", "https://example.com/icon.png", "https://example.com/icon.png"),
+            ("", "", ""),
+        ):
+            with self.subTest(host=host, icon=icon):
+                update_organization_email_settings(
+                    self.org, {"host_logo_url": host, "logo_url": icon}
+                )
+                context = organization_context(request)
+                context.update(
+                    {"student": {"preferred_first_name": "Test"}, "program": {}}
+                )
+                html = render_to_string("programs/balance_sheet_print.html", context)
+                header = html.split('<div class="org-header text-end">', 1)[1].split(
+                    "</div>", 1
+                )[0]
+                if expected:
+                    self.assertIn(f'src="{expected}"', header)
+                else:
+                    self.assertNotIn("<img", header)
+
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
+    def test_optional_logo_uploads_reject_invalid_images(self):
+        self.client.force_login(self.user)
+        for role in ("wordmark", "host_logo"):
+            with self.subTest(role=role):
+                image_io = BytesIO()
+                Image.new("RGB", (40, 20)).save(image_io, format="PNG")
+                self.client.post(
+                    self.url,
+                    {
+                        "action": "update_branding",
+                        f"{role}_file": SimpleUploadedFile(
+                            "logo.png", image_io.getvalue()
+                        ),
+                    },
+                )
+                saved = get_organization_email_settings(self.org)[f"{role}_url"]
+                self.assertTrue(saved.endswith(".png"))
+                self.client.post(
+                    self.url,
+                    {
+                        "action": "update_branding",
+                        f"{role}_file": SimpleUploadedFile("logo.png", b"not an image"),
+                    },
+                )
+                self.assertEqual(
+                    get_organization_email_settings(self.org)[f"{role}_url"], saved
+                )
+
     def test_base_notification_template_renders_branding(self):
         cfg = {
             "primary_color": "#7b1fa2",
@@ -332,9 +487,11 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="branding-tab"')
         self.assertContains(resp, 'id="branding"')
-        self.assertContains(resp, "Email Branding &amp; Template Customization")
+        self.assertContains(resp, "Organization Branding")
         self.assertContains(resp, "Primary Brand Color")
-        self.assertContains(resp, "Organization Logo")
+        self.assertContains(resp, "Team Icon")
+        self.assertContains(resp, "Team Wordmark")
+        self.assertContains(resp, "Host Organization Logo")
         self.assertNotContains(resp, 'name="portal_url"')
         self.assertContains(resp, "Email Template Live Preview")
 
@@ -405,6 +562,8 @@ class OrganizationEmailBrandingTests(TestCase):
         self.org_settings.save()
 
         adapter = get_adapter()
+        adapter.request = RequestFactory().get("/")
+        adapter.request.organization = self.org
         adapter.send_mail(
             "account/email/login_code",
             "student@example.com",

@@ -28,11 +28,10 @@ from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
-    Crew,
     Enrollment,
+    Group,
     Program,
     Student,
-    SubTeam,
     Team,
 )
 
@@ -566,45 +565,28 @@ class SignoutTenantSecurityTests(TestCase):
         self.assertNotIn(inconsistent, list(response.context["recent_signouts"]))
 
     def test_management_hides_foreign_enrollment_groups(self):
-        local_groups = {
-            "team": Team.objects.create(
-                organization=self.alpha, team_type="FRC", number=5678, name="Local Team"
+        local_team = Team.objects.create(
+            organization=self.alpha, team_type="FRC", number=5678, name="Local Team"
+        )
+        foreign_team = Team.objects.create(
+            organization=self.beta, team_type="FRC", number=1234, name="Foreign Team"
+        )
+        local_groups = [
+            Group.objects.create(
+                organization=self.alpha,
+                program=self.alpha_program,
+                name="Local Crew",
             ),
-            "crew": Crew.objects.create(
-                organization=self.alpha, program=self.alpha_program, name="Local Crew"
-            ),
-            "subteam": SubTeam.objects.create(
+            Group.objects.create(
                 organization=self.alpha,
                 program=self.alpha_program,
                 name="Local Subteam",
             ),
-        }
-        groups = (
-            (
-                "team",
-                Team.objects.create(
-                    organization=self.beta,
-                    team_type="FRC",
-                    number=1234,
-                    name="Foreign Team",
-                ),
-            ),
-            (
-                "crew",
-                Crew.objects.create(
-                    organization=self.beta,
-                    program=self.beta_program,
-                    name="Foreign Crew",
-                ),
-            ),
-            (
-                "subteam",
-                SubTeam.objects.create(
-                    organization=self.beta,
-                    program=self.beta_program,
-                    name="Foreign Subteam",
-                ),
-            ),
+        ]
+        foreign_group = Group.objects.create(
+            organization=self.beta,
+            program=self.beta_program,
+            name="Foreign Group",
         )
         lead, _ = self.make_mentor(
             "alpha-lead", "lead@alpha.example", self.alpha, role="LeadMentor"
@@ -613,19 +595,26 @@ class SignoutTenantSecurityTests(TestCase):
         enrollment = Enrollment.objects.get(
             program=self.alpha_program, student=self.student
         )
-        for field, group in groups:
-            with self.subTest(field=field):
-                assignments = {**local_groups, field: group}
-                Enrollment.objects.filter(pk=enrollment.pk).update(**assignments)
-                response = self.client.get(
-                    reverse("program_digital_signout", args=[self.alpha_program.pk]),
-                    HTTP_HOST=self.alpha_host,
-                )
-                self.assertContains(response, "Ada Student")
-                self.assertNotContains(response, group.name)
-                for local_field, local_group in local_groups.items():
-                    if local_field != field:
-                        self.assertContains(response, local_group.name)
+        url = reverse("program_digital_signout", args=[self.alpha_program.pk])
+
+        enrollment.team = local_team
+        enrollment.save(update_fields=["team"])
+        enrollment.groups.set(local_groups)
+        response = self.client.get(url, HTTP_HOST=self.alpha_host)
+        self.assertContains(response, "Ada Student")
+        self.assertContains(response, "Local Team")
+        for group in local_groups:
+            self.assertContains(response, group.name)
+
+        enrollment.team = foreign_team
+        enrollment.save(update_fields=["team"])
+        enrollment.groups.add(foreign_group)
+        response = self.client.get(url, HTTP_HOST=self.alpha_host)
+        self.assertContains(response, "Ada Student")
+        self.assertNotContains(response, "Foreign Team")
+        self.assertNotContains(response, foreign_group.name)
+        for group in local_groups:
+            self.assertContains(response, group.name)
 
     def test_presence_write_does_not_modify_foreign_owned_record(self):
         presence = StudentPresence.objects.get(

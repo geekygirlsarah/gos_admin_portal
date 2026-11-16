@@ -2,7 +2,7 @@ import os
 from unittest import mock
 
 from allauth.core.context import request_context
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 from django.core import mail
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
@@ -66,6 +66,7 @@ class AccountAdapterOrganizationTests(TestCase):
             "/accounts/login/", HTTP_HOST="other.momentumteam.app"
         )
         self.request.organization = self.org
+        self.request.user = AnonymousUser()
 
     def test_login_email_uses_request_tenant_not_request_host_or_override(self):
         with request_context(self.request):

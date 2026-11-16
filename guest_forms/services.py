@@ -11,6 +11,8 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import close_old_connections
 from django.template.loader import render_to_string
 
+from programs.utils.email_history import mark_email_history, send_messages_with_history
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +42,7 @@ def _send_html_email(
     text_body: str,
     html_body: Optional[str],
     recipients: List[str],
+    history_organization=None,
 ) -> None:
     if not recipients:
         return
@@ -53,10 +56,19 @@ def _send_html_email(
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
+        mark_email_history(
+            msg,
+            history_organization,
+            category="guest_form_confirmation",
+            retain_body=True,
+        )
         try:
-            msg.send()
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Failed to send email %r to %r", subject, recipients)
+            send_messages_with_history([msg])
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error(
+                "Failed to send guest form confirmation email (error=%s).",
+                type(exc).__name__,
+            )
         finally:
             if close_connections:
                 close_old_connections()
@@ -85,12 +97,9 @@ def send_submission_confirmation_email(submission) -> None:
         )
         return
 
-    from organizations.utils import (
-        get_default_organization,
-        get_organization_email_settings,
-    )
+    from organizations.utils import get_organization_email_settings
 
-    org = get_default_organization()
+    org = submission.guest_form.organization
     org_settings = get_organization_email_settings(org)
 
     ctx = {
@@ -108,4 +117,5 @@ def send_submission_confirmation_email(submission) -> None:
         text_body=text_body,
         html_body=html_body,
         recipients=[submission.email],
+        history_organization=submission.guest_form.organization,
     )

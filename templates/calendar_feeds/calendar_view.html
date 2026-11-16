@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Calendar - Girls of Steel Portal{% endblock %}
+{% block title %}Calendar - {{ organization_name }} Portal{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -140,7 +140,7 @@
                 <div class="mb-4">
                     <h6 class="fw-bold mb-2">Public Calendar Feed</h6>
                     <p class="text-muted small mb-2">
-                        Subscribe to all public Girls of Steel team meetings, workshops, and community events directly in your calendar app.
+                        Subscribe to public organization meetings, workshops, and community events directly in your calendar app.
                     </p>
                     <div class="input-group mb-2">
                         <input type="text" id="personalIcsInput" class="form-control font-monospace form-control-sm" value="{{ public_ics_url }}" readonly>

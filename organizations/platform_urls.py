@@ -2,12 +2,33 @@
 
 from django.urls import path
 
+from programs.views.notifications import (
+    PlatformNotificationCreateView,
+    PlatformNotificationListView,
+    PlatformNotificationMarkAsReadView,
+)
+
 from . import platform_views as views
 
 app_name = "platform_admin"
 
 urlpatterns = [
     path("", views.PlatformDashboardView.as_view(), name="dashboard"),
+    path(
+        "notifications/",
+        PlatformNotificationListView.as_view(),
+        name="notification_list",
+    ),
+    path(
+        "notifications/<int:pk>/read/",
+        PlatformNotificationMarkAsReadView.as_view(),
+        name="notification_mark_read",
+    ),
+    path(
+        "notifications/new/",
+        PlatformNotificationCreateView.as_view(),
+        name="notification_create",
+    ),
     # Organizations Management
     path(
         "organizations/",

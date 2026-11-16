@@ -206,7 +206,7 @@ class ListViewQueryOptimizationTest(TestCase):
         self.assertEqual(len(response.context["students"]), self.NUM)
         self.assertLess(
             _count_queries(fetch),
-            12,  # fixed overhead incl. org + org settings lookups
+            13,  # fixed overhead includes the scoped Group prefetch
             "student_list is performing an N+1 query pattern",
         )
 
@@ -218,7 +218,7 @@ class ListViewQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            10,
+            11,  # fixed overhead includes the scoped Group prefetch
             "parent_list is performing an N+1 query pattern",
         )
 
@@ -244,7 +244,7 @@ class ListViewQueryOptimizationTest(TestCase):
         self.assertEqual(len(response.context["alumni"]), self.NUM)
         self.assertLess(
             _count_queries(fetch),
-            10,
+            11,
             "alumni_list is performing an N+1 query pattern",
         )
 
@@ -282,7 +282,7 @@ class ProgramPhotoGridQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            12,  # fixed overhead incl. org + org settings lookups
+            13,  # fixed overhead includes the scoped Group prefetch
             "program_student_photos is performing an N+1 query pattern",
         )
 
@@ -337,7 +337,7 @@ class StudentDetailQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            18,  # fixed overhead incl. org + org settings lookups
+            19,  # fixed overhead includes the scoped Group prefetch
             "student_detail is performing an N+1 query pattern",
         )
 

@@ -151,6 +151,29 @@ class NavbarOrganizationTests(TestCase):
         for key in ("badges", "outreach", "orders", "travel"):
             self.assertFalse(context[f"current_program_has_{key}"])
 
+    def test_rendered_activities_exclude_other_organizations(self):
+        student = self.student(self.org, self.user)
+        for program in (self.local, self.foreign):
+            Enrollment.objects.create(
+                organization=self.org, student=student, program=program, active=True
+            )
+            for key in ("outreach", "orders", "travel"):
+                self.feature(program.organization, program, key)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile_dashboard"))
+        nav = response.content.decode().split("</nav>", 1)[0]
+        activities = nav.split('aria-labelledby="activitiesDropdown">', 1)[1].split(
+            "</ul>", 1
+        )[0]
+        for name in (
+            "outreach:event_list",
+            "orders:order_list",
+            "travel:event_list",
+            "program_student_map",
+        ):
+            self.assertIn(reverse(name, args=[self.local.pk]), activities)
+            self.assertNotIn(reverse(name, args=[self.foreign.pk]), activities)
+
     def test_foreign_profiles_and_missing_organization_fail_closed(self):
         student = self.student(self.other, self.user)
         Enrollment.objects.create(

@@ -1,7 +1,8 @@
 import datetime
 from decimal import Decimal
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group as AuthGroup
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -9,14 +10,15 @@ from django.utils import timezone
 from programs.models import (
     Adult,
     AdultStudentRelationship,
-    Crew,
     Enrollment,
     Fee,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     ProgramFeature,
     School,
     Student,
-    SubTeam,
     Team,
 )
 
@@ -24,8 +26,8 @@ from programs.models import (
 class CondensedProgramCardsTests(TestCase):
     def setUp(self):
         self.school = School.objects.create(name="Central High")
-        self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
-        self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
+        self.lead_group, _ = AuthGroup.objects.get_or_create(name="LeadMentor")
+        self.mentor_group, _ = AuthGroup.objects.get_or_create(name="Mentor")
 
         # Dates are relative to today so "Active"/"Upcoming" hold whenever the
         # suite runs. Program.status compares against timezone.now(), and
@@ -107,21 +109,26 @@ class CondensedProgramCardsTests(TestCase):
         team = Team.objects.create(
             team_type="FRC", number=3504, name="Girls of Steel", color="#0d6efd"
         )
-        subteam = SubTeam.objects.create(
-            program=self.program, name="Software", color="#198754"
+        software_group = ProgramGroup.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Software",
+            color="#198754",
         )
-        crew = Crew.objects.create(
-            program=self.program, name="Beta Crew", color="#6c757d"
+        beta_crew_group = ProgramGroup.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Beta Crew",
+            color="#6c757d",
         )
 
-        Enrollment.objects.create(
+        enrollment = Enrollment.objects.create(
             student=student,
             program=self.program,
             team=team,
-            subteam=subteam,
-            crew=crew,
             active=True,
         )
+        enrollment.groups.add(software_group, beta_crew_group)
 
         self.client.login(
             username="student_condensed", password="password123"

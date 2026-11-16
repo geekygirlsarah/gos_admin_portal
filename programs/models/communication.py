@@ -314,3 +314,124 @@ class EmailDeliveryQuarantine(models.Model):
 
     def __str__(self):
         return f"Quarantined delivery event ({self.reason_code}) at {self.received_at:%Y-%m-%d %H:%M}"
+
+
+class EmailHistoryBatch(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="email_history_batches",
+    )
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="initiated_email_history_batches",
+    )
+    category = models.CharField(max_length=80)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(
+                fields=("organization", "created_at"),
+                name="email_hist_batch_org_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"Email history batch {self.pk} ({self.category})"
+
+
+class EmailHistory(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_ATTEMPTED = "attempted"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_FAILED = "failed"
+    STATUS_UNKNOWN = "unknown"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_ATTEMPTED, "Attempted"),
+        (STATUS_ACCEPTED, "Accepted by provider"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_UNKNOWN, "Unknown"),
+    ]
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="email_history_entries",
+    )
+    batch = models.ForeignKey(
+        EmailHistoryBatch,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    subject = EncryptedTextField(null=True, blank=True, default=None)
+    body_text = EncryptedTextField(null=True, blank=True, default=None)
+    body_html = EncryptedTextField(null=True, blank=True, default=None)
+    body_retained = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_QUEUED, db_index=True
+    )
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(
+                fields=("organization", "created_at"),
+                name="email_hist_org_created_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"Email history entry {self.pk} ({self.status})"
+
+
+class EmailHistoryAddress(models.Model):
+    KIND_FROM = "from"
+    KIND_TO = "to"
+    KIND_CC = "cc"
+    KIND_BCC = "bcc"
+    KIND_CHOICES = [
+        (KIND_FROM, "From"),
+        (KIND_TO, "To"),
+        (KIND_CC, "Cc"),
+        (KIND_BCC, "Bcc"),
+    ]
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="email_history_addresses",
+    )
+    history = models.ForeignKey(
+        EmailHistory,
+        on_delete=models.CASCADE,
+        related_name="addresses",
+    )
+    kind = models.CharField(max_length=4, choices=KIND_CHOICES)
+    email_address = EncryptedTextField()
+    email_fingerprint = models.CharField(max_length=64, db_index=True)
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=("organization", "email_fingerprint"),
+                name="email_hist_addr_fpr_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"Email history address {self.pk} ({self.kind})"

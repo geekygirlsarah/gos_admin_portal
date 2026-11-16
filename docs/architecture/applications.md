@@ -35,6 +35,37 @@ Staff manage applications via `/applications/review/`:
   - Links application documents (`ApplicationDocumentSubmission`) into `StudentDocument` records.
   - Logs `AuditEvent.APPLICATION_CONVERTED`.
 
+### Historical student application answers
+
+`StudentApplicationAnswer` stores the question text and response for each
+application and linked student. Lead Mentors and platform superusers can see
+these answers on the student profile under the same tenant restrictions as
+application review. Ordinary student-profile access does not grant application
+review access. Program information and the application ID identify the source;
+different applications never overwrite one another.
+
+The backfill copies the four existing experience questions from approved,
+approved-and-signed, and converted student/parent applications only when
+`converted_student` is present and the student, application, and any program
+belong to the same organization. It does not infer a student from an email or
+an unconfirmed picker selection. Both old and current experience-step keys are
+examined separately; identical answers are de-duplicated, while conflicting
+answers are retained with their source step. Empty answers are not copied.
+Original application data and existing fixed Student fields remain unchanged.
+New conversions also preserve these answers before step-key normalization.
+For historical answers, question text is reconstructed from the current fixed
+wizard labels; earlier wording was not stored in the application data.
+
+Malformed answers, missing student links, and inconsistent ownership require
+manual review; see `report_application_answer_backfill` in `docs/operations.md`.
+Unlinked approved applications are expected until conversion. The backfill
+cannot recover data already lost before it ran. Answer rows follow the source
+application's and student's deletion lifecycle, and student merges transfer
+them only after validating their ownership. Question configuration and the
+replacement application wizard are not part of this phase.
+Conversion stops with an error if an experience answer is malformed rather than
+discarding it during step-key normalization.
+
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
 relationships, and enrollments. A selected foreign student, foreign program, or

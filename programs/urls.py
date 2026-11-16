@@ -30,6 +30,7 @@ from .views import (
     PortalCrewView,
     PortalDomainView,
     PortalEmailSettingsView,
+    PortalGroupView,
     PortalKioskView,
     PortalLeadMentorView,
     PortalOrgAccountSettingsView,
@@ -56,6 +57,7 @@ from .views import (
     ProgramFeeCreateView,
     ProgramFeeSelectView,
     ProgramFeeUpdateView,
+    ProgramGroupsView,
     ProgramListView,
     ProgramMailMergeView,
     ProgramMedicalInfoView,
@@ -109,7 +111,16 @@ from .views import (
 from .views.email_issues import (
     EmailDeliveryIssueListView,
     EmailDeliveryIssueResolveView,
+    EmailHistoryDetailView,
+    EmailHistoryListView,
     tosend_webhook_view,
+)
+from .views.notifications import (
+    NotificationBadgeView,
+    NotificationCreateView,
+    NotificationListView,
+    NotificationMarkAsReadView,
+    NotificationUnreadCountView,
 )
 from .views.org_emails import (
     andrew_id_management_view,
@@ -117,6 +128,27 @@ from .views.org_emails import (
 )
 
 urlpatterns = [
+    path("notifications/", NotificationListView.as_view(), name="notification_list"),
+    path(
+        "notifications/unread-count/",
+        NotificationUnreadCountView.as_view(),
+        name="notification_unread_count",
+    ),
+    path(
+        "notifications/badge/",
+        NotificationBadgeView.as_view(),
+        name="notification_badge",
+    ),
+    path(
+        "notifications/new/",
+        NotificationCreateView.as_view(),
+        name="notification_create",
+    ),
+    path(
+        "notifications/<int:pk>/read/",
+        NotificationMarkAsReadView.as_view(),
+        name="notification_mark_read",
+    ),
     # Programs
     path("", login_required(ProgramListView.as_view()), name="program_list"),
     path(
@@ -440,6 +472,7 @@ urlpatterns = [
         login_required(ProgramAssignmentView.as_view()),
         name="program_assignment",
     ),
+    path("<int:pk>/groups/", ProgramGroupsView.as_view(), name="program_groups"),
     path(
         "<int:pk>/enrollment/update/",
         ProgramEnrollmentUpdateView.as_view(),
@@ -661,6 +694,11 @@ urlpatterns = [
         name="portal_team",
     ),
     path(
+        "settings/groups/",
+        PortalGroupView.as_view(),
+        name="portal_groups",
+    ),
+    path(
         "settings/crews/",
         PortalCrewView.as_view(),
         name="portal_crew",
@@ -734,5 +772,11 @@ urlpatterns = [
         "email-issues/<int:pk>/resolve/",
         EmailDeliveryIssueResolveView.as_view(),
         name="email_delivery_issue_resolve",
+    ),
+    path("email-history/", EmailHistoryListView.as_view(), name="email_history_list"),
+    path(
+        "email-history/<int:pk>/",
+        EmailHistoryDetailView.as_view(),
+        name="email_history_detail",
     ),
 ]

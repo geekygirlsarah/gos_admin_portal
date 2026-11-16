@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Email History{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Email History</h1>
+      <p class="text-muted mb-0">Messages from your organization retained for up to 30 days.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'email_delivery_issues_list' %}">Delivery Issues</a>
+  </div>
+
+  <form method="get" class="row g-2 align-items-center mb-4">
+    <div class="col-sm-8 col-md-6">
+      <label class="visually-hidden" for="history-recipient">Recipient email</label>
+      <input id="history-recipient" class="form-control" type="email" name="q" value="{{ search_query }}" placeholder="Exact recipient email">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary" type="submit">Search</button>
+      {% if search_query %}<a class="btn btn-outline-secondary" href="{% url 'email_history_list' %}">Clear</a>{% endif %}
+    </div>
+  </form>
+
+  {% if history_entries %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr><th>Date</th><th>Recipient</th><th>Subject</th><th>Category</th><th>Initiated by</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for entry in history_entries %}
+            <tr>
+              <td>{{ entry.created_at|date:"M j, Y g:i A" }}</td>
+              <td>
+                {% for address in entry.addresses.all %}
+                  {% if address.kind == 'to' %}{{ address.email_address }}{% if not forloop.last %}, {% endif %}{% endif %}
+                {% empty %}—{% endfor %}
+              </td>
+              <td><a href="{% url 'email_history_detail' entry.pk %}">{{ entry.subject|default:"Body not retained" }}</a></td>
+              <td>{{ entry.batch.category|title }}</td>
+              <td>{{ entry.batch.initiated_by.username|default:"System" }}</td>
+              <td>{{ entry.get_status_display }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if is_paginated %}
+      <nav aria-label="Email history pages" class="d-flex justify-content-between">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Previous</a>{% else %}<span></span>{% endif %}
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <p class="alert alert-light">No retained messages match your search.</p>
+  {% endif %}
+{% endblock %}

@@ -1,6 +1,6 @@
 Hi {{ application.applicant_name|default:"" }},
 
-Thanks for applying to Girls of Steel Robotics!
+Thanks for applying to {{ org_email_settings.organization_name|default:"Momentum" }}!
 
 We've received your application:
 
@@ -19,4 +19,4 @@ You can check back at any time using your application ID:
   {{ resume_url }}
 {% endif %}
 
-If you have questions, contact leads@girlsofsteelrobotics.org.
+{% if org_email_settings.contact_email %}If you have questions, contact {{ org_email_settings.contact_email }}.{% endif %}

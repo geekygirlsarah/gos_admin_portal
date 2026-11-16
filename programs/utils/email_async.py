@@ -12,6 +12,12 @@ from django.core.mail.backends.base import BaseEmailBackend
 from django.core.mail.message import EmailMessage
 from django.db import close_old_connections
 
+from programs.utils.email_history import (
+    complete_email_history,
+    mark_email_history_attempted,
+    queue_email_history,
+)
+
 logger = logging.getLogger(__name__)
 
 # Shared bounded thread pool executor for background email delivery
@@ -44,8 +50,10 @@ def _dispatch_worker(
     try:
         if manage_connections:
             close_old_connections()
+        mark_email_history_attempted(email_messages)
         backend = connection or get_connection()
         sent_count = backend.send_messages(email_messages)
+        complete_email_history(email_messages, sent_count)
         logger.info(
             "Background email dispatch succeeded | message_count=%d | sent_count=%d",
             len(email_messages),
@@ -53,6 +61,7 @@ def _dispatch_worker(
         )
     except Exception as exc:
         err = exc
+        complete_email_history(email_messages, sent_count, error=exc)
         logger.error(
             "Background email dispatch failed | message_count=%d | error=%s",
             len(email_messages),
@@ -87,6 +96,7 @@ def send_messages_in_background(
     Returns a concurrent.futures.Future representing the execution.
     """
     is_sync = sync if sync is not None else getattr(settings, "TESTING", False)
+    queue_email_history(email_messages)
     if is_sync:
         sent = _dispatch_worker(
             email_messages, connection, on_complete, manage_connections=False

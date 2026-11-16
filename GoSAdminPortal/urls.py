@@ -38,6 +38,7 @@ urlpatterns = [
     path("health", portal_views.health, name="health"),
     path("health/", portal_views.health, name="health"),
     path("admin/", admin.site.urls),
+    path("audit/", include("audit.urls")),
     path("platform-admin/", include("organizations.platform_urls")),
     path("accounts/", include("allauth.urls")),
     path("organizations/", include("organizations.urls")),

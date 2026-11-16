@@ -1,7 +1,8 @@
 import datetime
 from decimal import Decimal
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group as AuthGroup
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -12,14 +13,15 @@ from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
-    Crew,
     Enrollment,
     Fee,
+)
+from programs.models import Group as ProgramGroup
+from programs.models import (
     Program,
     ProgramFeature,
     School,
     Student,
-    SubTeam,
     Team,
 )
 
@@ -37,7 +39,7 @@ class Phase2DashboardViewTests(TestCase):
             start_date=today - datetime.timedelta(days=30),
             end_date=today + datetime.timedelta(days=240),
         )
-        self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead_group, _ = AuthGroup.objects.get_or_create(name="LeadMentor")
 
     def test_lead_mentor_dashboard_overview_and_quick_actions(self):
         lead_user = User.objects.create_user(
@@ -153,11 +155,17 @@ class Phase2DashboardViewTests(TestCase):
         team = Team.objects.create(
             team_type="FRC", number=3504, name="Girls of Steel", color="#198754"
         )
-        subteam = SubTeam.objects.create(
-            program=self.program, name="Mechanical", color="#0d6efd"
+        mechanical_group = ProgramGroup.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Mechanical",
+            color="#0d6efd",
         )
-        crew = Crew.objects.create(
-            program=self.program, name="Alpha Crew", color="#6c757d"
+        alpha_crew_group = ProgramGroup.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Alpha Crew",
+            color="#6c757d",
         )
 
         # Enable orders and outreach features
@@ -166,14 +174,13 @@ class Phase2DashboardViewTests(TestCase):
         )
         self.program.features.add(feat_orders)
 
-        Enrollment.objects.create(
+        enrollment = Enrollment.objects.create(
             student=student,
             program=self.program,
             team=team,
-            subteam=subteam,
-            crew=crew,
             active=True,
         )
+        enrollment.groups.add(mechanical_group, alpha_crew_group)
 
         self.client.login(
             username="student_features", password="password123"

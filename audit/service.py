@@ -93,12 +93,51 @@ def _get_session_id(request) -> str:
         return ""
 
 
+def _request_organization_id(request, resource, organization=None):
+    """Attribute only tenant requests that agree with the resource's ownership."""
+    request_organization = getattr(request, "organization", None)
+    if request is not None and (
+        request_organization is None
+        or getattr(request, "_is_platform_domain", False)
+        or (organization is not None and organization.pk != request_organization.pk)
+    ):
+        return None
+    organization = organization or request_organization
+    if organization is None:
+        return None
+    if (
+        hasattr(resource, "organization_id")
+        and resource.organization_id != organization.pk
+    ):
+        return None
+    label = getattr(getattr(resource, "_meta", None), "label_lower", None)
+    if label == "organizations.organization":
+        if resource.pk != organization.pk:
+            return None
+    if label == "programs.adultstudentrelationship" and (
+        resource.adult.organization_id != organization.pk
+        or resource.student.organization_id != organization.pk
+    ):
+        return None
+    from django.contrib.auth import get_user_model
+
+    if isinstance(resource, get_user_model()):
+        from organizations.models import UserOrganizationMembership
+
+        if not UserOrganizationMembership.objects.filter(
+            user_id=resource.pk, organization_id=organization.pk
+        ).exists():
+            return None
+    return organization.pk
+
+
 def log_event(
     *,
     event: AuditEvent,
     resource,
     request=None,
     actor=None,
+    organization=None,
     before: dict | None = None,
     after: dict | None = None,
     outcome: str = AuditLog.SUCCESS,
@@ -114,6 +153,8 @@ def log_event(
     request:  The current HttpRequest (resolves IP, session, and actor).
               Pass None for management commands or background tasks.
     actor:    Explicit actor override (defaults to request.user when omitted).
+    organization: Explicit authoritative organization, when known by the caller.
+              A supplied request must resolve to the same organization.
     before:   Dict of field values before the change.
     after:    Dict of field values after the change.
     outcome:  AuditLog.SUCCESS (default) or AuditLog.FAILURE.
@@ -133,6 +174,7 @@ def log_event(
                 resolved_actor = user
 
         entry = AuditLog(
+            organization_id=_request_organization_id(request, resource, organization),
             actor=resolved_actor,
             event=event,
             resource_type=type(resource).__name__,

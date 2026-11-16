@@ -16,11 +16,7 @@ DEFAULT_ORGANIZATION_SETTINGS = {
     "mentor_label": "Mentor",
     "parent_label": "Parent",
     "student_label": "Student",
-    "clearance_types": [
-        "PA State Police Criminal Record Check (PATCH)",
-        "PA Child Abuse History Clearance (PACA)",
-        "FBI Fingerprinting / Affidavit",
-    ],
+    "clearance_types": [],
     "sliding_scale": {
         "base_amount": "10150.00",
         "additional_member_amount": "5500.00",
@@ -39,12 +35,12 @@ DEFAULT_ORGANIZATION_SETTINGS = {
         "signout-sheet": True,
     },
     "email_settings": {},
-    "portal_title": "Girls of Steel Portal",
-    "footer_tagline": "is an outreach program of Carnegie Mellon University.",
-    "org_account_enabled": True,
-    "org_account_name": "Andrew ID",
-    "org_email_domain": "andrew.cmu.edu",
-    "force_mentor_org_email": True,
+    "portal_title": "",
+    "footer_tagline": "",
+    "org_account_enabled": False,
+    "org_account_name": "",
+    "org_email_domain": "",
+    "force_mentor_org_email": False,
     "force_student_org_email": False,
     "force_parent_org_email": False,
     "force_alumni_org_email": False,
@@ -117,13 +113,7 @@ class OrganizationManager(models.Manager.from_queryset(OrganizationQuerySet)):
 
 
 class Organization(models.Model):
-    """A tenant/organization that owns portal data.
-
-    Phase 1 of the multi-tenant effort: there is a single organization
-    (Girls of Steel, slug ``gos``) and core models carry a *nullable*
-    ``organization`` FK. Nothing enforces scoping yet — the FK is just the
-    schema groundwork the later phases will build on.
-    """
+    """A tenant that owns portal data and organization-specific settings."""
 
     name = models.CharField(
         max_length=200,
@@ -132,7 +122,7 @@ class Organization(models.Model):
     slug = models.SlugField(
         max_length=100,
         unique=True,
-        help_text="URL-safe identifier for this organization (e.g. 'gos').",
+        help_text="URL-safe identifier for this organization (e.g. 'robotics-club').",
     )
     subdomain = models.SlugField(
         max_length=100,
@@ -190,9 +180,9 @@ class Organization(models.Model):
         """Check if the given email belongs to this organization's institutional domain."""
         if not email or "@" not in email:
             return False
-        if not self.get_setting("org_account_enabled", True):
+        if not self.get_setting("org_account_enabled", False):
             return False
-        domain_setting = self.get_setting("org_email_domain", "andrew.cmu.edu") or ""
+        domain_setting = self.get_setting("org_email_domain", "") or ""
         if not domain_setting:
             return False
         email_domain = email.lower().split("@")[-1].strip()
@@ -207,13 +197,13 @@ class Organization(models.Model):
 
     def is_role_forced_org_email(self, role: str) -> bool:
         """Check if members of a specific role are required to use their org email."""
-        if not self.get_setting("org_account_enabled", True):
+        if not self.get_setting("org_account_enabled", False):
             return False
         if not self.get_setting("org_email_domain", ""):
             return False
         role_lower = (role or "").strip().lower()
         if role_lower in ("mentor", "lead_mentor", "lead mentor"):
-            return bool(self.get_setting("force_mentor_org_email", True))
+            return bool(self.get_setting("force_mentor_org_email", False))
         elif role_lower == "student":
             return bool(self.get_setting("force_student_org_email", False))
         elif role_lower == "parent":

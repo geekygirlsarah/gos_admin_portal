@@ -14,6 +14,7 @@ from programs.models import (
     AdultStudentRelationship,
     Crew,
     Enrollment,
+    Group,
     Program,
     Student,
     SubTeam,
@@ -111,10 +112,10 @@ class ProgramMessagingTenantIsolationTests(TestCase):
             **kwargs,
         )
 
-    def post_broadcast(self, program, groups, **extra):
+    def post_broadcast(self, program, recipient_groups, **extra):
         data = {
             "program": str(program.pk),
-            "recipient_groups": groups,
+            "recipient_groups": recipient_groups,
             "subject": "Tenant announcement",
             "body": "<p>Tenant-only message</p>",
             "from_account": "DEFAULT",
@@ -160,6 +161,12 @@ class ProgramMessagingTenantIsolationTests(TestCase):
             program=self.beta_program,
             name="Beta Subteam",
         )
+        alpha_group = Group.objects.create(
+            organization=self.alpha, program=self.alpha_program, name="Alpha Group"
+        )
+        Group.objects.create(
+            organization=self.beta, program=self.beta_program, name="Beta Group"
+        )
         alpha_student = self.make_student(self.alpha, "alpha@example.test", "Alpha")
         beta_student = self.make_student(self.beta, "beta@example.test", "Beta")
         self.make_enrollment(
@@ -196,17 +203,14 @@ class ProgramMessagingTenantIsolationTests(TestCase):
             {alpha_team.pk},
         )
         self.assertEqual(
-            set(form.fields["crews"].queryset.values_list("pk", flat=True)),
-            {alpha_crew.pk},
-        )
-        self.assertEqual(
-            set(form.fields["subteams"].queryset.values_list("pk", flat=True)),
-            {alpha_subteam.pk},
+            set(form.fields["groups"].queryset.values_list("pk", flat=True)),
+            {alpha_group.pk},
         )
         self.assertNotContains(response, "Beta Program")
         self.assertNotContains(response, "Beta Team")
         self.assertNotContains(response, "Beta Crew")
         self.assertNotContains(response, "Beta Subteam")
+        self.assertNotContains(response, "Beta Group")
 
     def test_foreign_program_url_is_not_accessible(self):
         response = self.client.get(
@@ -346,21 +350,26 @@ class ProgramMessagingTenantIsolationTests(TestCase):
         self.assertContains(response, "Select a valid choice")
 
     def test_foreign_subgroup_submission_is_rejected(self):
-        foreign_crew = Crew.objects.create(
+        foreign_group = Group.objects.create(
             organization=self.beta,
             program=self.alpha_program,
-            name="Foreign Crew On Alpha Program",
+            name="Foreign Group On Alpha Program",
+        )
+        other_program = Program.objects.create(
+            organization=self.alpha, name="Other Alpha Program"
+        )
+        other_group = Group.objects.create(
+            organization=self.alpha, program=other_program, name="Other Group"
         )
 
-        response = self.post_broadcast(
-            self.alpha_program,
-            ["students"],
-            crews=[str(foreign_crew.pk)],
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(mail.outbox, [])
-        self.assertIn("crews", response.context["form"].errors)
+        for group in (foreign_group, other_group):
+            with self.subTest(group=group):
+                response = self.post_broadcast(
+                    self.alpha_program, ["students"], groups=[str(group.pk)]
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(mail.outbox, [])
+                self.assertIn("groups", response.context["form"].errors)
 
     def test_recipients_and_relationships_stay_with_program_organization(self):
         local_student = self.make_student(

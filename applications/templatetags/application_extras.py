@@ -7,6 +7,12 @@ from programs.utils import calculate_grade, format_grade
 register = template.Library()
 
 
+@register.simple_tag
+def wizard_step_numbers(total_steps):
+    """Return the numbered positions in the application wizard."""
+    return range(1, total_steps + 1)
+
+
 # Friendly labels for known field keys used in the saved step data.
 # Anything not listed falls back to humanizing the snake_case key.
 FIELD_LABELS = {
@@ -20,12 +26,12 @@ FIELD_LABELS = {
     "date_of_birth": "Date of birth",
     "school_name": "School",
     "graduation_year": "Graduation year",
-    "andrew_id": "Andrew ID",
+    "andrew_id": "Organization account ID",
     "discord_username": "Discord username",
     "email": "Email",
     "email_address": "Email address",
     "personal_email": "Personal email",
-    "andrew_email": "Andrew email",
+    "andrew_email": "Organization account email",
     "race_ethnicity": "Race / ethnicity",
     "race_ethnicities": "Race / Ethnicity",
     "pronouns": "Pronouns",
@@ -117,7 +123,7 @@ def humanize_field(value):
 
     Examples:
         legal_first_name -> Legal first name
-        andrew_id        -> Andrew ID
+        andrew_id        -> Organization account ID
         email            -> Email
     """
     if value is None:

@@ -63,6 +63,7 @@ The digital sign-out system allows parents/guardians to sign out students electr
 - **Undo Workflow**: Dimmed signed-out rows allow undoing sign-outs for the current day via `#undoForm` POST (`?notice=undone`).
 - **Signer Selection**: Dropdown populated from the student's linked `Adult` parents (`AdultStudentRelationship` with `is_parent=True`) with a fallback manual text input.
 - **Encrypted Storage**: Signatures are decoded from base64 PNGs and stored in encrypted `EncryptedFileField` storage (`DigitalSignout.signature`).
+- The mentor management page lists recent sign-outs without automatically requesting signatures. Each signature can be loaded on demand through the existing protected endpoint; without JavaScript, the link opens the image directly.
 
 ### Public Attendance Kiosks (`/kiosk/`, `/api/v1/kiosk/`)
 - Kiosk pages and API requests require an active resolved organization; kiosk and program ownership must both match that organization. Attendance events and sessions inherit the program's organization, and kiosk lookups scope students, mentors, RFID cards, and existing sessions to it.

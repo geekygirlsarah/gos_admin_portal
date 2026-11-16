@@ -156,16 +156,11 @@
                           {{ enr.team.team_type }} {{ enr.team.number }}{% if enr.team.name %} {{ enr.team.name }}{% endif %}
                         </span>
                       {% endif %}
-                      {% if enr.crew %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.crew.color }}; color: {{ enr.crew.color|contrast_color }};">
-                          {{ enr.crew.name }}
+                      {% for group in enr.groups.all %}
+                        <span class="badge rounded-pill" style="background-color: {{ group.color }}; color: {{ group.color|contrast_color }};">
+                          {{ group.name }}
                         </span>
-                      {% endif %}
-                      {% if enr.subteam %}
-                        <span class="badge rounded-pill" style="background-color: {{ enr.subteam.color }}; color: {{ enr.subteam.color|contrast_color }};">
-                          {{ enr.subteam.name }}
-                        </span>
-                      {% endif %}
+                      {% endfor %}
                     </div>
                   </div>
                   <div class="text-end">
@@ -544,6 +539,23 @@
           </div>
         {% endif %}
 
+        {% if application_answers %}
+          <div class="card shadow-sm border-0 rounded-3 mb-4">
+            <div class="card-header bg-white py-3 border-bottom">
+              <h3 class="h6 mb-0 fw-bold">Application Answers</h3>
+            </div>
+            <div class="card-body p-4">
+              {% for item in application_answers %}
+                <div class="mb-3">
+                  <div class="text-muted small">{{ item.application.program.name|default:"Program not recorded" }} &middot; Application {{ item.application.application_id }} &middot; {{ item.application.created_at|date:"M j, Y" }}{% if item.source_step == "step6" %} &middot; Earlier step data{% endif %}</div>
+                  <div class="fw-semibold">{{ item.question_text }}</div>
+                  <div class="text-break">{{ item.answer|linebreaksbr }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
         <!-- Signed Documents -->
         {% if can_read_docs %}
           <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -604,9 +616,9 @@
 
                 {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
                   <div class="col-md-6">
-                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Andrew Account" }}</div>
-                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Andrew ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
-                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Andrew" }} Email:</span> {{ student.org_email|default:'—' }}</div>
+                    <div class="text-muted small fw-semibold text-uppercase mb-2">{{ org_account_name|default:"Organization account" }}</div>
+                    <div class="small mb-1"><span class="fw-semibold">{{ org_account_name|default:"Organization account ID" }}:</span> <code>{{ student.org_account_id|default:'—' }}</code></div>
+                    <div class="small"><span class="fw-semibold">{{ org_account_name|default:"Organization" }} Email:</span> {{ student.org_email|default:'—' }}</div>
                   </div>
                 {% endif %}
               </div>

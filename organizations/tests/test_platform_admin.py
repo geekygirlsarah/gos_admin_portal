@@ -202,10 +202,9 @@ class PlatformAdminAccessControlTests(TestCase):
         self.assertContains(response, "Return to Team Portal")
 
         # Should NOT contain team Lead Mentor dropdowns
-        self.assertNotContains(response, 'id="studentsAdminDropdown"')
-        self.assertNotContains(response, 'id="adultsAdminDropdown"')
-        self.assertNotContains(response, 'id="applicationsAdminDropdown"')
-        self.assertNotContains(response, 'id="manageDataAdminDropdown"')
+        self.assertContains(response, 'id="platformOperationsDropdown"')
+        self.assertNotContains(response, 'id="peopleDropdown"')
+        self.assertNotContains(response, 'id="adminDropdown"')
 
     def test_team_portal_navbar_links_to_platform_admin_root_domain(self):
         """Team portal page renders Platform Admin link pointing to the primary root domain."""

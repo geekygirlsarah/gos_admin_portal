@@ -159,7 +159,7 @@
         {% load static %}
         <div class="row justify-content-center mb-2">
             <div class="col-auto">
-                <img src="{% static 'img/gos_logo.png' %}" class="img-fluid" style="max-height: 120px;" alt="Girls of Steel Logo">
+                {% if organization_logo_url %}<img src="{{ organization_logo_url }}" class="img-fluid" style="max-height: 120px;" alt="{{ organization_name }} logo">{% else %}<h2>{{ organization_name }}</h2>{% endif %}
             </div>
         </div>
         <h1>{{ kiosk.label }}</h1>
@@ -274,7 +274,7 @@
             <div class="kiosk-column kiosk-column-guest shadow">
                 <div class="kiosk-column-header">VISITOR / GUEST</div>
                 <div class="alert alert-warning mb-3 py-2 px-3" role="alert" style="font-size: 1.1rem;">
-                    <strong>Are you a Girls of Steel student or mentor?</strong>
+                    <strong>Are you a {{ organization_name }} student or mentor?</strong>
                     Use the <strong>Members</strong> side (left) so we can log your hours correctly.
                 </div>
                 <p class="kiosk-column-hint">Enter your first and last name (at least two parts) and optional team number.</p>

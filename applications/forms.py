@@ -414,7 +414,7 @@ class StudentExperienceForm(forms.Form):
     """New Step 6: qualitative questions about student interest/experience."""
 
     interest_reason = forms.CharField(
-        label="Why are you interested in participating in this Girls of Steel program this season?",
+        label="Why are you interested in participating in this program this season?",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
     )
@@ -430,7 +430,7 @@ class StudentExperienceForm(forms.Form):
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
     )
     referral_source = forms.CharField(
-        label="How did you hear about Girls of Steel Robotics?",
+        label="How did you hear about this program?",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
     )
@@ -439,7 +439,7 @@ class StudentExperienceForm(forms.Form):
         super().__init__(*args, **kwargs)
         if applicant_type == Application.Type.PARENT:
             self.fields["interest_reason"].label = (
-                "Why is your child interested in participating in this Girls of Steel program this season?"
+                "Why is your child interested in participating in this program this season?"
             )
             self.fields["hoped_gains"].label = (
                 "What does your child hope to gain from the experience?"
@@ -698,7 +698,7 @@ class MentorInfoForm(forms.Form):
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     andrew_id = forms.CharField(
-        label="Andrew ID (if you have one)",
+        label="Organization account ID (if you have one)",
         max_length=50,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
@@ -710,7 +710,7 @@ class MentorInfoForm(forms.Form):
         widget=forms.TextInput(attrs=_text_attrs),
     )
     notes = forms.CharField(
-        label="Why are you interested in volunteering with Girls of Steel?",
+        label="Why are you interested in volunteering with this organization?",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 4}),
     )

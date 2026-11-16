@@ -20,6 +20,9 @@ from .agreements import (
 from .communication import (
     EmailDeliveryEvent,
     EmailDeliveryQuarantine,
+    EmailHistory,
+    EmailHistoryAddress,
+    EmailHistoryBatch,
     TrustedOutgoingEmailRecipient,
 )
 from .enrollments import Enrollment
@@ -43,7 +46,8 @@ from .finances import (
     _tax_form_upload_to,
 )
 from .geocoding import AddressGeocode
-from .groups import Crew, SubTeam, Team
+from .groups import Crew, Group, SubTeam, Team
+from .notifications import Notification, UserNotificationStatus
 from .permissions import RolePermission
 from .programs import (
     Program,
@@ -71,6 +75,9 @@ __all__ = [
     "Crew",
     "EmailDeliveryEvent",
     "EmailDeliveryQuarantine",
+    "EmailHistory",
+    "EmailHistoryAddress",
+    "EmailHistoryBatch",
     "TrustedOutgoingEmailRecipient",
     "EncryptedCharField",
     "EncryptedFieldFile",
@@ -80,9 +87,11 @@ __all__ = [
     "Enrollment",
     "Fee",
     "FeeAssignment",
+    "Group",
     "MentorAgreement",
     "MentorAgreementAcceptance",
     "MentorAgreementSubmission",
+    "Notification",
     "OrganizationManager",
     "OrganizationQuerySet",
     "Payment",
@@ -102,6 +111,7 @@ __all__ = [
     "SubTeam",
     "TaxForm",
     "Team",
+    "UserNotificationStatus",
     "_agreement_submission_upload_to",
     "_adult_photo_upload_to",
     "_get_legacy_fernet",

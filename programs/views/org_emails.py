@@ -32,19 +32,15 @@ def _get_adult_sponsor_choices(organization=None):
 @login_required
 @require_http_methods(["GET", "POST"])
 def org_email_management_view(request):
-    from organizations.utils import (
-        get_default_organization,
-        get_organization_setting,
-    )
+    from organizations.utils import get_organization_setting
 
     from ..permission_views import user_is_lead_mentor
 
-    org = getattr(request, "organization", None) or get_default_organization()
-    org_account_name = (
-        get_organization_setting(org, "org_account_name", "Andrew ID")
-        if org
-        else "Andrew ID"
-    )
+    org = getattr(request, "organization", None)
+    if not org:
+        messages.error(request, "No organization is selected.")
+        return redirect("home")
+    org_account_name = get_organization_setting(org, "org_account_name", "")
 
     if not user_is_lead_mentor(request.user, org=org):
         messages.error(
@@ -142,11 +138,7 @@ def org_email_management_view(request):
                 messages.error(request, "Invalid account holder type.")
                 return _redirect_back(search_query)
 
-            person_org = (
-                getattr(person, "organization", None)
-                or org
-                or get_default_organization()
-            )
+            person_org = getattr(person, "organization", None) or org
             person_account_name = (
                 get_organization_setting(
                     person_org, "org_account_name", org_account_name
@@ -182,18 +174,14 @@ def org_email_management_view(request):
                 return _redirect_back(search_query)
 
             domain_setting = (
-                get_organization_setting(
-                    person_org, "org_email_domain", "andrew.cmu.edu"
-                )
-                or "andrew.cmu.edu"
+                get_organization_setting(person_org, "org_email_domain", "") or ""
             )
             primary_domain = (
                 domain_setting.replace(";", ",").split(",")[0].strip().lstrip("@")
-                or "andrew.cmu.edu"
             )
-            auto_email = f"{raw_id}@{primary_domain}"
+            auto_email = f"{raw_id}@{primary_domain}" if primary_domain else ""
             person.org_account_id = raw_id
-            person.org_email = auto_email
+            person.org_email = auto_email or None
 
             expiration = (
                 request.POST.get("org_email_expiration")
@@ -247,11 +235,7 @@ def org_email_management_view(request):
                 messages.error(request, "Invalid account holder type.")
                 return _redirect_back(search_query)
 
-            person_org = (
-                getattr(person, "organization", None)
-                or org
-                or get_default_organization()
-            )
+            person_org = getattr(person, "organization", None) or org
             person_account_name = (
                 get_organization_setting(
                     person_org, "org_account_name", org_account_name
