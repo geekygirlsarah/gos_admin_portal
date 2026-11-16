@@ -165,6 +165,30 @@ class StudentApplicationAnswerTests(TestCase):
             {"Old response", "New response"},
         )
 
+    def test_conversion_extracts_fresh_answers_from_stale_instance(self):
+        application = self.application(
+            status=Application.Status.APPROVED_SIGNED,
+            converted_student=None,
+            data={
+                "step5-student": {
+                    "legal_first_name": "New",
+                    "last_name": "Student",
+                    "date_of_birth": "2011-01-01",
+                }
+            },
+        )
+        stale = Application.objects.get(pk=application.pk)
+        application.data["step6-experience"] = {"referral_source": "Fresh answer"}
+        application.save(update_fields=["data"])
+
+        student = convert_application_to_student(stale)
+
+        self.assertEqual(student.application_answers.get().answer, "Fresh answer")
+        application.refresh_from_db()
+        self.assertEqual(
+            application.data["step6-experience"]["referral_source"], "Fresh answer"
+        )
+
     def test_failed_conversion_keeps_original_step_data(self):
         data = {
             "step6": {"referral_source": "Old response"},

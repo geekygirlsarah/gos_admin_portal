@@ -15,7 +15,7 @@ import uuid
 import pghistory
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
@@ -296,12 +296,22 @@ class Application(models.Model):
         ``save=True``, persists the result so a stale legacy copy can never
         reappear next load. Returns the normalized ``data`` dict.
         """
-        normalized = normalize_step_keys(self.data)
-        if normalized == self.data:
-            return self.data
-        self.data = normalized
         if save:
-            self.save(update_fields=["data", "updated_at"])
+            using = self._state.db
+            with transaction.atomic(using=using):
+                current = (
+                    type(self)
+                    .objects.using(using)
+                    .select_for_update()
+                    .get(pk=self.pk, organization_id=self.organization_id)
+                )
+                normalized = normalize_step_keys(current.data)
+                if normalized != current.data:
+                    current.data = normalized
+                    current.save(update_fields=["data", "updated_at"])
+                self.data = normalized
+            return self.data
+        self.data = normalize_step_keys(self.data)
         return self.data
 
     # -- OTP ----------------------------------------------------------------

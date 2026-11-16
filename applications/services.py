@@ -1124,15 +1124,6 @@ def convert_application_to_student(application: Application, request=None):
             )
         return application.converted_student
 
-    answers = []
-    if application.applicant_type != Application.Type.MENTOR:
-        from .answers import extract_experience_answers
-
-        try:
-            answers = extract_experience_answers(application.data)
-        except ValueError as exc:
-            raise ApplicationConversionError(str(exc)) from exc
-
     # Mentors don't produce a Student record, so idempotency is tracked by
     # the CONVERTED status plus a lookup of the created mentor Adult.
     if (
@@ -1193,6 +1184,18 @@ def convert_application_to_student(application: Application, request=None):
                 )
 
     with transaction.atomic():
+        current = Application.objects.select_for_update().get(
+            pk=application.pk, organization_id=organization_id
+        )
+        application.data = current.data
+        answers = []
+        if application.applicant_type != Application.Type.MENTOR:
+            from .answers import extract_experience_answers
+
+            try:
+                answers = extract_experience_answers(application.data)
+            except ValueError as exc:
+                raise ApplicationConversionError(str(exc)) from exc
         application.normalize_step_data(save=True)
         data = application.data or {}
         if application.applicant_type == Application.Type.MENTOR:
