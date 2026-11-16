@@ -4,11 +4,14 @@ import datetime
 import re
 
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from applications.models import Application
-from applications.tests.access_helpers import grant_applicant_document_access
+from applications.tests.access_helpers import (
+    grant_applicant_document_access,
+    verify_application_browser,
+)
 from programs.models import Program
 
 
@@ -27,6 +30,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=4,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
@@ -42,6 +46,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=4,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step3", kwargs={"app_id": app.application_id})
         )
@@ -57,6 +62,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             program=self.program,
             current_step=5,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -75,6 +81,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=5,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_mentor_info", kwargs={"app_id": app.application_id})
         )
@@ -94,6 +101,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             program=self.program,
             current_step=5,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -110,6 +118,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             email_verified_at=timezone.now(),
             current_step=5,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_mentor_info", kwargs={"app_id": app.application_id})
         )
@@ -124,7 +133,9 @@ class WizardBackNavigationReproductionTests(TestCase):
             program=self.program,
             status=Application.Status.SUBMITTED,
             current_step=10,
+            email_verified_at=timezone.now(),
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_submitted", kwargs={"app_id": app.application_id})
         )
@@ -141,6 +152,7 @@ class WizardBackNavigationReproductionTests(TestCase):
             status=Application.Status.APPROVED,
             current_step=10,
         )
+        verify_application_browser(self.client, app)
         grant_applicant_document_access(self.client, app)
         response = self.client.get(
             reverse("apply_step10", kwargs={"app_id": app.application_id})
@@ -152,8 +164,9 @@ class WizardBackNavigationReproductionTests(TestCase):
 
 class Step2LabelReproductionTest(TestCase):
     def test_step2_labels_not_duplicated(self):
-        app = Application.objects.create(email="test@example.com")
-        url = reverse("apply_step2", kwargs={"app_id": app.application_id})
+        start_response = self.client.post(reverse("apply_start"))
+        app_id = resolve(start_response.url).kwargs["app_id"]
+        url = reverse("apply_step2", kwargs={"app_id": app_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -181,6 +194,7 @@ class Step2LabelReproductionTest(TestCase):
             email="test@example.com",
             email_verified_at=timezone.now(),
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step4", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

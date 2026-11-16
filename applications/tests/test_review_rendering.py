@@ -1,5 +1,7 @@
 """Tests for review page rendering: boolean fields and AdultStudentRelationship prefill."""
 
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -191,6 +193,16 @@ class AdultToPrefillAttributeErrorTest(TestCase):
         session = self.client.session
         session[f"handoff_{self.application.application_id}"] = True
         session.save()
+        verification_url = reverse(
+            "apply_browser_verification",
+            kwargs={"app_id": self.application.application_id},
+        )
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email"):
+                self.client.post(verification_url, {"action": "send"})
+        self.client.post(verification_url, {"code": "123456"})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Volida")

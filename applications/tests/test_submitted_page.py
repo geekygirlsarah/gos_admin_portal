@@ -2,8 +2,10 @@
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from applications.models import Application
+from applications.tests.access_helpers import verify_application_browser
 from programs.models import Program
 
 
@@ -21,6 +23,7 @@ class SubmittedNamesReproductionTest(TestCase):
             email="student@example.com",
             program=self.program,
             status=Application.Status.SUBMITTED,
+            email_verified_at=timezone.now(),
             data={
                 "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
                 "step7-primaryparent": {"legal_first_name": "John", "last_name": "Doe"},
@@ -30,6 +33,7 @@ class SubmittedNamesReproductionTest(TestCase):
                 },
             },
         )
+        verify_application_browser(self.client, application)
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -43,10 +47,12 @@ class SubmittedNamesReproductionTest(TestCase):
             email="mentor@example.com",
             program=self.program,
             status=Application.Status.SUBMITTED,
+            email_verified_at=timezone.now(),
             data={
                 "mentor_info": {"legal_first_name": "James", "last_name": "Smith"},
             },
         )
+        verify_application_browser(self.client, application)
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -58,12 +64,14 @@ class SubmittedNamesReproductionTest(TestCase):
             email="student@example.com",
             program=self.program,
             status=Application.Status.SUBMITTED,
+            email_verified_at=timezone.now(),
             data={
                 "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
                 "step7-primaryparent": {"legal_first_name": "John", "last_name": "Doe"},
                 "step8-secondaryparent": {"_skipped": True},
             },
         )
+        verify_application_browser(self.client, application)
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
         response = self.client.get(url)
         self.assertNotContains(response, "Secondary parent")

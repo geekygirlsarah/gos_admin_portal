@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from applications.tests.access_helpers import verify_application_browser
 
 
 class DuplicateApplicationTests(TestCase):
@@ -41,6 +42,7 @@ class DuplicateApplicationTests(TestCase):
             reverse("apply_duplicate_found", kwargs={"app_id": new_app.application_id}),
             fetch_redirect_response=False,
         )
+        verify_application_browser(self.client, new_app)
 
         # 5. Check the duplicate found page
         response = self.client.get(
@@ -77,6 +79,7 @@ class DuplicateApplicationTests(TestCase):
         app = Application.objects.create(
             email="test2@example.com", email_verified_at=timezone.now()
         )
+        verify_application_browser(self.client, app)
 
         # 3. Choose "start over"
         response = self.client.post(
@@ -114,6 +117,7 @@ class DuplicateApplicationTests(TestCase):
             applicant_type=Application.Type.MENTOR,
             email_verified_at=timezone.now(),
         )
+        verify_application_browser(self.client, new_app)
 
         # 3. Resume
         response = self.client.post(
@@ -135,6 +139,7 @@ class DuplicateApplicationTests(TestCase):
             applicant_type=Application.Type.MENTOR,
             email_verified_at=timezone.now(),
         )
+        verify_application_browser(self.client, app)
         # Existing one
         Application.objects.create(
             email="mentor2@example.com", status=Application.Status.DRAFT

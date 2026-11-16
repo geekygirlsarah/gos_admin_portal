@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from applications.models import Application
 from applications.services import latest_program_for_adult, latest_program_for_student
+from applications.tests.access_helpers import verify_application_browser
 from programs.models import Adult, Enrollment, Program, Student
 
 
@@ -84,6 +85,7 @@ class Step5WelcomeBackBannerTests(TestCase):
             applicant_type=Application.Type.STUDENT,
             email="ada@example.com",
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -97,6 +99,7 @@ class Step5WelcomeBackBannerTests(TestCase):
             applicant_type=Application.Type.STUDENT,
             email="brand-new@example.com",
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -127,6 +130,7 @@ class Step7WelcomeBackBannerTests(TestCase):
             email="parent@example.com",
             current_step=7,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -141,6 +145,7 @@ class Step7WelcomeBackBannerTests(TestCase):
             email="brand-new-parent@example.com",
             current_step=7,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -191,6 +196,7 @@ class Step7WelcomeBackBannerTests(TestCase):
             email=shared_email,
             current_step=7,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )

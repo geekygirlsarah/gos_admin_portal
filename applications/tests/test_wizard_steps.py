@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application
+from applications.tests.access_helpers import verify_application_browser
 from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Program, School, Student
 
@@ -49,19 +51,25 @@ class Step5StudentInfoTests(TestCase):
         mail.outbox = []
 
     def test_step5_redirects_to_step3_if_email_not_verified(self):
-        app = Application.objects.create(
-            applicant_type=Application.Type.PARENT,
-            email="parent@example.com",
-            current_step=5,
-        )
-        response = self.client.get(
-            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        start_response = self.client.post(reverse("apply_start"))
+        app_id = resolve(start_response.url).kwargs["app_id"]
+        response = self.client.post(
+            reverse("apply_step2", kwargs={"app_id": app_id}),
+            {"applicant_type": "parent", "email": "parent@example.com"},
         )
         self.assertRedirects(
             response,
-            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app_id}),
             fetch_redirect_response=False,
         )
+        response = self.client.get(reverse("apply_step5", kwargs={"app_id": app_id}))
+        self.assertRedirects(
+            response,
+            reverse("apply_step3", kwargs={"app_id": app_id}),
+            fetch_redirect_response=False,
+        )
+        app = Application.objects.get(application_id=app_id)
+        self.assertIsNone(app.email_verified_at)
 
     def test_step5_get_prefills_for_existing_student_email(self):
         Student.objects.create(
@@ -76,6 +84,7 @@ class Step5StudentInfoTests(TestCase):
         app = _verified(
             applicant_type=Application.Type.STUDENT, email="ada@example.com"
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -88,6 +97,7 @@ class Step5StudentInfoTests(TestCase):
 
     def test_step5_post_saves_data_and_advances_to_step6(self):
         app = _verified()
+        verify_application_browser(self.client, app)
         response = self.client.post(
             reverse("apply_step5", kwargs={"app_id": app.application_id}),
             {
@@ -140,6 +150,7 @@ class Step5StudentInfoTests(TestCase):
             primary_contact=adult,
         )
         app = _verified(email="parent@example.com")
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -157,6 +168,7 @@ class Step5StudentInfoTests(TestCase):
 class Step6ExperienceTests(TestCase):
     def setUp(self):
         self.app = _verified(current_step=6)
+        verify_application_browser(self.client, self.app)
 
     def test_step6_get_renders(self):
         response = self.client.get(
@@ -197,6 +209,7 @@ class Step7PrimaryParentTests(TestCase):
             email="kid@example.com",
             current_step=7,
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -209,6 +222,7 @@ class Step7PrimaryParentTests(TestCase):
             email="kid@example.com",
             current_step=7,
         )
+        verify_application_browser(self.client, app)
         response = self.client.post(
             reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "guardian@example.com"},
@@ -236,6 +250,7 @@ class Step7PrimaryParentTests(TestCase):
             is_parent=True,
         )
         app = _verified(email="parent@example.com", current_step=7)
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -246,6 +261,7 @@ class Step7PrimaryParentTests(TestCase):
 
     def test_parent_form_post_saves_and_advances_to_step8(self):
         app = _verified()
+        verify_application_browser(self.client, app)
         response = self.client.post(
             reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {
@@ -276,6 +292,7 @@ class Step7PrimaryParentTests(TestCase):
 class Step8SecondaryParentTests(TestCase):
     def test_secondary_parent_is_required(self):
         app = _verified(current_step=8)
+        verify_application_browser(self.client, app)
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {"skip": "1"},
@@ -286,6 +303,7 @@ class Step8SecondaryParentTests(TestCase):
 
     def test_filled_form_saves_and_advances(self):
         app = _verified(current_step=8)
+        verify_application_browser(self.client, app)
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
@@ -324,7 +342,7 @@ class Step9ConfirmTests(TestCase):
         mail.outbox = []
 
     def _verified_with_data(self):
-        return _verified(
+        app = _verified(
             program=self.program,
             current_step=9,
             data={
@@ -342,6 +360,8 @@ class Step9ConfirmTests(TestCase):
                 },
             },
         )
+        verify_application_browser(self.client, app)
+        return app
 
     def test_get_renders_review_with_collected_data(self):
         app = self._verified_with_data()
@@ -418,6 +438,7 @@ class Step9ConfirmTests(TestCase):
                 },
             },
         )
+        verify_application_browser(self.client, app)
         self.client.post(
             reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {"confirm": "on"},
@@ -453,6 +474,7 @@ class Step5ValidationTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
+        verify_application_browser(self.client, self.app)
 
     def test_birthdate_required(self):
         response = self.client.post(
@@ -626,6 +648,7 @@ class GradeValidationTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
+        verify_application_browser(self.client, self.app)
 
     def test_grade_within_range_no_warning(self):
         dob = timezone.localdate() - datetime.timedelta(days=10 * 365)
@@ -718,6 +741,7 @@ class RenumberingTests(TestCase):
 
     def test_step5_post_advances_to_step6(self):
         app = _verified()
+        verify_application_browser(self.client, app)
         date_of_birth_year_string = str(datetime.date.today().year - 12)
         response = self.client.post(
             reverse("apply_step5", kwargs={"app_id": app.application_id}),
@@ -743,6 +767,7 @@ class RenumberingTests(TestCase):
 
     def test_step_urls_and_views(self):
         app = _verified()
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -773,6 +798,7 @@ class Step8RepopulationTests(TestCase):
 
     def test_step8_repopulates_when_navigating_back(self):
         app = _verified(program=self.program, current_step=8)
+        verify_application_browser(self.client, app)
         app.data = {"step5-student": {"address": "123 Main St"}}
         app.save()
 
@@ -806,6 +832,30 @@ class Step8RepopulationTests(TestCase):
 class SwapParentsViewTests(TestCase):
     """Tests for the swap-parents endpoint."""
 
+    def _create_application(self, **fields):
+        response = self.client.post(reverse("apply_start"))
+        application_id = resolve(response.url).kwargs["app_id"]
+        application = Application.objects.get(application_id=application_id)
+        for field, value in fields.items():
+            setattr(application, field, value)
+        if fields:
+            application.save()
+        return application
+
+    def _verify_browser_access(self, application):
+        access_url = reverse(
+            "apply_browser_verification",
+            kwargs={"app_id": application.application_id},
+        )
+        with patch(
+            "applications.views.browser.generate_otp_code", return_value="123456"
+        ):
+            with patch("applications.views.browser.send_otp_email"):
+                self.client.post(access_url, {"action": "send"})
+        response = self.client.post(access_url, {"code": "123456"})
+        self.assertEqual(response.status_code, 302)
+        return response
+
     def _app_with_both_parents(self, **kwargs):
         defaults = dict(
             applicant_type=Application.Type.PARENT,
@@ -827,7 +877,9 @@ class SwapParentsViewTests(TestCase):
             },
         )
         defaults.update(kwargs)
-        return Application.objects.create(**defaults)
+        application = self._create_application(**defaults)
+        self._verify_browser_access(application)
+        return application
 
     def test_swap_exchanges_step7_and_step8_data(self):
         app = self._app_with_both_parents()
@@ -889,7 +941,7 @@ class SwapParentsViewTests(TestCase):
             primary_contact=primary,
             secondary_contact=secondary,
         )
-        app = Application.objects.create(
+        app = self._create_application(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
             current_step=7,
@@ -897,6 +949,7 @@ class SwapParentsViewTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             data={"step5-student": {"_existing_student_id": student.pk}},
         )
+        self._verify_browser_access(app)
         self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
             {"next": "7"},
@@ -906,7 +959,7 @@ class SwapParentsViewTests(TestCase):
         self.assertEqual(app.data["step8-secondaryparent"]["legal_first_name"], "Joe")
 
     def test_swap_requires_verified_email(self):
-        app = Application.objects.create(
+        app = self._create_application(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
             current_step=7,
@@ -958,7 +1011,7 @@ class Step7SwapBoxVisibilityTests(TestCase):
         )
 
     def _app_with_existing_student(self):
-        return Application.objects.create(
+        app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
             current_step=7,
@@ -968,6 +1021,8 @@ class Step7SwapBoxVisibilityTests(TestCase):
                 "step5-student": {"_existing_student_id": self.student.pk},
             },
         )
+        verify_application_browser(self.client, app)
+        return app
 
     def test_swap_box_shown_when_secondary_contact_exists_but_step8_not_saved(self):
         app = self._app_with_existing_student()
@@ -1005,6 +1060,7 @@ class Step7SwapBoxVisibilityTests(TestCase):
                 },
             },
         )
+        verify_application_browser(self.client, app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
@@ -1069,6 +1125,7 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -1093,6 +1150,7 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step8", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -1116,6 +1174,7 @@ class Step7AddressCopyTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             data={"step5-student": {"_existing_student_id": student.pk}},
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -1138,6 +1197,7 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -1153,6 +1213,7 @@ class Step7AddressCopyTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             data={},
         )
+        verify_application_browser(self.client, app)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

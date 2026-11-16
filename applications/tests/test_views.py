@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 
 from django.core import mail
 from django.test import TestCase
@@ -15,6 +16,7 @@ from applications.models import (
     Application,
     OtpVerifyResult,
 )
+from applications.tests.access_helpers import verify_application_browser
 from programs.models import Program
 
 
@@ -49,6 +51,32 @@ class WizardFlowTests(TestCase):
             update_fields=["applications_open", "applications_close"]
         )
         mail.outbox = []
+
+    def start_application(self):
+        response = self.client.post(reverse("apply_start"))
+        self.assertEqual(response.status_code, 302)
+        return Application.objects.get()
+
+    def start_application_with_email(
+        self, applicant_type="parent", email="parent@example.com"
+    ):
+        app = self.start_application()
+        response = self.client.post(
+            reverse("apply_step2", kwargs={"app_id": app.application_id}),
+            {"applicant_type": applicant_type, "email": email},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        return app
+
+    def verified_application(self, **kwargs):
+        app = Application.objects.create(**kwargs)
+        verify_application_browser(self.client, app)
+        return app
 
     # --- Step 1 ---------------------------------------------------------
 
@@ -155,7 +183,7 @@ class WizardFlowTests(TestCase):
     # --- Step 2 ---------------------------------------------------------
 
     def test_step2_parent_requires_email(self):
-        app = Application.objects.create()
+        app = self.start_application()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
             {"applicant_type": "parent", "email": ""},
@@ -164,7 +192,7 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "An email address is required")
 
     def test_step2_student_with_email_advances(self):
-        app = Application.objects.create()
+        app = self.start_application()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
             {"applicant_type": "student", "email": "kid@example.com"},
@@ -184,7 +212,7 @@ class WizardFlowTests(TestCase):
         self.assertTrue(app.otp_hash)
 
     def test_step2_student_without_email_redirects_to_start_with_message(self):
-        app = Application.objects.create()
+        app = self.start_application()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
             {"applicant_type": "student", "email": ""},
@@ -196,7 +224,7 @@ class WizardFlowTests(TestCase):
     # --- Step 4 (Program Select) -----------------------------------------
 
     def test_step4_lists_future_and_current_programs_separately(self):
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -216,7 +244,7 @@ class WizardFlowTests(TestCase):
         self.future_program.description = "This is a detailed blurb about the program."
         self.future_program.save()
 
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -235,7 +263,7 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "This is a detailed blurb about the program.")
 
     def test_step4_post_only_accepts_future_programs(self):
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -252,7 +280,7 @@ class WizardFlowTests(TestCase):
         self.assertIsNone(app.program)
 
     def test_step4_post_with_future_program_advances(self):
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -276,7 +304,7 @@ class WizardFlowTests(TestCase):
         self.future_program.grade_range_end = 6
         self.future_program.save()
 
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -295,7 +323,7 @@ class WizardFlowTests(TestCase):
         self.assertIn("Grade", html)
 
     def test_step4_shows_application_deadline(self):
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             current_step=4,
@@ -312,11 +340,7 @@ class WizardFlowTests(TestCase):
     # --- Step 3 (Email Verify) -------------------------------------------
 
     def test_step3_get_issues_otp_and_emails_it(self):
-        app = Application.objects.create(
-            applicant_type="parent",
-            email="parent@example.com",
-            current_step=3,
-        )
+        app = self.start_application_with_email()
         response = self.client.get(
             reverse("apply_step3", kwargs={"app_id": app.application_id})
         )
@@ -331,18 +355,14 @@ class WizardFlowTests(TestCase):
         self.assertIn(app.application_id, body)
         self.assertIn("Resume link:", body)
         # Extract the 6-digit code from the email body for use in next step.
-        import re
-
         m = re.search(r"\b(\d{6})\b", body)
         self.assertIsNotNone(m)
 
     def test_step3_post_with_correct_code_advances_to_step4(self):
-        app = Application.objects.create(
-            applicant_type="parent",
-            email="parent@example.com",
-            current_step=3,
-        )
-        code = app.issue_otp()
+        app = self.start_application_with_email()
+        match = re.search(r"\b(\d{6})\b", mail.outbox[-1].body)
+        self.assertIsNotNone(match)
+        code = match.group(1)
         response = self.client.post(
             reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": code},
@@ -357,12 +377,7 @@ class WizardFlowTests(TestCase):
         self.assertEqual(app.status, Application.Status.EMAIL_VERIFIED)
 
     def test_step3_post_with_wrong_code_stays_on_page(self):
-        app = Application.objects.create(
-            applicant_type="parent",
-            email="parent@example.com",
-            current_step=3,
-        )
-        app.issue_otp()
+        app = self.start_application_with_email()
         response = self.client.post(
             reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": "000000"},
@@ -371,12 +386,10 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "didn&#x27;t match")
 
     def test_step3_resend_issues_new_code(self):
-        app = Application.objects.create(
-            applicant_type="parent",
-            email="parent@example.com",
-            current_step=3,
-        )
-        old_code = app.issue_otp()
+        app = self.start_application_with_email()
+        match = re.search(r"\b(\d{6})\b", mail.outbox[-1].body)
+        self.assertIsNotNone(match)
+        old_code = match.group(1)
         old_hash = Application.objects.get(pk=app.pk).otp_hash
         mail.outbox = []
         response = self.client.post(
@@ -392,12 +405,12 @@ class WizardFlowTests(TestCase):
     # --- Continue placeholder ------------------------------------------
 
     def test_continue_requires_verified_email(self):
-        app = Application.objects.create(
-            applicant_type="parent",
-            email="parent@example.com",
-            program=self.future_program,
-            current_step=5,
-        )
+        app = self.start_application()
+        app.applicant_type = Application.Type.PARENT
+        app.email = "parent@example.com"
+        app.program = self.future_program
+        app.current_step = 5
+        app.save(update_fields=["applicant_type", "email", "program", "current_step"])
         response = self.client.get(
             reverse("apply_continue", kwargs={"app_id": app.application_id})
         )
@@ -408,7 +421,7 @@ class WizardFlowTests(TestCase):
         )
 
     def test_continue_redirects_to_current_step_when_verified(self):
-        app = Application.objects.create(
+        app = self.verified_application(
             applicant_type="parent",
             email="parent@example.com",
             program=self.future_program,
