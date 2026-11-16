@@ -1,0 +1,13 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel trip updated{% endblock %}
+{% block header %}Trip Update: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p>Details for <strong>{{ event.name }}</strong>{% if program %}, part of the {{ program.name }} program{% endif %}, have changed:</p>
+<ul>
+    {% for change in changes %}
+    <li><strong>{{ change.title }}</strong>{% if change.detail %}: {{ change.detail }}{% endif %}</li>
+    {% endfor %}
+</ul>
+<p>Please log in to the portal and review the Travel page for {{ program.name }}. Any approval already recorded remains on file; contact your program lead if you have questions about how these updates affect it.</p>
+{% endblock %}

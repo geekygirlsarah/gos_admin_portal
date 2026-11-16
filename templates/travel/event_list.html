@@ -411,6 +411,29 @@
                     {% endfor %}
                 </p>
                 {% endif %}
+
+                {% with mentor_form=mentor_staff_forms|get_item:event.id %}
+                {% if mentor_form %}
+                <form action="{% url 'travel:mentor_add' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
+                    {% csrf_token %}
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1" for="{{ mentor_form.adult.id_for_label }}">Add a mentor</label>
+                            {{ mentor_form.adult }}
+                        </div>
+                        {% if event.has_multiple_departures %}
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1" for="{{ mentor_form.departure.id_for_label }}">Departure</label>
+                            {{ mentor_form.departure }}
+                        </div>
+                        {% endif %}
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-plus me-1"></i>Add mentor</button>
+                        </div>
+                    </div>
+                </form>
+                {% endif %}
+                {% endwith %}
                 {% endif %}
             </div>
         </div>

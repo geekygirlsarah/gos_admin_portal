@@ -6,9 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Portal announcements support sanitized light formatting, separate unread and read sections, recipient dismissal, and scoped publisher management with non-destructive withdrawal.
+- Lead Mentors can add active, organization-local mentors to travel trips.
 
 ### Changed
 - Announcement menus and publisher workflows consistently use “Announcements”; `/programs/announcements/` and `/platform-admin/announcements/` are canonical, with previous `/notifications/` URLs retained for existing links.
+- Travel trip forms are grouped into clearer sections, and edits notify approved participants with a summary of changed details.
 
 ## 2026-11-15
 
