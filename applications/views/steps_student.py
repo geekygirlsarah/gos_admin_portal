@@ -68,6 +68,15 @@ from .utils import (
     _student_initial_for,
 )
 
+
+def _locked_application_queryset(using, pk, organization_id):
+    return (
+        Application.objects.using(using)
+        .select_for_update()
+        .filter(pk=pk, organization_id=organization_id)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Step 2: applicant type + email
 # ---------------------------------------------------------------------------
@@ -252,11 +261,9 @@ class Step4ProgramView(View):
         render_args = None
         with transaction.atomic(using=using):
             current_application = get_object_or_404(
-                Application.objects.using(using)
-                .select_for_update()
-                .select_related("program"),
-                pk=application.pk,
-                organization_id=application.organization_id,
+                _locked_application_queryset(
+                    using, application.pk, application.organization_id
+                )
             )
             guard = _require_verified_email(request, current_application)
             if guard is not None:
@@ -979,11 +986,9 @@ class Step7PrimaryParentView(View):
             handoff_saved = False
             with transaction.atomic(using=using):
                 current = get_object_or_404(
-                    Application.objects.using(using)
-                    .select_for_update()
-                    .select_related("program"),
-                    pk=application.pk,
-                    organization_id=application.organization_id,
+                    _locked_application_queryset(
+                        using, application.pk, application.organization_id
+                    )
                 )
                 guard = _require_verified_email(request, current)
                 if guard is not None:
@@ -1369,11 +1374,9 @@ class SwapParentsView(View):
         handoff_required = None
         with transaction.atomic(using=using):
             current = get_object_or_404(
-                Application.objects.using(using)
-                .select_for_update()
-                .select_related("program"),
-                pk=application.pk,
-                organization_id=application.organization_id,
+                _locked_application_queryset(
+                    using, application.pk, application.organization_id
+                )
             )
             guard = _require_verified_email(request, current)
             if guard is not None:

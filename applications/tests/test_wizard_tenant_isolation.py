@@ -21,6 +21,7 @@ from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_lead_notification_email
 from applications.tests.access_helpers import grant_applicant_document_access
 from applications.views.documents import Step10DocumentsView
+from applications.views.steps_student import _locked_application_queryset
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
@@ -128,6 +129,34 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             return valid
 
         return patch.object(form_class, "is_valid", new=is_valid)
+
+    def test_locked_application_query_avoids_nullable_program_join(self):
+        for program in (None, self.alpha_program):
+            with self.subTest(program=program):
+                application = self.make_application(
+                    program=program,
+                    status=Application.Status.EMAIL_VERIFIED,
+                    email_verified_at=timezone.now(),
+                )
+                queryset = _locked_application_queryset(
+                    application._state.db,
+                    application.pk,
+                    application.organization_id,
+                )
+
+                self.assertTrue(queryset.query.select_for_update)
+                self.assertNotIn(Program._meta.db_table, str(queryset.query))
+                self.assertEqual(queryset.get().pk, application.pk)
+
+        foreign_application = self.make_application(
+            organization=self.beta, program=self.beta_program
+        )
+        foreign_queryset = _locked_application_queryset(
+            foreign_application._state.db,
+            foreign_application.pk,
+            self.alpha.pk,
+        )
+        self.assertFalse(foreign_queryset.exists())
 
     def test_submission_rechecks_current_parent_notification_opt_in(self):
         application = self.make_application(
