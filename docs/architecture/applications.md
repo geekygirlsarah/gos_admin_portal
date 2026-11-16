@@ -22,16 +22,26 @@ Legacy applications stored responses under older keys (`step5`, `step6`, `step7`
 ### Normalization Rule
 Never write code that reads or writes the legacy key names directly. Always call `normalize_step_keys()` (module-level helper in `applications/models.py`) or `Application.normalize_step_data(save=True)` before inspecting or converting application data.
 
-Persisted normalization, the shared wizard step writer, parent handoff, and
-parent swapping reload and lock the application row before updating, so they
-preserve newer unrelated JSON and wizard progress rather than writing a stale
-instance. Handoff also revalidates the parent address and applicant status
-against the locked row before issuing a token; the notification is sent after
-the transaction. Conversion extracts historical answers from the same locked
-data before normalizing it. Other JSON writers do not yet all use this locking
-protocol, so this is not a complete concurrency guarantee; SQLite does not
-provide row-level `select_for_update` locking. Concurrent edits to the same
-step are not conflict-detected.
+Persisted normalization, the shared wizard step writer, applicant type/email,
+program selection, parent handoff, and parent swapping reload and lock the
+organization-bound application row before updating. These writers preserve
+newer unrelated JSON and wizard progress rather than saving a stale instance.
+Step 2 rechecks identity and status under the lock and rejects a request whose
+applicant/email changed while the form was being submitted; changing the email
+clears its verification and pending OTP. Program selection rechecks the
+tenant's eligible programs and current status before updating only the program
+and progress fields. Handoff also revalidates the parent address and applicant
+status against the locked row before issuing a token; the notification is sent
+after the transaction. Conversion extracts historical answers from the same
+locked data before normalizing it.
+
+Other JSON writers do not yet all use this locking protocol, so this is not a
+complete concurrency guarantee; SQLite does not provide row-level
+`select_for_update` locking, and concurrent edits to the same step are not
+conflict-detected. Program changes after a custom-question snapshot is frozen
+still need an explicit policy; applicant question collection is not enabled
+until program changes and all relevant writers can preserve the snapshot's
+question binding.
 
 ---
 

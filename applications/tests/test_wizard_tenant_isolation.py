@@ -16,6 +16,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from applications.forms import ApplicantTypeForm, ProgramSelectForm
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_lead_notification_email
 from applications.tests.access_helpers import grant_applicant_document_access
@@ -113,6 +114,199 @@ class ApplicationWizardTenantIsolationTests(TestCase):
                 self.tenant_post(access_url, {"action": "send"})
         response = self.tenant_post(access_url, {"code": "123456"})
         self.assertEqual(response.status_code, 302)
+
+    def patch_validation_after_intervening_write(self, form_class, update):
+        original_is_valid = form_class.is_valid
+        updated = False
+
+        def is_valid(form):
+            nonlocal updated
+            valid = original_is_valid(form)
+            if valid and not updated:
+                updated = True
+                update()
+            return valid
+
+        return patch.object(form_class, "is_valid", new=is_valid)
+
+    def test_step2_preserves_newer_answers_and_progress(self):
+        application = self.make_application(
+            email="step2-merge@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=2,
+            data={"existing": "before"},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def update_latest_application():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step6-custom"] = [
+                {"question_text": "Latest question?", "answer": "Latest answer"}
+            ]
+            latest.current_step = 8
+            latest.save(update_fields=["data", "current_step", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ApplicantTypeForm, update_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step2", kwargs={"app_id": application.application_id}),
+                {
+                    "applicant_type": Application.Type.STUDENT,
+                    "email": application.email,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.applicant_type, Application.Type.STUDENT)
+        self.assertEqual(application.current_step, 8)
+        self.assertEqual(application.data["existing"], "before")
+        self.assertEqual(application.data["step6-custom"][0]["answer"], "Latest answer")
+
+    def test_step2_rejects_stale_request_after_identity_changes(self):
+        application = self.make_application(
+            email="step2-original@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=2,
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def change_latest_identity():
+            latest = Application.objects.get(pk=application.pk)
+            latest.email = "step2-current@example.test"
+            latest.email_verified_at = None
+            latest.save(update_fields=["email", "email_verified_at", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ApplicantTypeForm, change_latest_identity
+        ):
+            response = self.tenant_post(
+                reverse("apply_step2", kwargs={"app_id": application.application_id}),
+                {
+                    "applicant_type": Application.Type.STUDENT,
+                    "email": "step2-original@example.test",
+                },
+            )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "apply_browser_verification",
+                kwargs={"app_id": application.application_id},
+            ),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.applicant_type, Application.Type.PARENT)
+        self.assertEqual(application.email, "step2-current@example.test")
+        self.assertIsNone(application.email_verified_at)
+
+    def test_step2_does_not_update_application_submitted_during_request(self):
+        application = self.make_application(
+            email="step2-submitted@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=2,
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def submit_latest_application():
+            Application.objects.filter(pk=application.pk).update(
+                status=Application.Status.SUBMITTED
+            )
+
+        with self.patch_validation_after_intervening_write(
+            ApplicantTypeForm, submit_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step2", kwargs={"app_id": application.application_id}),
+                {
+                    "applicant_type": Application.Type.STUDENT,
+                    "email": "changed@example.test",
+                },
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": application.application_id}),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.SUBMITTED)
+        self.assertEqual(application.applicant_type, Application.Type.PARENT)
+        self.assertEqual(application.email, "step2-submitted@example.test")
+
+    def test_program_selection_preserves_newer_answers_and_progress(self):
+        application = self.make_application(
+            email="program-merge@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=4,
+            data={"existing": "before"},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def update_latest_application():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step6-custom"] = [
+                {"question_text": "Latest question?", "answer": "Latest answer"}
+            ]
+            latest.current_step = 8
+            latest.save(update_fields=["data", "current_step", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ProgramSelectForm, update_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step4", kwargs={"app_id": application.application_id}),
+                {"program": self.alpha_program.pk},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.program_id, self.alpha_program.pk)
+        self.assertEqual(application.current_step, 8)
+        self.assertEqual(application.data["existing"], "before")
+        self.assertEqual(application.data["step6-custom"][0]["answer"], "Latest answer")
+
+    def test_program_selection_does_not_update_application_submitted_during_request(
+        self,
+    ):
+        application = self.make_application(
+            email="program-submitted@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=4,
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def submit_latest_application():
+            Application.objects.filter(pk=application.pk).update(
+                status=Application.Status.SUBMITTED
+            )
+
+        with self.patch_validation_after_intervening_write(
+            ProgramSelectForm, submit_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step4", kwargs={"app_id": application.application_id}),
+                {"program": self.alpha_program.pk},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": application.application_id}),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.SUBMITTED)
+        self.assertIsNone(application.program_id)
 
     def test_parent_handoff_merges_current_snapshot_and_progress(self):
         application = self.make_application(

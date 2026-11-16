@@ -109,20 +109,63 @@ class Step2ApplicantTypeView(View):
         if not form.is_valid():
             return self._render(request, application, form)
 
-        old_type = application.applicant_type
-        application.applicant_type = form.cleaned_data["applicant_type"]
         new_email = form.cleaned_data.get("email") or ""
-        # Changing the email invalidates a prior verification.
-        email_changed = new_email.lower() != (application.email or "").lower()
-        if email_changed:
-            _start_bootstrap(request, application)
-            application.email_verified_at = None
-            application.otp_hash = ""
-            application.otp_expires_at = None
-            application.otp_attempts = 0
-        application.email = new_email
-        application.current_step = max(application.current_step, 3)
-        application.save()
+        initial_type = application.applicant_type
+        initial_email = (application.email or "").strip().lower()
+        using = application._state.db
+        response = None
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using).select_for_update(),
+                pk=application.pk,
+                organization_id=application.organization_id,
+            )
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                response = locked_redirect
+            elif (
+                current.applicant_type != initial_type
+                or (current.email or "").strip().lower() != initial_email
+            ):
+                response = redirect(
+                    "apply_browser_verification", app_id=current.application_id
+                )
+            else:
+                guard = _require_browser_access(request, current, allow_bootstrap=True)
+                if guard is not None:
+                    response = guard
+                elif current.status == Application.Status.AWAITING_PARENT:
+                    response = _redirect_to_current_step(current)
+                else:
+                    old_type = current.applicant_type
+                    current.applicant_type = form.cleaned_data["applicant_type"]
+                    # Changing the email invalidates a prior verification.
+                    email_changed = new_email.lower() != (current.email or "").lower()
+                    if email_changed:
+                        _start_bootstrap(request, current)
+                        current.email_verified_at = None
+                        current.otp_hash = ""
+                        current.otp_expires_at = None
+                        current.otp_attempts = 0
+                    current.email = new_email
+                    current.current_step = max(current.current_step, 3)
+                    current.save(
+                        update_fields=[
+                            "applicant_type",
+                            "email",
+                            "email_verified_at",
+                            "otp_hash",
+                            "otp_expires_at",
+                            "otp_attempts",
+                            "current_step",
+                            "updated_at",
+                        ]
+                    )
+                    application = current
+
+        if response is not None:
+            return response
+
         if old_type != application.applicant_type and application.email_is_verified:
             _grant_browser_access(request, application)
 
@@ -203,9 +246,55 @@ class Step4ProgramView(View):
         form = ProgramSelectForm(request.POST, future_programs=future)
         if not form.is_valid():
             return self._render(request, application, form, future, current, past)
-        application.program = form.cleaned_data["program"]
-        application.current_step = max(application.current_step, 5)
-        application.save()
+
+        using = application._state.db
+        response = None
+        render_args = None
+        with transaction.atomic(using=using):
+            current_application = get_object_or_404(
+                Application.objects.using(using)
+                .select_for_update()
+                .select_related("program"),
+                pk=application.pk,
+                organization_id=application.organization_id,
+            )
+            guard = _require_verified_email(request, current_application)
+            if guard is not None:
+                response = guard
+            elif current_application.status == Application.Status.AWAITING_PARENT:
+                response = _redirect_to_current_step(current_application)
+            else:
+                current_future, current_programs, current_past = get_program_buckets(
+                    current_application.organization
+                )
+                selected_program = form.cleaned_data["program"]
+                if selected_program.pk not in {
+                    program.pk for program in current_future
+                }:
+                    current_form = ProgramSelectForm(
+                        request.POST, future_programs=current_future
+                    )
+                    current_form.is_valid()
+                    render_args = (
+                        current_application,
+                        current_form,
+                        current_future,
+                        current_programs,
+                        current_past,
+                    )
+                else:
+                    current_application.program_id = selected_program.pk
+                    current_application.current_step = max(
+                        current_application.current_step, 5
+                    )
+                    current_application.save(
+                        update_fields=["program", "current_step", "updated_at"]
+                    )
+
+        if response is not None:
+            return response
+        if render_args is not None:
+            return self._render(request, *render_args)
         return redirect("apply_continue", app_id=application.application_id)
 
     def _render(self, request, application, form, future, current, past):
