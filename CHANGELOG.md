@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
 
 ### Changed
+- Lead Mentors can edit stored custom answers on submitted or approved applications, with stale-edit detection.
 - Application review displays stored custom questions and answers in a readable format and flags malformed snapshots.
 - The student profile's Application Answers card now also shows existing fixed profile responses and explains when no linked answers are on file.
 - Signed-document notices and access codes go to the parent or guardian rather than the student; document verification no longer changes application email verification.

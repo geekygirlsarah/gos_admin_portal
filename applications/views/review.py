@@ -8,6 +8,7 @@ gated by the ``applications.review_application`` permission. The
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 
 from django import forms
@@ -17,10 +18,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.mail import EmailMultiAlternatives
-from django.db import models
+from django.db import models, transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.decorators import method_decorator
 from django.views import View
 
@@ -377,14 +379,35 @@ class ApplicationDataEditForm(forms.Form):
         widget=forms.EmailInput(attrs={"class": "form-control"}),
     )
 
-    def __init__(self, *args, sections=(), **kwargs):
+    def __init__(self, *args, sections=(), custom_snapshot=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.sections = list(sections)
+        self.custom_snapshot = custom_snapshot
+        if custom_snapshot is not None:
+            self.fields["custom_snapshot_version"] = forms.CharField(
+                widget=forms.HiddenInput
+            )
+            for item in custom_snapshot:
+                self.fields[f"custom_answer_{item['question_id']}"] = forms.CharField(
+                    label=item["question_text"],
+                    required=item.get("required", False),
+                    initial=item["answer"],
+                    widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+                )
         for _data_key, _title, fields in self.sections:
             for spec in fields:
                 self.fields[self._field_name(_data_key, spec["name"])] = (
                     self._make_field(spec)
                 )
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.custom_snapshot is not None and any(
+            f"custom_answer_{item['question_id']}" not in self.data
+            for item in self.custom_snapshot
+        ):
+            raise forms.ValidationError("Submit all custom answer fields.")
+        return cleaned
 
     @staticmethod
     def _field_name(data_key, field_name):
@@ -1044,6 +1067,73 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
 
     template_name = "applications/review/edit.html"
 
+    def _custom_snapshot(self, application):
+        data = application.data or {}
+        if "step6-custom" not in data:
+            return None
+        snapshot = data["step6-custom"]
+        if not isinstance(snapshot, list):
+            raise ValueError("Custom application questions are malformed.")
+        try:
+            extract_experience_answers({"step6-custom": snapshot})
+        except ValueError as exc:
+            raise ValueError("Custom application questions are malformed.") from exc
+        if any(
+            "required" in item and not isinstance(item["required"], bool)
+            for item in snapshot
+        ):
+            raise ValueError("Custom application questions are malformed.")
+        if "_custom_question_program_id" in data and (
+            type(data["_custom_question_program_id"]) is not int
+            or data["_custom_question_program_id"] != application.program_id
+        ):
+            raise ValueError(
+                "Custom application questions belong to a different program."
+            )
+        return snapshot
+
+    @staticmethod
+    def _custom_version(application):
+        state = json.dumps(
+            {
+                "id": application.pk,
+                "organization": application.organization_id,
+                "program": application.program_id,
+                "status": application.status,
+                "email": application.email,
+                "data": application.data,
+                "updated_at": application.updated_at.isoformat(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return salted_hmac("application-review-custom-snapshot", state).hexdigest()
+
+    def _form(self, application, post_data=None):
+        snapshot = None
+        snapshot_error = None
+        try:
+            snapshot = self._custom_snapshot(application)
+        except ValueError as exc:
+            snapshot_error = str(exc)
+        editable = application.status in (
+            Application.Status.SUBMITTED,
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+        )
+        initial = self._initial(application)
+        if snapshot is not None and editable:
+            initial["custom_snapshot_version"] = self._custom_version(application)
+        form = ApplicationDataEditForm(
+            post_data,
+            sections=_sections_for(application),
+            custom_snapshot=snapshot if editable else None,
+            initial=initial,
+        )
+        form.custom_snapshot_error = snapshot_error
+        form.custom_snapshot_readonly = snapshot is not None and not editable
+        return form
+
     def _initial(self, application: Application):
         sections = _sections_for(application)
         initial = {"email": application.email}
@@ -1078,6 +1168,16 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
                 for spec in fields
             ]
             groups.append({"title": title, "fields": bound})
+        if form.custom_snapshot:
+            groups.append(
+                {
+                    "title": "Custom application questions",
+                    "fields": [
+                        form[f"custom_answer_{item['question_id']}"]
+                        for item in form.custom_snapshot
+                    ],
+                }
+            )
         return render(
             request,
             self.template_name,
@@ -1093,24 +1193,56 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         # Persist any legacy step-key migration up front so the form (and any
         # subsequent save) always operate on the current key names.
         application.normalize_step_data(save=True)
-        form = ApplicationDataEditForm(
-            sections=_sections_for(application),
-            initial=self._initial(application),
-        )
+        form = self._form(application)
         return self._render(request, application, form)
 
+    @transaction.atomic
     def post(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
-        application.normalize_step_data(save=True)
-        form = ApplicationDataEditForm(
-            request.POST, sections=_sections_for(application)
+        application = (
+            Application.objects.for_organization(application.organization)
+            .select_for_update()
+            .get(pk=application.pk)
         )
+        if (
+            application.program_id
+            and application.program.organization_id != application.organization_id
+        ):
+            raise Http404
+        application.normalize_step_data(save=False)
+        form = self._form(application, request.POST)
+        if form.custom_snapshot_error:
+            form.is_valid()
+            form.add_error(None, form.custom_snapshot_error)
+            return self._render(request, application, form)
+        if form.custom_snapshot is None and "custom_snapshot_version" in request.POST:
+            form.is_valid()
+            form.add_error(
+                None, "The application changed. Reload this page before saving."
+            )
+            return self._render(request, application, form)
         if not form.is_valid():
+            return self._render(request, application, form)
+        if form.custom_snapshot is not None and not constant_time_compare(
+            form.cleaned_data["custom_snapshot_version"],
+            self._custom_version(application),
+        ):
+            form.add_error(
+                None, "The application changed. Reload this page before saving."
+            )
             return self._render(request, application, form)
         old_data = application.data
         application.data = form.rebuild_data(
             application.data, initial=self._initial(application)
         )
+        if form.custom_snapshot is not None:
+            application.data["step6-custom"] = [
+                {
+                    **item,
+                    "answer": form.cleaned_data[f"custom_answer_{item['question_id']}"],
+                }
+                for item in form.custom_snapshot
+            ]
         new_email = (form.cleaned_data.get("email") or "").strip()
         if new_email:
             application.email = new_email

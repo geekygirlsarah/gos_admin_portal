@@ -4,6 +4,18 @@
 {% block review_body %}
   <form method="post" class="mb-3">
     {% csrf_token %}
+    {% if form.custom_snapshot_version %}
+      {{ form.custom_snapshot_version }}
+      {% for e in form.custom_snapshot_version.errors %}<div class="alert alert-danger" role="alert">{{ e }} Reload this page before saving.</div>{% endfor %}
+    {% endif %}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% elif form.custom_snapshot_error %}
+      <div class="alert alert-danger" role="alert">{{ form.custom_snapshot_error }} Contact an administrator for assistance.</div>
+    {% endif %}
+    {% if form.custom_snapshot_readonly %}
+      <div class="alert alert-info">Custom answers cannot be edited while this application is in progress or after conversion.</div>
+    {% endif %}
     <div class="card mb-3">
       <div class="card-header">Contact</div>
       <div class="card-body">

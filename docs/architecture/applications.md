@@ -90,7 +90,12 @@ ownership, completed applications, and malformed or unbound snapshots instead
 of overwriting them. It is not yet wired to the wizard: other application
 writers must be coordinated before it can safely be used publicly. Staff review
 renders existing custom snapshots as questions and answers and flags malformed
-snapshots; it does not yet support editing them.
+snapshots. Lead Mentors may edit answers on submitted or approved applications;
+the question text and metadata are retained, required answers remain required,
+and stale edits are rejected. Answer edits use the existing application edit
+audit event. Custom answers are read-only during an in-progress application
+until concurrent applicant writes are coordinated, and after conversion to
+avoid diverging from the student profile.
 
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
