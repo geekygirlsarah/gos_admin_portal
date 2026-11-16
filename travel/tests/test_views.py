@@ -198,6 +198,14 @@ class TravelViewTest(TestCase):
         self.assertNotIn(">Edit</a>", html)
         self.assertNotIn(">Delete</a>", html)
         self.assertNotIn("Add Trip", html)
+        self.assertNotIn("Student Sign-ups", html)
+        self.assertNotIn("Add a mentor", html)
+        self.assertRegex(
+            html,
+            r'(?s)<section class="card shadow-sm mt-3" '
+            r'aria-labelledby="mentor-signups-title">.*?'
+            r"Mentors are welcome to come along as chaperones:",
+        )
 
     def test_membership_lead_sees_trip_management_controls(self):
         self.client.login(username="lead", password="password")  # nosec B106
@@ -211,6 +219,113 @@ class TravelViewTest(TestCase):
         self.assertIn(">Edit</a>", html)
         self.assertIn(">Delete</a>", html)
         self.assertIn("Add a mentor", html)
+
+    def test_lead_trip_rosters_and_add_forms_are_grouped_in_cards(self):
+        second_departure = TravelDeparture.objects.create(
+            event=self.event,
+            label="Bus 2",
+            leave_date=self.departure.leave_date,
+        )
+        TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            departure=self.departure,
+            status=TravelSignup.APPROVED,
+            approved_total="350.00",
+        )
+        parent = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="Alex",
+            last_name="Chaperone",
+            is_parent=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.organization,
+            adult=parent,
+            student=self.student,
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=parent,
+            event=self.event,
+            departure=second_departure,
+        )
+        mentor = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="Casey",
+            last_name="Mentor",
+            is_mentor=True,
+            mentor_active=True,
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=mentor,
+            event=self.event,
+            departure=self.departure,
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        page = response.content.decode()
+
+        def get_card_contents(card_id):
+            match = re.search(
+                rf'<section class="card shadow-sm mt-3" '
+                rf'aria-labelledby="{card_id}">(.*?)</section>',
+                page,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"Missing participant card {card_id}")
+            return match.group(1)
+
+        student_card = get_card_contents("student-signups-title")
+        parent_card = get_card_contents("parent-chaperones-title")
+        mentor_card = get_card_contents("mentor-signups-title")
+
+        self.assertIn("Test Student", student_card)
+        self.assertIn("Add a student", student_card)
+        self.assertIn("Bus 2", student_card)
+        self.assertIn(f'id="id_departure_{self.event.pk}"', student_card)
+        self.assertIn("Alex Chaperone", parent_card)
+        self.assertIn("Add a parent", parent_card)
+        self.assertIn("Bus 2", parent_card)
+        self.assertRegex(
+            parent_card,
+            r'(?s)<select name="departure"[^>]*>.*?<option[^>]*>Bus 2',
+        )
+        self.assertIn("Casey Mentor", mentor_card)
+        self.assertIn("Add a mentor", mentor_card)
+        self.assertIn("Bus 2", mentor_card)
+        self.assertIn(f'name="mentor-{self.event.pk}-departure"', mentor_card)
+        self.assertLess(
+            page.index("student-signups-title"), page.index("parent-chaperones-title")
+        )
+        self.assertLess(
+            page.index("parent-chaperones-title"), page.index("mentor-signups-title")
+        )
+
+    def test_lead_sees_empty_student_parent_and_mentor_cards(self):
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        page = response.content.decode()
+        for card_id, action in (
+            ("student-signups-title", "Add a student"),
+            ("parent-chaperones-title", "Add a parent"),
+            ("mentor-signups-title", "Add a mentor"),
+        ):
+            match = re.search(
+                rf'<section class="card shadow-sm mt-3" '
+                rf'aria-labelledby="{card_id}">(.*?)</section>',
+                page,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"Missing participant card {card_id}")
+            self.assertIn(action, match.group(1))
 
     def test_edit_form_groups_trip_fields_into_sections(self):
         self.client.login(username="lead", password="password")  # nosec B106
@@ -264,9 +379,16 @@ class TravelViewTest(TestCase):
             response = self.client.post(
                 reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
                 payload,
+                follow=True,
             )
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        page = response.content.decode()
+        self.assertIn("alert-info", page)
+        self.assertIn("Trip updated.", page)
+        self.assertIn("students with approved sign-ups", page)
+        self.assertIn("eligible parents/guardians", page)
+        self.assertIn("signed-up mentors and parent chaperones", page)
         signup.refresh_from_db()
         self.assertEqual(signup.approved_total, Decimal("300.00"))
         self.assertEqual(len(mail.outbox), 2)
@@ -275,6 +397,189 @@ class TravelViewTest(TestCase):
         for message in mail.outbox:
             self.assertIn("Hotel", message.body)
             self.assertIn("425.00", message.body)
+
+    def test_edit_with_changes_shows_notice_when_no_approved_recipients_exist(self):
+        payload = self.event_edit_payload()
+        payload["description"] = "Updated itinerary"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        page = response.content.decode()
+        self.assertIn("alert-info", page)
+        self.assertIn("Trip updated.", page)
+        self.assertIn("when email addresses are available", page)
+        self.assertEqual(mail.outbox, [])
+
+    def test_edit_notifies_signed_up_adults_without_approved_students(self):
+        self.mentor_user.email = "mentor@example.com"
+        self.mentor_user.save(update_fields=["email"])
+        self.mentor_adult.personal_email = ""
+        self.mentor_adult.save(update_fields=["personal_email"])
+        for model, adult in (
+            (TravelMentorSignup, self.mentor_adult),
+            (TravelParentChaperoneSignup, self.parent_adult),
+        ):
+            model.objects.create(
+                organization=self.organization,
+                event=self.event,
+                adult=adult,
+                departure=self.departure,
+            )
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"mentor@example.com", "parent@example.com"},
+        )
+        self.assertEqual(len(mail.outbox), 2)
+        for message in mail.outbox:
+            self.assertIn("Hotel", message.body)
+            self.assertIn("425.00", message.body)
+
+    def test_edit_deduplicates_signed_up_guardian_and_mentor(self):
+        TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+        )
+        self.parent_user.email = "other-parent-address@example.com"
+        self.parent_user.save(update_fields=["email"])
+        for model in (TravelMentorSignup, TravelParentChaperoneSignup):
+            model.objects.create(
+                organization=self.organization,
+                event=self.event,
+                adult=self.parent_adult,
+                departure=self.departure,
+            )
+        shared_email_mentor = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="Shared",
+            last_name="Address",
+            personal_email="PARENT@example.com",
+            login_enabled=True,
+            email_updates=True,
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.organization, event=self.event, adult=shared_email_mentor
+        )
+        payload = self.event_edit_payload()
+        payload["description"] = "Updated itinerary"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"student@example.com", "parent@example.com"},
+        )
+
+    def test_edit_excludes_ineligible_or_foreign_adult_signups(self):
+        foreign_org = Organization.objects.create(
+            name="Foreign Trip Attendees",
+            slug="foreign-trip-attendees",
+            subdomain="foreign-trip-attendees",
+        )
+        foreign_departure = TravelDeparture.objects.create(
+            organization=foreign_org,
+            event=self.event,
+            label="Foreign departure",
+            leave_date=self.departure.leave_date,
+        )
+        other_event = TravelEvent.objects.create(
+            organization=self.organization,
+            program=self.program,
+            name="Other trip",
+            start_date=self.event.start_date,
+            end_date=self.event.end_date,
+        )
+        other_departure = TravelDeparture.objects.create(
+            organization=self.organization,
+            event=other_event,
+            label="Other departure",
+            leave_date=self.departure.leave_date,
+        )
+        for model, label in (
+            (TravelMentorSignup, "mentor"),
+            (TravelParentChaperoneSignup, "parent"),
+        ):
+            for case, adult_org, signup_org, enabled, opted_in in (
+                ("valid", self.organization, self.organization, True, True),
+                ("opted-out", self.organization, self.organization, True, False),
+                ("disabled", self.organization, self.organization, False, True),
+                ("foreign-adult", foreign_org, self.organization, True, True),
+                ("foreign-signup", self.organization, foreign_org, True, True),
+            ):
+                adult = Adult.objects.create(
+                    organization=adult_org,
+                    legal_first_name=case,
+                    last_name=label,
+                    personal_email=f"{case}-{label}@example.com",
+                    login_enabled=enabled,
+                    email_updates=opted_in,
+                )
+                model.objects.create(
+                    organization=signup_org, event=self.event, adult=adult
+                )
+            for case, departure in (
+                ("foreign-departure", foreign_departure),
+                ("other-departure", other_departure),
+                ("no-address", None),
+            ):
+                adult = Adult.objects.create(
+                    organization=self.organization,
+                    legal_first_name=case,
+                    last_name=label,
+                    personal_email=(
+                        "" if case == "no-address" else f"{case}-{label}@example.com"
+                    ),
+                    login_enabled=True,
+                    email_updates=True,
+                )
+                model.objects.create(
+                    organization=self.organization,
+                    event=self.event,
+                    adult=adult,
+                    departure=departure,
+                )
+        payload = self.event_edit_payload()
+        payload["description"] = "Updated itinerary"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"valid-mentor@example.com", "valid-parent@example.com"},
+        )
 
     def test_edit_notifies_approved_people_of_departure_and_permission_form_changes(
         self,
@@ -329,12 +634,21 @@ class TravelViewTest(TestCase):
             status=TravelSignup.APPROVED,
             approved_total="300.00",
         )
+        TravelMentorSignup.objects.create(
+            organization=self.organization, event=self.event, adult=self.mentor_adult
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.organization, event=self.event, adult=self.parent_adult
+        )
         self.client.login(username="lead", password="password")  # nosec B106
         edit_url = reverse("travel:event_edit", args=[self.program.pk, self.event.pk])
 
         with self.captureOnCommitCallbacks(execute=True):
-            unchanged_response = self.client.post(edit_url, self.event_edit_payload())
-        self.assertEqual(unchanged_response.status_code, 302)
+            unchanged_response = self.client.post(
+                edit_url, self.event_edit_payload(), follow=True
+            )
+        self.assertEqual(unchanged_response.status_code, 200)
+        self.assertNotIn("Trip updated.", unchanged_response.content.decode())
         self.assertEqual(mail.outbox, [])
 
         invalid_payload = self.event_edit_payload()
@@ -342,8 +656,9 @@ class TravelViewTest(TestCase):
             self.event.start_date - timedelta(days=1)
         ).isoformat()
         with self.captureOnCommitCallbacks(execute=True):
-            invalid_response = self.client.post(edit_url, invalid_payload)
+            invalid_response = self.client.post(edit_url, invalid_payload, follow=True)
         self.assertEqual(invalid_response.status_code, 200)
+        self.assertNotIn("Trip updated.", invalid_response.content.decode())
         self.assertEqual(mail.outbox, [])
 
     def test_edit_does_not_notify_guardians_from_another_organization(self):

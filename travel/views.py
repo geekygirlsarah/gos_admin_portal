@@ -424,6 +424,14 @@ class TravelInlineFormsetsMixin:
                         event_id, organization_id, changes
                     )
                 )
+        if is_update and changes:
+            messages.info(
+                self.request,
+                "Trip updated. Update emails may be sent to students with approved "
+                "sign-ups and their eligible parents/guardians, as well as signed-up "
+                "mentors and parent chaperones with email updates enabled, when "
+                "email addresses are available.",
+            )
         return response
 
 

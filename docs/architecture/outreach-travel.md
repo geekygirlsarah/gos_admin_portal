@@ -77,7 +77,7 @@ records are preserved for review rather than detached or reassigned.
 - Students submit initial sign-ups (`interested`).
 - **Guardian Approval Invariant**: **Only a student's linked parents can approve or decline** (`_ParentSignupActionView` verifies `parent.students.filter(pk=...)`).
 - All state transitions dispatch transactional notification emails via `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`).
-- When a trip with approved sign-ups is edited, opted-in local students and guardians receive an email listing changed trip fields, departures, and costs. Existing approval and permission acknowledgements remain historical snapshots; a trip edit does not silently change them.
+- When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email. Existing approval and permission acknowledgements remain historical snapshots; a trip edit does not silently change them.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.
 
 ### Parent Chaperone System

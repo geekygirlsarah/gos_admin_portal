@@ -9,7 +9,12 @@ student (when they have a linked account) and/or their parents -- using
 from django.urls import reverse
 
 from programs.utils import send_templated_notification
-from travel.models import TravelEvent, TravelSignup
+from travel.models import (
+    TravelEvent,
+    TravelMentorSignup,
+    TravelParentChaperoneSignup,
+    TravelSignup,
+)
 from travel.utils import parent_recipients, student_recipients
 
 
@@ -297,7 +302,7 @@ def trip_change_summary(event_form, departure_formset, cost_formset):
 
 
 def notify_approved_trip_changes(event_id, organization_id, changes):
-    """Notify approved students and their opted-in local guardians of trip edits."""
+    """Notify approved students, their guardians, and signed-up adult attendees."""
     if not changes:
         return
 
@@ -333,6 +338,31 @@ def notify_approved_trip_changes(event_id, organization_id, changes):
             normalized_email = email.strip().casefold()
             if normalized_email:
                 recipients.setdefault(normalized_email, email.strip())
+
+    for model in (TravelMentorSignup, TravelParentChaperoneSignup):
+        adult_signups = (
+            model.objects.for_organization(organization)
+            .filter(
+                event=event,
+                event__organization=organization,
+                adult__organization=organization,
+                adult__login_enabled=True,
+                adult__email_updates=True,
+            )
+            .select_related(
+                "organization", "event__program", "adult__user", "departure"
+            )
+        )
+        for signup in adult_signups:
+            if _trusted_notification_organization(signup, signup.adult) != organization:
+                continue
+            if signup.departure_id and signup.departure.event_id != event.pk:
+                continue
+            email = (signup.adult.personal_email or "").strip() or _adult_email(
+                signup.adult
+            ).strip()
+            if email:
+                recipients.setdefault(email.casefold(), email)
 
     context = {
         "event": event,
