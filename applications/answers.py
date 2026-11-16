@@ -2,7 +2,9 @@
 
 from uuid import UUID
 
-from .models import ProgramApplicationQuestion, StudentApplicationAnswer
+from django.db import transaction
+
+from .models import Application, ProgramApplicationQuestion, StudentApplicationAnswer
 
 EXPERIENCE_QUESTIONS = {
     "interest_reason": (
@@ -74,6 +76,61 @@ def validate_custom_question_snapshot(snapshot, require_answers=False):
         seen.add(canonical_id)
         if require_answers and item["required"] and not item["answer"].strip():
             raise ValueError("Required custom questions are unanswered.")
+
+
+def freeze_custom_question_snapshot(application):
+    """Persist one program-bound question set without overwriting newer step data."""
+    with transaction.atomic(using=application._state.db):
+        current = (
+            Application.objects.using(application._state.db)
+            .filter(pk=application.pk, organization_id=application.organization_id)
+            .select_for_update()
+            .first()
+        )
+        if current is None:
+            raise ValueError(
+                "The application organization has changed or it is missing."
+            )
+        if current.program_id != application.program_id:
+            raise ValueError("The application program has changed.")
+        if current.status not in (
+            Application.Status.DRAFT,
+            Application.Status.EMAIL_VERIFIED,
+            Application.Status.AWAITING_PARENT,
+        ):
+            raise ValueError("The application is no longer editable.")
+        if not current.program_id:
+            raise ValueError("An application program is required for custom questions.")
+        if current.program.organization_id != current.organization_id:
+            raise ValueError(
+                "The application program does not belong to its organization."
+            )
+        data = current.data
+        if not isinstance(data, dict):
+            raise ValueError("Application answer data is malformed.")
+        has_snapshot = "step6-custom" in data
+        has_program = "_custom_question_program_id" in data
+        if has_snapshot != has_program:
+            raise ValueError("Custom application question ownership is missing.")
+        if has_snapshot:
+            snapshot_program = data["_custom_question_program_id"]
+            if (
+                type(snapshot_program) is not int
+                or snapshot_program != current.program_id
+            ):
+                raise ValueError("Custom questions belong to a different program.")
+            snapshot = data["step6-custom"]
+            validate_custom_question_snapshot(snapshot)
+            return snapshot
+        snapshot = build_custom_question_snapshot(current)
+        validate_custom_question_snapshot(snapshot)
+        current.data = {
+            **data,
+            "step6-custom": snapshot,
+            "_custom_question_program_id": current.program_id,
+        }
+        current.save(update_fields=["data", "updated_at"])
+        return snapshot
 
 
 def extract_experience_answers(data):

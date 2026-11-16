@@ -40,6 +40,7 @@ from programs.utils.email_async import send_messages_in_background
 from programs.utils.email_html import build_email_parts
 from programs.utils.notifications import get_sender_connection
 
+from ..answers import extract_experience_answers
 from ..forms import StaffDocumentUploadForm
 from ..models import Application, ApplicationDocumentSubmission, normalize_step_keys
 from ..services import (
@@ -850,12 +851,22 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         can_convert = application.status == Application.Status.APPROVED_SIGNED or (
             application.status == Application.Status.APPROVED and all_required_uploaded
         )
+        custom_question_error = False
+        data = application.data or {}
+        if "step6-custom" in data:
+            try:
+                if not isinstance(data["step6-custom"], list):
+                    raise ValueError("Custom application answers are malformed.")
+                extract_experience_answers({"step6-custom": data["step6-custom"]})
+            except ValueError:
+                custom_question_error = True
         return render(
             request,
             self.template_name,
             {
                 "application": application,
-                "data": application.data or {},
+                "data": data,
+                "custom_question_error": custom_question_error,
                 "decline_form": DeclineForm(),
                 "upload_form": StaffDocumentUploadForm(program=application.program),
                 "documents_status": documents_status,

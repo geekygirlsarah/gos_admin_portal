@@ -74,8 +74,9 @@ Conversion also recognizes a `step6-custom` snapshot: a list of objects with
 `question_id` (UUID), `question_text`, and `answer` (strings). It preserves each
 nonblank answer with the exact question text shown, alongside legacy answers.
 Invalid snapshots or repeated question IDs stop conversion without changing the
-source data. Snapshot creation, applicant forms, and application-answer editing
-are not yet implemented. Lead Mentors can prepare free-text questions in program settings,
+source data. Snapshot creation is not yet connected to applicant forms, and
+application-answer editing is not yet implemented. Lead Mentors can prepare
+free-text questions in program settings,
 mark them required or optional, set their order, and deactivate them. These
 definitions are organization-scoped and do not yet change the public wizard.
 Each definition has a stable UUID intended for future answer snapshots. Existing
@@ -83,7 +84,13 @@ applications and their answers are unaffected by configuring questions.
 Snapshot-building and validation helpers select active questions from the same
 program and organization, retain the wording and required flag, and reject
 malformed or unanswered required entries. A form can render and validate that
-frozen set. These helpers are not yet wired to public submission or review.
+frozen set. A persistence helper can freeze a program-bound snapshot while
+locking and reloading the application; it rejects stale programs, inconsistent
+ownership, completed applications, and malformed or unbound snapshots instead
+of overwriting them. It is not yet wired to the wizard: other application
+writers must be coordinated before it can safely be used publicly. Staff review
+renders existing custom snapshots as questions and answers and flags malformed
+snapshots; it does not yet support editing them.
 
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
