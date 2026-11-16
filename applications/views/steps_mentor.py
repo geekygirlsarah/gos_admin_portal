@@ -152,17 +152,17 @@ class MentorClearanceInterestView(View):
             "mentor_clearance_interest",
             dict(form.cleaned_data),
             next_step=7,
+            remove_keys=(
+                ("mentor_clearance_detail",)
+                if form.cleaned_data["interested"] == "no"
+                else ()
+            ),
         )
         if form.cleaned_data["interested"] == "yes":
             return redirect(
                 "apply_mentor_clearance_detail",
                 app_id=application.application_id,
             )
-        # Not interested → clear any prior detail and jump to confirm.
-        data = dict(application.data or {})
-        data.pop("mentor_clearance_detail", None)
-        application.data = data
-        application.save(update_fields=["data", "updated_at"])
         return redirect("apply_mentor_confirm", app_id=application.application_id)
 
     def _render(self, request, application, form):

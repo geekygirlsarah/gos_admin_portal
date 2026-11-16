@@ -1,7 +1,10 @@
-from django.test import TestCase
+from unittest.mock import patch
+
+from django.test import RequestFactory, TestCase
 
 from applications.answers import freeze_custom_question_snapshot
 from applications.models import Application, ProgramApplicationQuestion
+from applications.views.steps_mentor import MentorClearanceInterestView
 from applications.views.utils import _save_step_data
 from organizations.models import Organization
 from programs.models import Program
@@ -99,6 +102,71 @@ class CustomQuestionPersistenceTests(TestCase):
 
         with self.assertRaises(Application.DoesNotExist):
             _save_step_data(stale, "step6-experience", {}, 7)
+
+    def test_mentor_clearance_cleanup_preserves_intervening_data(self):
+        self.app.applicant_type = Application.Type.MENTOR
+        self.app.data = {"mentor_clearance_detail": {"previous": "detail"}}
+        self.app.save(update_fields=["applicant_type", "data"])
+        request = RequestFactory().post("/", {"interested": "no"})
+        request.organization = self.org
+
+        def save_then_update(*args, **kwargs):
+            _save_step_data(*args, **kwargs)
+            current = Application.objects.get(pk=self.app.pk)
+            current.data["other_step"] = {"answer": "newer"}
+            current.save(update_fields=["data"])
+
+        with (
+            patch(
+                "applications.views.steps_mentor._get_application_or_404",
+                return_value=self.app,
+            ),
+            patch(
+                "applications.views.steps_mentor._require_mentor_verified",
+                return_value=None,
+            ),
+            patch(
+                "applications.views.utils._save_step_data", side_effect=save_then_update
+            ),
+        ):
+            response = MentorClearanceInterestView.as_view()(
+                request, app_id=self.app.application_id
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data["other_step"], {"answer": "newer"})
+        self.assertEqual(self.app.data["mentor_clearance_interest"]["interested"], "no")
+        self.assertNotIn("mentor_clearance_detail", self.app.data)
+
+    def test_interested_mentor_keeps_clearance_detail(self):
+        self.app.data = {"mentor_clearance_detail": {"previous": "detail"}}
+        self.app.save(update_fields=["data"])
+        request = RequestFactory().post("/", {"interested": "yes"})
+        request.organization = self.org
+
+        with (
+            patch(
+                "applications.views.steps_mentor._get_application_or_404",
+                return_value=self.app,
+            ),
+            patch(
+                "applications.views.steps_mentor._require_mentor_verified",
+                return_value=None,
+            ),
+        ):
+            response = MentorClearanceInterestView.as_view()(
+                request, app_id=self.app.application_id
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(
+            self.app.data["mentor_clearance_detail"], {"previous": "detail"}
+        )
+        self.assertEqual(
+            self.app.data["mentor_clearance_interest"]["interested"], "yes"
+        )
 
     def test_empty_snapshot_is_still_frozen(self):
         self.question.is_active = False

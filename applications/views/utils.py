@@ -235,7 +235,9 @@ def _auto_authorize_handoff(request, application: Application) -> None:
         request.session[f"handoff_token_{application.application_id}"] = token
 
 
-def _save_step_data(application: Application, key: str, payload: dict, next_step: int):
+def _save_step_data(
+    application: Application, key: str, payload: dict, next_step: int, remove_keys=()
+):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
     """
@@ -247,6 +249,8 @@ def _save_step_data(application: Application, key: str, payload: dict, next_step
             .get(pk=application.pk, organization_id=application.organization_id)
         )
         data = dict(normalize_step_keys(current.data) or {})
+        for remove_key in remove_keys:
+            data.pop(remove_key, None)
         data[key] = payload
         current.data = data
         current.current_step = max(current.current_step, next_step)
