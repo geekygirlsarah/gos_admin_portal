@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
 
 ### Changed
+- The student profile's Application Answers card now also shows existing fixed profile responses and explains when no linked answers are on file.
 - Signed-document notices and access codes go to the parent or guardian rather than the student; document verification no longer changes application email verification.
 - Application forms show numbered steps instead of a percentage bar; the submission confirmation no longer displays the documents step as the current page.
 - Condensed navigation into People, Admin, and Activities menus, and grouped platform operations to leave more room in the navigation bar.

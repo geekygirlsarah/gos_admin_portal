@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from .models import StudentApplicationAnswer
+from .models import ProgramApplicationQuestion, StudentApplicationAnswer
 
 EXPERIENCE_QUESTIONS = {
     "interest_reason": (
@@ -22,6 +22,58 @@ EXPERIENCE_QUESTIONS = {
         "How did you hear about this program?",
     ),
 }
+
+
+def build_custom_question_snapshot(application):
+    """Build the active question set for this application's program."""
+    if not application.program_id:
+        raise ValueError("An application program is required for custom questions.")
+    if application.program.organization_id != application.organization_id:
+        raise ValueError("The application program does not belong to its organization.")
+    questions = ProgramApplicationQuestion.objects.for_organization(
+        application.organization
+    ).filter(
+        program_id=application.program_id,
+        program__organization_id=application.organization_id,
+        is_active=True,
+    )
+    return [
+        {
+            "question_id": str(question.question_id),
+            "question_text": question.text,
+            "required": question.is_required,
+            "answer": "",
+        }
+        for question in questions
+    ]
+
+
+def validate_custom_question_snapshot(snapshot, require_answers=False):
+    """Reject malformed snapshots and, when requested, missing required answers."""
+    if not isinstance(snapshot, list):
+        raise ValueError("Custom application questions are malformed.")
+    seen = set()
+    for item in snapshot:
+        if not isinstance(item, dict):
+            raise ValueError("Custom application question is malformed.")
+        question_id = item.get("question_id")
+        try:
+            if not isinstance(question_id, str):
+                raise ValueError
+            canonical_id = str(UUID(question_id))
+        except ValueError as exc:
+            raise ValueError("Custom application question is malformed.") from exc
+        if (
+            canonical_id in seen
+            or not isinstance(item.get("question_text"), str)
+            or not item["question_text"].strip()
+            or not isinstance(item.get("required"), bool)
+            or not isinstance(item.get("answer"), str)
+        ):
+            raise ValueError("Custom application question is malformed.")
+        seen.add(canonical_id)
+        if require_answers and item["required"] and not item["answer"].strip():
+            raise ValueError("Required custom questions are unanswered.")
 
 
 def extract_experience_answers(data):

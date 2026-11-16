@@ -539,7 +539,7 @@
           </div>
         {% endif %}
 
-        {% if application_answers %}
+        {% if application_answers is not None %}
           <div class="card shadow-sm border-0 rounded-3 mb-4">
             <div class="card-header bg-white py-3 border-bottom">
               <h3 class="h6 mb-0 fw-bold">Application Answers</h3>
@@ -551,7 +551,19 @@
                   <div class="fw-semibold">{{ item.question_text }}</div>
                   <div class="text-break">{{ item.answer|linebreaksbr }}</div>
                 </div>
+              {% empty %}
+                <p class="text-muted">No linked application answers on file. This does not necessarily mean no answers were submitted.</p>
               {% endfor %}
+              {% if existing_application_responses %}
+                <h4 class="h6 mt-4">Existing student profile responses</h4>
+                <p class="text-muted small">These profile fields are not linked to a specific application.</p>
+                {% for label, answer in existing_application_responses %}
+                  <div class="mb-3">
+                    <div class="fw-semibold">{{ label }}</div>
+                    <div class="text-break">{{ answer|linebreaksbr }}</div>
+                  </div>
+                {% endfor %}
+              {% endif %}
             </div>
           </div>
         {% endif %}

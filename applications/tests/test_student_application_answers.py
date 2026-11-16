@@ -294,6 +294,111 @@ class StudentApplicationAnswerTests(TestCase):
         self.assertNotIn(other_app.application_id, output.getvalue())
         self.assertIn("Applications requiring review: 3", output.getvalue())
 
+    def test_report_can_identify_linked_answers_missing_from_backfill(self):
+        missing = self.application()
+        copied = self.application(data={"step6": {"referral_source": "School"}})
+        duplicate = self.application(
+            data={
+                "step6": {"referral_source": "Same"},
+                "step6-experience": {"referral_source": "Same"},
+            }
+        )
+        moved = self.application(data={"step6": {"interest_reason": "Old step"}})
+        self.application(data={"step6": {"referral_source": "  "}})
+        foreign_student = Student.objects.create(
+            organization=self.other, legal_first_name="Other", last_name="Student"
+        )
+        foreign = self.application(
+            organization=self.other, program=None, converted_student=foreign_student
+        )
+        self.run_backfill()
+        moved.data = {"step6-experience": {"interest_reason": "Old step"}}
+        moved.save(update_fields=["data"])
+        StudentApplicationAnswer.objects.filter(application=missing).delete()
+        output = StringIO()
+        call_command(
+            "report_application_answer_backfill",
+            organization=self.org.slug,
+            check_copied=True,
+            stdout=output,
+        )
+        self.assertIn(
+            f"{missing.application_id}: missing copied answers", output.getvalue()
+        )
+        self.assertNotIn(copied.application_id, output.getvalue())
+        self.assertNotIn(duplicate.application_id, output.getvalue())
+        self.assertNotIn(moved.application_id, output.getvalue())
+        self.assertNotIn(foreign.application_id, output.getvalue())
+        self.assertNotIn("A friend", output.getvalue())
+        self.assertIn("Applications requiring review: 1", output.getvalue())
+
+    def test_lead_sees_empty_answer_card_but_mentor_does_not(self):
+        user = get_user_model().objects.create_user(username="empty-answer-lead")
+        membership = UserOrganizationMembership.objects.create(
+            user=user, organization=self.org, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(user)
+        url = reverse("student_detail", args=[self.student.pk])
+        response = self.client.get(url, HTTP_HOST="answer-org.localhost")
+        self.assertContains(response, "No linked application answers on file")
+        membership.role = "Mentor"
+        membership.save()
+        response = self.client.get(url, HTTP_HOST="answer-org.localhost")
+        self.assertNotContains(response, "No linked application answers on file")
+
+    def test_lead_can_see_existing_profile_responses_without_an_application(self):
+        self.student.interest_reason = "Interested in building"
+        self.student.referral_source = "A teacher"
+        self.student.save()
+        user = get_user_model().objects.create_user(username="legacy-answer-lead")
+        membership = UserOrganizationMembership.objects.create(
+            user=user, organization=self.org, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(user)
+        url = reverse("student_detail", args=[self.student.pk])
+        response = self.client.get(url, HTTP_HOST="answer-org.localhost")
+        self.assertContains(response, "Existing student profile responses")
+        self.assertContains(response, "Interested in building")
+        self.assertContains(response, "A teacher")
+        membership.role = "Mentor"
+        membership.save()
+        response = self.client.get(url, HTTP_HOST="answer-org.localhost")
+        self.assertNotContains(response, "Interested in building")
+        self.assertNotContains(response, "A teacher")
+
+    def test_report_flags_partial_or_inconsistently_owned_copies(self):
+        partial = self.application(
+            data={
+                "step6-experience": {
+                    "referral_source": "A teacher",
+                    "interest_reason": "Building",
+                }
+            }
+        )
+        inconsistent = self.application()
+        self.run_backfill()
+        StudentApplicationAnswer.objects.filter(
+            application=partial, question_key="interest_reason"
+        ).delete()
+        StudentApplicationAnswer.objects.filter(application=inconsistent).update(
+            organization=self.other
+        )
+        output = StringIO()
+        call_command(
+            "report_application_answer_backfill",
+            organization=self.org.slug,
+            check_copied=True,
+            stdout=output,
+        )
+        self.assertIn(
+            f"{partial.application_id}: missing copied answers", output.getvalue()
+        )
+        self.assertIn(
+            f"{inconsistent.application_id}: missing copied answers", output.getvalue()
+        )
+        self.assertNotIn("Building", output.getvalue())
+        self.assertIn("Applications requiring review: 2", output.getvalue())
+
     def test_lead_can_view_answers_but_mentor_cannot(self):
         application = self.application()
         self.run_backfill()
@@ -358,11 +463,13 @@ class StudentApplicationAnswerTests(TestCase):
         self.run_backfill()
         user = get_user_model().objects.create_user(username="applicant-student")
         self.student.user = user
+        self.student.interest_reason = "Private profile response"
         self.student.save()
         self.client.force_login(user)
         url = reverse("student_detail", args=[self.student.pk])
         response = self.client.get(url, HTTP_HOST="answer-org.localhost")
         self.assertNotContains(response, "A friend")
+        self.assertNotContains(response, "Private profile response")
 
         foreign_lead = get_user_model().objects.create_user(username="foreign-lead")
         UserOrganizationMembership.objects.create(
@@ -378,6 +485,8 @@ class StudentApplicationAnswerTests(TestCase):
     def test_parent_can_open_profile_but_cannot_see_answers(self):
         self.application()
         self.run_backfill()
+        self.student.interest_reason = "Private profile response"
+        self.student.save()
         user = get_user_model().objects.create_user(username="applicant-parent")
         parent = Adult.objects.create(
             organization=self.org,
@@ -398,6 +507,7 @@ class StudentApplicationAnswerTests(TestCase):
             HTTP_HOST="answer-org.localhost",
         )
         self.assertNotContains(response, "A friend")
+        self.assertNotContains(response, "Private profile response")
 
     def test_student_merge_preserves_answers_and_checks_ownership(self):
         source = Student.objects.create(

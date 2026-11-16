@@ -43,6 +43,10 @@ these answers on the student profile under the same tenant restrictions as
 application review. Ordinary student-profile access does not grant application
 review access. Program information and the application ID identify the source;
 different applications never overwrite one another.
+The card is inside the collapsed “View Contact & Personal Details” section and
+shows an empty state when no linked answers are visible to the reviewer.
+It also shows nonblank responses already stored in the four fixed student
+profile fields, separately because their source application is not recorded.
 
 The backfill copies the four existing experience questions from approved,
 approved-and-signed, and converted student/parent applications only when
@@ -76,6 +80,10 @@ mark them required or optional, set their order, and deactivate them. These
 definitions are organization-scoped and do not yet change the public wizard.
 Each definition has a stable UUID intended for future answer snapshots. Existing
 applications and their answers are unaffected by configuring questions.
+Snapshot-building and validation helpers select active questions from the same
+program and organization, retain the wording and required flag, and reject
+malformed or unanswered required entries. A form can render and validate that
+frozen set. These helpers are not yet wired to public submission or review.
 
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
