@@ -22,13 +22,16 @@ Legacy applications stored responses under older keys (`step5`, `step6`, `step7`
 ### Normalization Rule
 Never write code that reads or writes the legacy key names directly. Always call `normalize_step_keys()` (module-level helper in `applications/models.py`) or `Application.normalize_step_data(save=True)` before inspecting or converting application data.
 
-Persisted normalization and the shared wizard step writer reload and lock the
-application row before updating, so they preserve newer unrelated JSON and
-wizard progress rather than writing a stale instance. Conversion extracts
-historical answers from that locked data before normalizing it. Other JSON
-writers do not yet all use this locking protocol, so this is not a complete
-concurrency guarantee; SQLite does not provide row-level `select_for_update`
-locking. Concurrent edits to the same step are not conflict-detected.
+Persisted normalization, the shared wizard step writer, parent handoff, and
+parent swapping reload and lock the application row before updating, so they
+preserve newer unrelated JSON and wizard progress rather than writing a stale
+instance. Handoff also revalidates the parent address and applicant status
+against the locked row before issuing a token; the notification is sent after
+the transaction. Conversion extracts historical answers from the same locked
+data before normalizing it. Other JSON writers do not yet all use this locking
+protocol, so this is not a complete concurrency guarantee; SQLite does not
+provide row-level `select_for_update` locking. Concurrent edits to the same
+step are not conflict-detected.
 
 ---
 

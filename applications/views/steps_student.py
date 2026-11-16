@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import F, Q
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -883,16 +884,88 @@ class Step7PrimaryParentView(View):
                 return self._render(
                     request, application, form, handoff_form, mode, existing_adult
                 )
-            parent_email = handoff_form.cleaned_data["parent_email"]
-            data = dict(application.data or {})
-            data["step7_handoff"] = {"parent_email": parent_email}
-            application.data = data
-            application.status = Application.Status.AWAITING_PARENT
-            application.current_step = max(application.current_step, 7)
-            application.issue_handoff_token()
-            application.save(
-                update_fields=["data", "status", "current_step", "updated_at"]
-            )
+            using = application._state.db
+            response = None
+            render_args = None
+            handoff_saved = False
+            with transaction.atomic(using=using):
+                current = get_object_or_404(
+                    Application.objects.using(using)
+                    .select_for_update()
+                    .select_related("program"),
+                    pk=application.pk,
+                    organization_id=application.organization_id,
+                )
+                guard = _require_verified_email(request, current)
+                if guard is not None:
+                    response = guard
+                elif not _is_handoff_authorized(request, current):
+                    render_args = (current, None, None, None, None)
+                else:
+                    current.normalize_step_data(save=False)
+                    (
+                        current_form,
+                        current_handoff_form,
+                        current_mode,
+                        current_adult,
+                    ) = self._build_forms(current, request.POST)
+                    if current_mode != "handoff" or not current_handoff_form.is_valid():
+                        render_args = (
+                            current,
+                            current_form,
+                            current_handoff_form,
+                            current_mode,
+                            current_adult,
+                        )
+                    else:
+                        parent_email = current_handoff_form.cleaned_data["parent_email"]
+                        data = dict(current.data or {})
+                        data["step7_handoff"] = {"parent_email": parent_email}
+                        current.data = data
+                        current.status = Application.Status.AWAITING_PARENT
+                        current.current_step = max(current.current_step, 7)
+                        current.issue_handoff_token()
+                        current.save(
+                            update_fields=[
+                                "data",
+                                "status",
+                                "current_step",
+                                "updated_at",
+                            ]
+                        )
+                        application.data = current.data
+                        application.status = current.status
+                        application.current_step = current.current_step
+                        application.handoff_token = current.handoff_token
+                        handoff_saved = True
+
+            if response is not None:
+                return response
+            if render_args is not None:
+                (
+                    current,
+                    current_form,
+                    current_handoff_form,
+                    current_mode,
+                    current_adult,
+                ) = render_args
+                if current_mode is None:
+                    return render(
+                        request,
+                        "applications/handoff_required.html",
+                        {"application": current},
+                    )
+                return self._render(
+                    request,
+                    current,
+                    current_form,
+                    current_handoff_form,
+                    current_mode,
+                    current_adult,
+                )
+            if not handoff_saved:
+                return _redirect_to_current_step(application)
+
             from ..services import send_parent_handoff_email
 
             send_parent_handoff_email(application, parent_email, request=request)
@@ -1202,57 +1275,85 @@ class SwapParentsView(View):
                 {"application": application},
             )
 
-        data = dict(application.data or {})
-        step7 = data.get("step7-primaryparent") or {}
-        step8 = data.get("step8-secondaryparent") or {}
-
-        # For returning students the wizard prefills from the Student record
-        # but doesn't save to application.data until the user submits each
-        # step.  If either side is empty, hydrate it from the Student record
-        # so the swap has something to work with.
-        existing_student_id = (data.get("step5-student") or {}).get(
-            "_existing_student_id"
-        )
-        if existing_student_id and (not step7 or not step8):
-            student = (
-                Student.objects.for_organization(application.organization)
-                .filter(pk=existing_student_id)
-                .first()
+        using = application._state.db
+        response = None
+        handoff_required = None
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .select_for_update()
+                .select_related("program"),
+                pk=application.pk,
+                organization_id=application.organization_id,
             )
-            if student:
-                primary_relationship = student.primary_contact_relationship
-                if (
-                    not step7
-                    and primary_relationship is not None
-                    and primary_relationship.organization_id
-                    == application.organization_id
-                    and primary_relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    step7 = adult_to_prefill(
-                        primary_relationship.adult, student=student
+            guard = _require_verified_email(request, current)
+            if guard is not None:
+                response = guard
+            elif not _is_handoff_authorized(request, current):
+                handoff_required = current
+            else:
+                current.normalize_step_data(save=False)
+                data = dict(current.data or {})
+                step7 = data.get("step7-primaryparent") or {}
+                step8 = data.get("step8-secondaryparent") or {}
+
+                # Returning-student prefills aren't saved until each step is
+                # submitted, so hydrate missing sides before swapping.
+                existing_student_id = (data.get("step5-student") or {}).get(
+                    "_existing_student_id"
+                )
+                if existing_student_id and (not step7 or not step8):
+                    student = (
+                        Student.objects.for_organization(current.organization)
+                        .filter(pk=existing_student_id)
+                        .first()
                     )
-                secondary_relationship = student.secondary_contact_relationship
-                if (
-                    not step8
-                    and secondary_relationship is not None
-                    and secondary_relationship.organization_id
-                    == application.organization_id
-                    and secondary_relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    step8 = adult_to_prefill(
-                        secondary_relationship.adult, student=student
+                    if student:
+                        primary_relationship = student.primary_contact_relationship
+                        if (
+                            not step7
+                            and primary_relationship is not None
+                            and primary_relationship.organization_id
+                            == current.organization_id
+                            and primary_relationship.adult.organization_id
+                            == current.organization_id
+                        ):
+                            step7 = adult_to_prefill(
+                                primary_relationship.adult, student=student
+                            )
+                        secondary_relationship = student.secondary_contact_relationship
+                        if (
+                            not step8
+                            and secondary_relationship is not None
+                            and secondary_relationship.organization_id
+                            == current.organization_id
+                            and secondary_relationship.adult.organization_id
+                            == current.organization_id
+                        ):
+                            step8 = adult_to_prefill(
+                                secondary_relationship.adult, student=student
+                            )
+
+                if step7 or step8:
+                    data["step7-primaryparent"], data["step8-secondaryparent"] = (
+                        step8,
+                        step7,
+                    )
+                    current.data = data
+                    current.save(update_fields=["data", "updated_at"])
+                    application.data = current.data
+                    messages.success(
+                        request,
+                        "Primary and secondary parent / guardian information has been swapped.",
                     )
 
-        # Only swap when both sides have content.
-        if step7 or step8:
-            data["step7-primaryparent"], data["step8-secondaryparent"] = step8, step7
-            application.data = data
-            application.save(update_fields=["data", "updated_at"])
-            messages.success(
+        if response is not None:
+            return response
+        if handoff_required is not None:
+            return render(
                 request,
-                "Primary and secondary parent / guardian information has been swapped.",
+                "applications/handoff_required.html",
+                {"application": handoff_required},
             )
 
         next_step = request.POST.get("next", "7")
