@@ -14,6 +14,7 @@ import uuid
 
 import pghistory
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -533,3 +534,41 @@ class StudentApplicationAnswer(models.Model):
             )
         ]
         ordering = ["-application__created_at", "application_id", "source_step", "id"]
+
+
+class ProgramApplicationQuestion(models.Model):
+    """A configurable question belonging to one program and organization."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_questions",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.CASCADE,
+        related_name="application_questions",
+    )
+    question_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    text = models.TextField()
+    is_required = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "pk"]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.program_id
+            and self.organization_id
+            and self.program.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                "The question and program must belong to the same organization."
+            )
+
+    def __str__(self):
+        return self.text

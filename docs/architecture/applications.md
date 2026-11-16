@@ -66,6 +66,17 @@ replacement application wizard are not part of this phase.
 Conversion stops with an error if an experience answer is malformed rather than
 discarding it during step-key normalization.
 
+Conversion also recognizes a `step6-custom` snapshot: a list of objects with
+`question_id` (UUID), `question_text`, and `answer` (strings). It preserves each
+nonblank answer with the exact question text shown, alongside legacy answers.
+Invalid snapshots or repeated question IDs stop conversion without changing the
+source data. Snapshot creation, applicant forms, and application-answer editing
+are not yet implemented. Lead Mentors can prepare free-text questions in program settings,
+mark them required or optional, set their order, and deactivate them. These
+definitions are organization-scoped and do not yet change the public wizard.
+Each definition has a stable UUID intended for future answer snapshots. Existing
+applications and their answers are unaffected by configuring questions.
+
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
 relationships, and enrollments. A selected foreign student, foreign program, or

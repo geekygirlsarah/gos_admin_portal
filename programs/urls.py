@@ -40,6 +40,8 @@ from .views import (
     PortalSlidingScaleSettingsView,
     PortalSubteamView,
     PortalTeamView,
+    ProgramApplicationQuestionCreateView,
+    ProgramApplicationQuestionUpdateView,
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,
@@ -589,6 +591,16 @@ urlpatterns = [
         "<int:pk>/fees/<int:fee_id>/assignments/",
         ProgramFeeAssignmentEditView.as_view(),
         name="program_fee_assignments",
+    ),
+    path(
+        "<int:pk>/application-questions/new/",
+        ProgramApplicationQuestionCreateView.as_view(),
+        name="program_application_question_create",
+    ),
+    path(
+        "<int:pk>/application-questions/<int:question_id>/edit/",
+        ProgramApplicationQuestionUpdateView.as_view(),
+        name="program_application_question_edit",
     ),
     # Program documents (Step 9 blank forms)
     path(

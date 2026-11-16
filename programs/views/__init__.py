@@ -79,6 +79,8 @@ from .portal_settings import (
     ProgramGroupsView,
 )
 from .programs import (
+    ProgramApplicationQuestionCreateView,
+    ProgramApplicationQuestionUpdateView,
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,

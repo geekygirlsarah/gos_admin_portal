@@ -1,5 +1,7 @@
 """Preserve answers captured by the existing student application wizard."""
 
+from uuid import UUID
+
 from .models import StudentApplicationAnswer
 
 EXPERIENCE_QUESTIONS = {
@@ -46,6 +48,39 @@ def extract_experience_answers(data):
                 continue
             seen.add((key, answer))
             answers.append((step, key, labels, answer))
+
+    custom_answers = data.get("step6-custom")
+    if custom_answers is not None:
+        if not isinstance(custom_answers, list):
+            raise ValueError("Custom application answers are malformed.")
+        custom_keys = set()
+        for item in custom_answers:
+            if not isinstance(item, dict):
+                raise ValueError("A custom application answer is malformed.")
+            question_id = item.get("question_id")
+            question_text = item.get("question_text")
+            answer = item.get("answer")
+            try:
+                if not isinstance(question_id, str):
+                    raise ValueError
+                key = str(UUID(question_id))
+            except ValueError as exc:
+                raise ValueError(
+                    "A custom application question ID is malformed."
+                ) from exc
+            if key in custom_keys:
+                raise ValueError("A custom application question is duplicated.")
+            custom_keys.add(key)
+            if (
+                not isinstance(question_text, str)
+                or not question_text.strip()
+                or not isinstance(answer, str)
+            ):
+                raise ValueError("A custom application answer is malformed.")
+            if answer.strip():
+                answers.append(
+                    ("step6-custom", key, (question_text, question_text), answer)
+                )
     return answers
 
 

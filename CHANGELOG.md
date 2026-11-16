@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
+- Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
 
 ### Changed
 - Signed-document notices and access codes go to the parent or guardian rather than the student; document verification no longer changes application email verification.

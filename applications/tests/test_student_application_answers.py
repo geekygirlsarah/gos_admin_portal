@@ -1,6 +1,7 @@
 from importlib import import_module
 from io import StringIO
 from types import SimpleNamespace
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -205,6 +206,64 @@ class StudentApplicationAnswerTests(TestCase):
         self.assertFalse(
             StudentApplicationAnswer.objects.filter(application=application).exists()
         )
+
+    def test_conversion_preserves_custom_question_snapshot_and_legacy_answers(self):
+        question_id = str(uuid4())
+        application = self.application(
+            status=Application.Status.APPROVED_SIGNED,
+            converted_student=None,
+            data={
+                "step5-student": {
+                    "legal_first_name": "New",
+                    "last_name": "Student",
+                    "date_of_birth": "2011-01-01",
+                },
+                "step6-experience": {"referral_source": "A friend"},
+                "step6-custom": [
+                    {
+                        "question_id": question_id,
+                        "question_text": "What would you like to build?",
+                        "answer": "A robot",
+                    },
+                    {
+                        "question_id": str(uuid4()),
+                        "question_text": "Anything else?",
+                        "answer": "",
+                    },
+                ],
+            },
+        )
+        student = convert_application_to_student(application)
+        answer = student.application_answers.get(
+            source_step="step6-custom", question_key=question_id
+        )
+        self.assertEqual(answer.question_text, "What would you like to build?")
+        self.assertEqual(answer.answer, "A robot")
+        self.assertEqual(student.application_answers.count(), 2)
+
+    def test_conversion_rejects_duplicate_custom_questions_without_losing_data(self):
+        question_id = str(uuid4())
+        item = {
+            "question_id": question_id,
+            "question_text": "Question?",
+            "answer": "Answer",
+        }
+        data = {
+            "step5-student": {"legal_first_name": "New", "last_name": "Student"},
+            "step6-custom": [item, item.copy()],
+        }
+        application = self.application(
+            status=Application.Status.APPROVED_SIGNED,
+            converted_student=None,
+            data=data,
+        )
+        with self.assertRaisesMessage(
+            ApplicationConversionError, "A custom application question is duplicated."
+        ):
+            convert_application_to_student(application)
+        application.refresh_from_db()
+        self.assertEqual(application.data, data)
+        self.assertFalse(application.student_answers.exists())
 
     def test_report_lists_only_local_unlinked_and_inconsistent_applications(self):
         unlinked = self.application(converted_student=None)

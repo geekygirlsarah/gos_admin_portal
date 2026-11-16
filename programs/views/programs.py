@@ -13,8 +13,11 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
+from applications.models import ProgramApplicationQuestion
+
 from ..forms import (
     AddExistingStudentToProgramForm,
+    ProgramApplicationQuestionForm,
     ProgramDocumentForm,
     ProgramEmailForm,
     ProgramForm,
@@ -881,6 +884,11 @@ class ProgramUpdateView(
         ) or self.request.user.has_perm("programs.change_program")
         ctx["program_documents"] = program.documents.all().order_by(
             "display_order", "name"
+        )
+        ctx["application_questions"] = (
+            ProgramApplicationQuestion.objects.for_organization(org).filter(
+                program=program, program__organization=org
+            )
         )
         return ctx
 
@@ -2381,6 +2389,62 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
         if request.GET.get("format", "xlsx").lower() == "csv":
             return _students_csv_response(program, headers, rows)
         return _students_xlsx_response(program, headers, rows)
+
+
+class ProgramApplicationQuestionMixin:
+    model = ProgramApplicationQuestion
+    form_class = ProgramApplicationQuestionForm
+    template_name = "programs/application_question_form.html"
+    permission_required = "programs.change_program"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(
+            Program.objects.for_organization(getattr(request, "organization", None)),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return ProgramApplicationQuestion.objects.for_organization(
+            self.program.organization
+        ).filter(program=self.program, program__organization=self.program.organization)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if not kwargs.get("instance"):
+            kwargs["instance"] = ProgramApplicationQuestion(
+                organization=self.program.organization, program=self.program
+            )
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        return ctx
+
+    def get_success_url(self):
+        return reverse("program_edit", args=[self.program.pk])
+
+
+class ProgramApplicationQuestionCreateView(
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    LogFormSaveMixin,
+    ProgramApplicationQuestionMixin,
+    CreateView,
+):
+    permission_required = "programs.change_program"
+
+
+class ProgramApplicationQuestionUpdateView(
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    LogFormSaveMixin,
+    ProgramApplicationQuestionMixin,
+    UpdateView,
+):
+    pk_url_kwarg = "question_id"
+    permission_required = "programs.change_program"
 
 
 class ProgramDocumentCreateView(
