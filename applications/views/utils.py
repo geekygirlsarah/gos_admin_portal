@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 
@@ -238,12 +239,20 @@ def _save_step_data(application: Application, key: str, payload: dict, next_step
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
     """
-    application.normalize_step_data(save=False)
-    data = dict(application.data or {})
-    data[key] = payload
-    application.data = data
-    application.current_step = max(application.current_step, next_step)
-    application.save(update_fields=["data", "current_step", "updated_at"])
+    using = application._state.db
+    with transaction.atomic(using=using):
+        current = (
+            Application.objects.using(using)
+            .select_for_update()
+            .get(pk=application.pk, organization_id=application.organization_id)
+        )
+        data = dict(normalize_step_keys(current.data) or {})
+        data[key] = payload
+        current.data = data
+        current.current_step = max(current.current_step, next_step)
+        current.save(update_fields=["data", "current_step", "updated_at"])
+        application.data = current.data
+        application.current_step = current.current_step
 
 
 def _sanitize_payload(cleaned_data: dict) -> dict:

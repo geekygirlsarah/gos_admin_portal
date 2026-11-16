@@ -2,6 +2,7 @@ from django.test import TestCase
 
 from applications.answers import freeze_custom_question_snapshot
 from applications.models import Application, ProgramApplicationQuestion
+from applications.views.utils import _save_step_data
 from organizations.models import Organization
 from programs.models import Program
 
@@ -43,6 +44,61 @@ class CustomQuestionPersistenceTests(TestCase):
         self.question.save()
         self.assertEqual(freeze_custom_question_snapshot(stale), snapshot)
         self.assertEqual(snapshot[0]["question_text"], "Original?")
+
+    def test_persisted_normalization_uses_fresh_data(self):
+        self.app.data = {"step5": {"legal_first_name": "Example"}}
+        self.app.save(update_fields=["data"])
+        stale = Application.objects.get(pk=self.app.pk)
+        snapshot = freeze_custom_question_snapshot(self.app)
+
+        normalized = stale.normalize_step_data(save=True)
+
+        self.app.refresh_from_db()
+        self.assertEqual(normalized, self.app.data)
+        self.assertEqual(normalized["step6-custom"], snapshot)
+        self.assertEqual(normalized["_custom_question_program_id"], self.program.pk)
+        self.assertEqual(normalized["step5-student"]["legal_first_name"], "Example")
+        self.assertNotIn("step5", normalized)
+
+    def test_persisted_normalization_refreshes_even_without_stale_legacy_keys(self):
+        stale = Application.objects.get(pk=self.app.pk)
+        snapshot = freeze_custom_question_snapshot(self.app)
+
+        normalized = stale.normalize_step_data(save=True)
+
+        self.assertEqual(normalized["step6-custom"], snapshot)
+        self.assertEqual(stale.data, normalized)
+
+    def test_persisted_normalization_does_not_follow_changed_organization(self):
+        stale = Application.objects.get(pk=self.app.pk)
+        Application.objects.filter(pk=self.app.pk).update(organization=self.other)
+
+        with self.assertRaises(Application.DoesNotExist):
+            stale.normalize_step_data(save=True)
+
+    def test_stale_step_save_preserves_snapshot_other_steps_and_progress(self):
+        stale = Application.objects.get(pk=self.app.pk)
+        snapshot = freeze_custom_question_snapshot(self.app)
+        Application.objects.filter(pk=self.app.pk).update(current_step=9)
+        _save_step_data(self.app, "step7-primaryparent", {"email_updates": True}, 8)
+
+        _save_step_data(stale, "step6-experience", {"referral_source": "Friend"}, 7)
+
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data["step6-custom"], snapshot)
+        self.assertEqual(self.app.data["_custom_question_program_id"], self.program.pk)
+        self.assertTrue(self.app.data["step7-primaryparent"]["email_updates"])
+        self.assertEqual(self.app.data["step6-experience"]["referral_source"], "Friend")
+        self.assertEqual(self.app.current_step, 9)
+        self.assertEqual(stale.data, self.app.data)
+        self.assertEqual(stale.current_step, 9)
+
+    def test_step_save_does_not_follow_changed_organization(self):
+        stale = Application.objects.get(pk=self.app.pk)
+        Application.objects.filter(pk=self.app.pk).update(organization=self.other)
+
+        with self.assertRaises(Application.DoesNotExist):
+            _save_step_data(stale, "step6-experience", {}, 7)
 
     def test_empty_snapshot_is_still_frozen(self):
         self.question.is_active = False
