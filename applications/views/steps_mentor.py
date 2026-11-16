@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -25,6 +26,7 @@ from .utils import (
     MENTOR_TOTAL_STEPS,
     _get_application_or_404,
     _is_mentor,
+    _locked_application_redirect,
     _mentor_progress,
     _redirect_to_current_step,
     logger,
@@ -251,12 +253,36 @@ class MentorConfirmView(View):
         form = ConfirmSubmitForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
-        application.status = Application.Status.SUBMITTED
-        application.submitted_at = timezone.now()
-        application.current_step = max(application.current_step, 9)
-        application.save(
-            update_fields=["status", "submitted_at", "current_step", "updated_at"]
-        )
+
+        using = application._state.db
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update(),
+                pk=application.pk,
+            )
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_mentor_verified(request, current)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The application changed while you were confirming. "
+                    "Please review it before submitting again.",
+                )
+                return self._render(request, current, form)
+
+            current.status = Application.Status.SUBMITTED
+            current.submitted_at = timezone.now()
+            current.current_step = max(current.current_step, 9)
+            current.save(
+                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+            )
+            application = current
         from .utils import logger
 
         try:

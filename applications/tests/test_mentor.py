@@ -10,6 +10,7 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
+from applications.forms import ConfirmSubmitForm
 from applications.models import Application
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult
@@ -361,6 +362,59 @@ class MentorFlowTests(TestCase):
         self.assertTrue(
             any("mentor-flow-lead@example.test" in m.to for m in mail.outbox)
         )
+        sent_email_count = len(mail.outbox)
+        submitted_at = app.submitted_at
+
+        response = self.client.post(
+            reverse("apply_mentor_confirm", kwargs={"app_id": app.application_id}),
+            {"confirm": "on"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.submitted_at, submitted_at)
+        self.assertEqual(len(mail.outbox), sent_email_count)
+
+    def test_mentor_confirmation_rechecks_browser_identity_after_validation(self):
+        app = self.verified_mentor_app()
+        original_status = app.status
+        mail.outbox = []
+        original_is_valid = ConfirmSubmitForm.is_valid
+        changed = False
+
+        def is_valid(form):
+            nonlocal changed
+            valid = original_is_valid(form)
+            if valid and not changed:
+                changed = True
+                Application.objects.filter(pk=app.pk).update(
+                    email="current-mentor@example.test",
+                    email_verified_at=None,
+                )
+            return valid
+
+        with patch.object(ConfirmSubmitForm, "is_valid", new=is_valid):
+            response = self.client.post(
+                reverse("apply_mentor_confirm", kwargs={"app_id": app.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "apply_browser_verification", kwargs={"app_id": app.application_id}
+            ),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.email, "current-mentor@example.test")
+        self.assertIsNone(app.email_verified_at)
+        self.assertEqual(app.status, original_status)
+        self.assertEqual(mail.outbox, [])
 
     def test_mentor_submitted_page_renders(self):
         app = self.verified_mentor_app()

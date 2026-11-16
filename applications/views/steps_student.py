@@ -1640,24 +1640,55 @@ class Step9ConfirmView(View):
         if not form.is_valid():
             return self._render(request, application, form)
 
-        # Ensure at least one parent opted in to notifications (only for students/parents)
-        data = application.data or {}
-        p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
-        p2_opt = (data.get("step8-secondaryparent") or {}).get("email_updates", False)
-        if not p1_opt and not p2_opt:
-            form.add_error(
-                None,
-                "At least one parent or guardian must opt in to receiving email "
-                "updates from this organization.",
+        using = application._state.db
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update(),
+                pk=application.pk,
             )
-            return self._render(request, application, form)
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_verified_email(request, current)
+            if guard is not None:
+                return guard
+            if not _is_handoff_authorized(request, current):
+                return render(
+                    request,
+                    "applications/handoff_required.html",
+                    {"application": current},
+                )
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while you were confirming. "
+                    "Please review the application before submitting again.",
+                )
+                return self._render(request, current, form)
 
-        application.status = Application.Status.SUBMITTED
-        application.submitted_at = timezone.now()
-        application.current_step = 10
-        application.save(
-            update_fields=["status", "submitted_at", "current_step", "updated_at"]
-        )
+            # Ensure at least one parent opted in to notifications.
+            data = current.data or {}
+            p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
+            p2_opt = (data.get("step8-secondaryparent") or {}).get(
+                "email_updates", False
+            )
+            if not p1_opt and not p2_opt:
+                form.add_error(
+                    None,
+                    "At least one parent or guardian must opt in to receiving email "
+                    "updates from this organization.",
+                )
+                return self._render(request, current, form)
+
+            current.status = Application.Status.SUBMITTED
+            current.submitted_at = timezone.now()
+            current.current_step = 10
+            current.save(
+                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+            )
+            application = current
 
         try:
             send_application_submitted_email(application, request=request)

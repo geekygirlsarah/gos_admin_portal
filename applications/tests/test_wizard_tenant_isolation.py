@@ -16,7 +16,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from applications.forms import ApplicantTypeForm, ProgramSelectForm
+from applications.forms import ApplicantTypeForm, ConfirmSubmitForm, ProgramSelectForm
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_lead_notification_email
 from applications.tests.access_helpers import grant_applicant_document_access
@@ -128,6 +128,184 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             return valid
 
         return patch.object(form_class, "is_valid", new=is_valid)
+
+    def test_submission_rechecks_current_parent_notification_opt_in(self):
+        application = self.make_application(
+            email="submit-opt-in@example.test",
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=9,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        mail.outbox = []
+
+        def remove_latest_opt_in():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step7-primaryparent"]["email_updates"] = False
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ConfirmSubmitForm, remove_latest_opt_in
+        ):
+            response = self.tenant_post(
+                reverse("apply_step9", kwargs={"app_id": application.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "At least one parent or guardian must opt in")
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.EMAIL_VERIFIED)
+        self.assertFalse(application.data["step7-primaryparent"]["email_updates"])
+        self.assertEqual(mail.outbox, [])
+
+    def test_submission_rejects_identity_change_after_form_validation(self):
+        application = self.make_application(
+            email="submit-original@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=9,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        mail.outbox = []
+
+        def change_latest_identity():
+            Application.objects.filter(pk=application.pk).update(
+                email="submit-current@example.test",
+                email_verified_at=None,
+            )
+
+        with self.patch_validation_after_intervening_write(
+            ConfirmSubmitForm, change_latest_identity
+        ):
+            response = self.tenant_post(
+                reverse("apply_step9", kwargs={"app_id": application.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "apply_browser_verification",
+                kwargs={"app_id": application.application_id},
+            ),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.email, "submit-current@example.test")
+        self.assertNotEqual(application.status, Application.Status.SUBMITTED)
+        self.assertEqual(mail.outbox, [])
+
+    def test_submission_rechecks_parent_handoff_after_form_validation(self):
+        application = self.make_application(
+            email="submit-student@example.test",
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=9,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        mail.outbox = []
+
+        def start_latest_handoff():
+            latest = Application.objects.get(pk=application.pk)
+            latest.status = Application.Status.AWAITING_PARENT
+            latest.handoff_token = "current-handoff-token"  # nosec B105
+            latest.data["step7_handoff"] = {
+                "parent_email": "current-parent@example.test"
+            }
+            latest.save(update_fields=["status", "handoff_token", "data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ConfirmSubmitForm, start_latest_handoff
+        ):
+            response = self.tenant_post(
+                reverse("apply_step9", kwargs={"app_id": application.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "apply_browser_verification",
+                kwargs={"app_id": application.application_id},
+            ),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.AWAITING_PARENT)
+        self.assertEqual(application.handoff_token, "current-handoff-token")
+        self.assertEqual(mail.outbox, [])
+
+    def test_submission_rejects_program_change_after_form_validation(self):
+        application = self.make_application(
+            email="submit-program@example.test",
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=9,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        mail.outbox = []
+
+        def change_latest_program():
+            Application.objects.filter(pk=application.pk).update(program=None)
+
+        with self.patch_validation_after_intervening_write(
+            ConfirmSubmitForm, change_latest_program
+        ):
+            response = self.tenant_post(
+                reverse("apply_step9", kwargs={"app_id": application.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "program changed")
+        application.refresh_from_db()
+        self.assertIsNone(application.program_id)
+        self.assertEqual(application.status, Application.Status.EMAIL_VERIFIED)
+        self.assertEqual(mail.outbox, [])
+
+    def test_submission_does_not_repeat_notifications_after_concurrent_submit(self):
+        application = self.make_application(
+            email="submit-status@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=9,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        already_submitted_at = timezone.now() - datetime.timedelta(minutes=1)
+        mail.outbox = []
+
+        def submit_latest_application():
+            Application.objects.filter(pk=application.pk).update(
+                status=Application.Status.SUBMITTED,
+                submitted_at=already_submitted_at,
+            )
+
+        with self.patch_validation_after_intervening_write(
+            ConfirmSubmitForm, submit_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step9", kwargs={"app_id": application.application_id}),
+                {"confirm": "on"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": application.application_id}),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.SUBMITTED)
+        self.assertEqual(application.submitted_at, already_submitted_at)
+        self.assertEqual(mail.outbox, [])
 
     def test_step2_preserves_newer_answers_and_progress(self):
         application = self.make_application(

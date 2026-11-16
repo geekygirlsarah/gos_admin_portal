@@ -35,6 +35,14 @@ status against the locked row before issuing a token; the notification is sent
 after the transaction. Conversion extracts historical answers from the same
 locked data before normalizing it.
 
+Student/parent and mentor confirmation also reload and lock the organization-
+bound application after form validation. They recheck terminal status and the
+current browser verification; student/parent submission additionally rechecks
+parent handoff authorization, program selection, and the current parent email-
+updates opt-in. The status transition is saved once, and applicant/lead notices
+are sent only after the transaction, so stale or repeated confirmation posts
+do not reset submission time or resend notifications.
+
 Other JSON writers do not yet all use this locking protocol, so this is not a
 complete concurrency guarantee; SQLite does not provide row-level
 `select_for_update` locking, and concurrent edits to the same step are not
