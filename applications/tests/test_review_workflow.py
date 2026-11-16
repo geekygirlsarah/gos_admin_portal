@@ -4,6 +4,7 @@ approve/decline/edit/delete, convert, and email resend."""
 from __future__ import annotations
 
 import datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -179,6 +180,34 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.user = _reviewer_user()
         self.client.force_login(self.user)
         mail.outbox = []
+
+    def test_decisions_preserve_newer_application_data(self):
+        for action, expected_status in (
+            ("approve", Application.Status.APPROVED),
+            ("decline", Application.Status.DECLINED),
+        ):
+            with self.subTest(action=action):
+                app = _make_application()
+                stale = Application.objects.get(pk=app.pk)
+                app.data["step6-custom"] = [{"question_text": "New question?"}]
+                app.save(update_fields=["data"])
+                with patch(
+                    "applications.views.review._get_tenant_application",
+                    return_value=stale,
+                ):
+                    response = self.client.post(
+                        reverse(
+                            f"application_review_{action}",
+                            kwargs={"app_id": app.application_id},
+                        ),
+                        {"reason": "Not eligible"},
+                    )
+                self.assertEqual(response.status_code, 302)
+                app.refresh_from_db()
+                self.assertEqual(app.status, expected_status)
+                self.assertEqual(
+                    app.data["step6-custom"][0]["question_text"], "New question?"
+                )
 
     def test_approve_sets_status_and_emails(self):
         url = reverse(

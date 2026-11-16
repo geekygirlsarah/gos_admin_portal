@@ -944,7 +944,16 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
         # Move them past the wizard's submit step; Step 9 will surface
         # the signed-document upload page next time they resume.
         application.current_step = max(application.current_step, 9)
-        application.save()
+        application.save(
+            update_fields=[
+                "status",
+                "reviewed_at",
+                "reviewed_by",
+                "decline_reason",
+                "current_step",
+                "updated_at",
+            ]
+        )
 
         log_event(
             request=request,
@@ -1030,7 +1039,15 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
         application.decline_reason = reason
         application.reviewed_at = timezone.now()
         application.reviewed_by = request.user
-        application.save()
+        application.save(
+            update_fields=[
+                "status",
+                "decline_reason",
+                "reviewed_at",
+                "reviewed_by",
+                "updated_at",
+            ]
+        )
 
         log_event(
             request=request,
