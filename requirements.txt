@@ -1,7 +1,7 @@
 # Runtime dependencies for production (build.sh / Render).
 # Pin first-party packages only; pip resolves transitives.
 
-Django==6.1.2
+Django==6.1.3
 dnspython==2.9.1
 django-allauth==65.21.1
 django-formtools==2.7
