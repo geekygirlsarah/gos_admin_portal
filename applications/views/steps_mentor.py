@@ -104,9 +104,31 @@ class MentorInfoView(View):
             return self._render(request, application, form)
         from .utils import _save_step_data
 
-        _save_step_data(
-            application, "mentor_info", dict(form.cleaned_data), next_step=6
+        def validate_current(current):
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_mentor_verified(request, current)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The application changed while this form was being saved. "
+                    "Please review your information and submit it again.",
+                )
+                return self._render(request, current, form)
+            return None
+
+        response = _save_step_data(
+            application,
+            "mentor_info",
+            dict(form.cleaned_data),
+            next_step=6,
+            validate_current=validate_current,
         )
+        if response is not None:
+            return response
         return redirect(
             "apply_mentor_clearance_interest", app_id=application.application_id
         )
@@ -149,17 +171,50 @@ class MentorClearanceInterestView(View):
             return self._render(request, application, form)
         from .utils import _save_step_data
 
-        _save_step_data(
+        initial_interest = (application.data or {}).get(
+            "mentor_clearance_interest"
+        ) or {}
+
+        def validate_current(current):
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_mentor_verified(request, current)
+            if guard is not None:
+                return guard
+            current_interest = (current.data or {}).get(
+                "mentor_clearance_interest"
+            ) or {}
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The application changed while this form was being saved. "
+                    "Please review your answers and submit them again.",
+                )
+            elif current_interest != initial_interest:
+                form.add_error(
+                    None,
+                    "Your clearance interest changed while this form was being "
+                    "saved. Please review your answer and submit it again.",
+                )
+            else:
+                return None
+            return self._render(request, current, form)
+
+        response = _save_step_data(
             application,
             "mentor_clearance_interest",
             dict(form.cleaned_data),
             next_step=7,
+            validate_current=validate_current,
             remove_keys=(
                 ("mentor_clearance_detail",)
                 if form.cleaned_data["interested"] == "no"
                 else ()
             ),
         )
+        if response is not None:
+            return response
         if form.cleaned_data["interested"] == "yes":
             return redirect(
                 "apply_mentor_clearance_detail",
@@ -212,12 +267,39 @@ class MentorClearanceDetailView(View):
             return self._render(request, application, form)
         from .utils import _save_step_data
 
-        _save_step_data(
+        def validate_current(current):
+            locked_redirect = _locked_application_redirect(current)
+            if locked_redirect is not None:
+                return locked_redirect
+            guard = _require_mentor_verified(request, current)
+            if guard is not None:
+                return guard
+            current_interest = (current.data or {}).get(
+                "mentor_clearance_interest"
+            ) or {}
+            if current_interest.get("interested") != "yes":
+                return redirect(
+                    "apply_mentor_clearance_interest",
+                    app_id=current.application_id,
+                )
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The application changed while this form was being saved. "
+                    "Please review your answers and submit them again.",
+                )
+                return self._render(request, current, form)
+            return None
+
+        response = _save_step_data(
             application,
             "mentor_clearance_detail",
             dict(form.cleaned_data),
             next_step=8,
+            validate_current=validate_current,
         )
+        if response is not None:
+            return response
         return redirect("apply_mentor_confirm", app_id=application.application_id)
 
     def _render(self, request, application, form):

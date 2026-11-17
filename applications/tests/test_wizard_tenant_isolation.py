@@ -16,7 +16,13 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from applications.forms import ApplicantTypeForm, ConfirmSubmitForm, ProgramSelectForm
+from applications.forms import (
+    ApplicantTypeForm,
+    ConfirmSubmitForm,
+    ParentInfoForm,
+    ProgramSelectForm,
+    StudentExperienceForm,
+)
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_lead_notification_email
 from applications.tests.access_helpers import grant_applicant_document_access
@@ -189,6 +195,158 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         self.assertEqual(application.status, Application.Status.EMAIL_VERIFIED)
         self.assertFalse(application.data["step7-primaryparent"]["email_updates"])
         self.assertEqual(mail.outbox, [])
+
+    def test_step_write_does_not_update_application_submitted_during_request(self):
+        application = self.make_application(
+            email="step6-submitted@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=6,
+            data={"step6-experience": {"prior_robotics_experience": "Earlier"}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def submit_latest_application():
+            Application.objects.filter(pk=application.pk).update(
+                status=Application.Status.SUBMITTED
+            )
+
+        with self.patch_validation_after_intervening_write(
+            StudentExperienceForm, submit_latest_application
+        ):
+            response = self.tenant_post(
+                reverse("apply_step6", kwargs={"app_id": application.application_id}),
+                {
+                    "interest_reason": "Robotics",
+                    "hoped_gains": "Experience",
+                    "prior_robotics_experience": "Current submission",
+                    "referral_source": "Friend",
+                },
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": application.application_id}),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.SUBMITTED)
+        self.assertEqual(
+            application.data["step6-experience"]["prior_robotics_experience"],
+            "Earlier",
+        )
+
+    def test_step_write_rejects_program_change_during_request(self):
+        application = self.make_application(
+            email="step6-program-change@example.test",
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=6,
+            data={"step6-experience": {"prior_robotics_experience": "Earlier"}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def clear_latest_program():
+            Application.objects.filter(pk=application.pk).update(program=None)
+
+        with self.patch_validation_after_intervening_write(
+            StudentExperienceForm, clear_latest_program
+        ):
+            response = self.tenant_post(
+                reverse("apply_step6", kwargs={"app_id": application.application_id}),
+                {
+                    "interest_reason": "Robotics",
+                    "hoped_gains": "Experience",
+                    "prior_robotics_experience": "Current submission",
+                    "referral_source": "Friend",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "selected program changed")
+        application.refresh_from_db()
+        self.assertIsNone(application.program_id)
+        self.assertEqual(
+            application.data["step6-experience"]["prior_robotics_experience"],
+            "Earlier",
+        )
+
+    def test_secondary_parent_write_rejects_changed_student_email_context(self):
+        submitted_parent_email = "new-student@example.test"
+        application = self.make_application(
+            email="student-applicant@example.test",
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={
+                "step5-student": {"personal_email": "old-student@example.test"},
+                "step7-primaryparent": {"email_updates": True},
+            },
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def change_student_email_context():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step5-student"]["personal_email"] = submitted_parent_email
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ParentInfoForm, change_student_email_context
+        ):
+            response = self.tenant_post(
+                reverse("apply_step8", kwargs={"app_id": application.application_id}),
+                {
+                    "legal_first_name": "Secondary",
+                    "last_name": "Parent",
+                    "relationship_to_student": "parent",
+                    "email": submitted_parent_email,
+                    "phone_number": "412-555-1212",
+                    "phone_type": "cell",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, submitted_parent_email)
+        application.refresh_from_db()
+        self.assertNotIn("step8-secondaryparent", application.data)
+
+    def test_secondary_parent_write_rechecks_latest_primary_opt_in(self):
+        application = self.make_application(
+            email="primary-opt-in-change@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step7-primaryparent": {"email_updates": True}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def remove_primary_opt_in():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step7-primaryparent"]["email_updates"] = False
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ParentInfoForm, remove_primary_opt_in
+        ):
+            response = self.tenant_post(
+                reverse("apply_step8", kwargs={"app_id": application.application_id}),
+                {
+                    "legal_first_name": "Secondary",
+                    "last_name": "Parent",
+                    "relationship_to_student": "parent",
+                    "email": "secondary@example.test",
+                    "phone_number": "412-555-1212",
+                    "phone_type": "cell",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "At least one adult contact must opt in")
+        application.refresh_from_db()
+        self.assertFalse(application.data["step7-primaryparent"]["email_updates"])
+        self.assertNotIn("step8-secondaryparent", application.data)
 
     def test_submission_rejects_identity_change_after_form_validation(self):
         application = self.make_application(

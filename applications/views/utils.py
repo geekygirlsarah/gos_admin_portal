@@ -236,7 +236,12 @@ def _auto_authorize_handoff(request, application: Application) -> None:
 
 
 def _save_step_data(
-    application: Application, key: str, payload: dict, next_step: int, remove_keys=()
+    application: Application,
+    key: str,
+    payload: dict,
+    next_step: int,
+    remove_keys=(),
+    validate_current=None,
 ):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
@@ -248,6 +253,10 @@ def _save_step_data(
             .select_for_update()
             .get(pk=application.pk, organization_id=application.organization_id)
         )
+        if validate_current is not None:
+            response = validate_current(current)
+            if response is not None:
+                return response
         data = dict(normalize_step_keys(current.data) or {})
         for remove_key in remove_keys:
             data.pop(remove_key, None)
@@ -257,6 +266,7 @@ def _save_step_data(
         current.save(update_fields=["data", "current_step", "updated_at"])
         application.data = current.data
         application.current_step = current.current_step
+    return None
 
 
 def _sanitize_payload(cleaned_data: dict) -> dict:

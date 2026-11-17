@@ -77,6 +77,27 @@ def _locked_application_queryset(using, pk, organization_id):
     )
 
 
+def _step_write_guard(request, current, expected):
+    guard = _require_verified_email(request, current)
+    if guard is not None:
+        return guard
+    if current.applicant_type != expected.applicant_type:
+        return _redirect_to_current_step(current)
+    if not _is_handoff_authorized(request, current):
+        return render(
+            request,
+            "applications/handoff_required.html",
+            {"application": current},
+        )
+    return None
+
+
+def _student_email_context(application):
+    return {
+        email.strip().casefold() for email in get_student_emails(application) if email
+    }
+
+
 # ---------------------------------------------------------------------------
 # Step 2: applicant type + email
 # ---------------------------------------------------------------------------
@@ -780,7 +801,59 @@ class Step5StudentInfoView(View):
             )
             if matched is not None:
                 payload["_existing_student_id"] = matched.pk
-        _save_step_data(application, "step5-student", payload, next_step=6)
+
+        def validate_current(current):
+            guard = _step_write_guard(request, current, application)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while this form was being saved. "
+                    "Please review the student information and submit it again.",
+                )
+                return self._render(
+                    request,
+                    current,
+                    form,
+                    picker,
+                    chosen_student,
+                    program_start_date=(
+                        current.program.start_date if current.program else None
+                    ),
+                )
+            current_chosen_student, current_picker = self._existing_student_picker(
+                current, request.POST
+            )
+            if getattr(current_chosen_student, "pk", None) != getattr(
+                chosen_student, "pk", None
+            ):
+                form.add_error(
+                    None,
+                    "The selected student record changed while this form was being "
+                    "saved. Please review the selection and submit it again.",
+                )
+                return self._render(
+                    request,
+                    current,
+                    form,
+                    current_picker,
+                    current_chosen_student,
+                    program_start_date=(
+                        current.program.start_date if current.program else None
+                    ),
+                )
+            return None
+
+        response = _save_step_data(
+            application,
+            "step5-student",
+            payload,
+            next_step=6,
+            validate_current=validate_current,
+        )
+        if response is not None:
+            return response
 
         return redirect("apply_step6", app_id=application.application_id)
 
@@ -912,9 +985,30 @@ class Step6ExperienceView(View):
         )
         if not form.is_valid():
             return self._render(request, application, form)
-
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step6-experience", payload, next_step=7)
+
+        def validate_current(current):
+            guard = _step_write_guard(request, current, application)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while this form was being saved. "
+                    "Please review your answers and submit them again.",
+                )
+                return self._render(request, current, form)
+            return None
+
+        response = _save_step_data(
+            application,
+            "step6-experience",
+            payload,
+            next_step=7,
+            validate_current=validate_current,
+        )
+        if response is not None:
+            return response
         return redirect("apply_step7", app_id=application.application_id)
 
     def _render(self, request, application, form):
@@ -1077,7 +1171,41 @@ class Step7PrimaryParentView(View):
                 request, application, form, handoff_form, mode, existing_adult
             )
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step7-primaryparent", payload, next_step=8)
+
+        student_email_context = _student_email_context(application)
+
+        def validate_current(current):
+            guard = _step_write_guard(request, current, application)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while this form was being saved. "
+                    "Please review the contact information and submit it again.",
+                )
+            elif _student_email_context(current) != student_email_context:
+                form.add_error(
+                    None,
+                    "The student contact information changed while this form was "
+                    "being saved. Please review the contact information and submit "
+                    "it again.",
+                )
+            else:
+                return None
+            return self._render(
+                request, current, form, handoff_form, mode, existing_adult
+            )
+
+        response = _save_step_data(
+            application,
+            "step7-primaryparent",
+            payload,
+            next_step=8,
+            validate_current=validate_current,
+        )
+        if response is not None:
+            return response
         return redirect("apply_step8", app_id=application.application_id)
 
     def _build_forms(self, application, post=None):
@@ -1508,24 +1636,50 @@ class Step8SecondaryParentView(View):
         if not form.is_valid():
             return self._render(request, application, form)
 
-        # If the secondary parent is also opting out, check whether the primary
-        # parent opted in. If neither opted in, surface the error here (step 8)
-        # rather than making the applicant go all the way to step 9 to find out.
-        # Only run this check when step 7 data is present (primary parent was collected).
-        step7_data = (application.data or {}).get("step7-primaryparent") or {}
-        p1_opt = step7_data.get("email_updates", False)
-        p2_opt = form.cleaned_data.get("email_updates", False)
-        if step7_data and not p1_opt and not p2_opt:
-            form.add_error(
-                None,
-                "At least one adult contact must opt in to receiving email "
-                "updates from this organization. Please check the box on this page or "
-                "go back and check it on the primary contact page.",
-            )
-            return self._render(request, application, form)
-
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step8-secondaryparent", payload, next_step=9)
+
+        student_email_context = _student_email_context(application)
+
+        def validate_current(current):
+            guard = _step_write_guard(request, current, application)
+            if guard is not None:
+                return guard
+            if current.program_id != application.program_id:
+                form.add_error(
+                    None,
+                    "The selected program changed while this form was being saved. "
+                    "Please review the contact information and submit it again.",
+                )
+            elif _student_email_context(current) != student_email_context:
+                form.add_error(
+                    None,
+                    "The student contact information changed while this form was "
+                    "being saved. Please review the contact information and submit "
+                    "it again.",
+                )
+            else:
+                step7_data = (current.data or {}).get("step7-primaryparent") or {}
+                p1_opt = step7_data.get("email_updates", False)
+                p2_opt = form.cleaned_data.get("email_updates", False)
+                if not step7_data or p1_opt or p2_opt:
+                    return None
+                form.add_error(
+                    None,
+                    "At least one adult contact must opt in to receiving email "
+                    "updates from this organization. Please check the box on this "
+                    "page or go back and check it on the primary contact page.",
+                )
+            return self._render(request, current, form)
+
+        response = _save_step_data(
+            application,
+            "step8-secondaryparent",
+            payload,
+            next_step=9,
+            validate_current=validate_current,
+        )
+        if response is not None:
+            return response
         return redirect("apply_step9", app_id=application.application_id)
 
     def _initial(self, application):

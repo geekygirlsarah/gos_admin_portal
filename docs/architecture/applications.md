@@ -35,6 +35,16 @@ status against the locked row before issuing a token; the notification is sent
 after the transaction. Conversion extracts historical answers from the same
 locked data before normalizing it.
 
+Student steps 5–8 and mentor information/clearance writes also recheck the
+locked row after form validation. They do not save when the application has
+become terminal, browser or handoff authorization no longer applies, the
+applicant type or program changed, or student-contact context used for parent
+email validation has changed. Step 8 rechecks the primary/secondary contact
+email-update opt-in against current data. Mentor clearance details are saved
+only while current clearance interest remains affirmative, and clearance
+interest edits reject a conflicting intervening change. Rejected forms are
+rendered with their submitted values so applicants can review and resubmit.
+
 Student/parent and mentor confirmation also reload and lock the organization-
 bound application after form validation. They recheck terminal status and the
 current browser verification; student/parent submission additionally rechecks
