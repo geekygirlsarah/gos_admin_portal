@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-17
+
+### Changed
+- Switching an application to a different program preserves its program-bound custom-question answers and restores them if the applicant switches back.
+
 ## 2026-11-16
 
 ### Added

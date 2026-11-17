@@ -29,11 +29,14 @@ newer unrelated JSON and wizard progress rather than saving a stale instance.
 Step 2 rechecks identity and status under the lock and rejects a request whose
 applicant/email changed while the form was being submitted; changing the email
 clears its verification and pending OTP. Program selection rechecks the
-tenant's eligible programs and current status before updating only the program
-and progress fields. Handoff also revalidates the parent address and applicant
-status against the locked row before issuing a token; the notification is sent
-after the transaction. Conversion extracts historical answers from the same
-locked data before normalizing it.
+tenant's eligible programs and current status before updating the program,
+progress, and program-bound custom-question snapshot together. When switching
+programs, it archives the active snapshot by program ID and restores a saved
+snapshot for the selected program; malformed, unbound, or ambiguous snapshots
+are left unchanged and require staff assistance. Handoff also revalidates the
+parent address and applicant status against the locked row before issuing a
+token; the notification is sent after the transaction. Conversion extracts
+historical answers from the same locked data before normalizing it.
 
 Student steps 5–8 and mentor information/clearance writes also recheck the
 locked row after form validation. They do not save when the application has
@@ -56,10 +59,9 @@ do not reset submission time or resend notifications.
 Other JSON writers do not yet all use this locking protocol, so this is not a
 complete concurrency guarantee; SQLite does not provide row-level
 `select_for_update` locking, and concurrent edits to the same step are not
-conflict-detected. Program changes after a custom-question snapshot is frozen
-still need an explicit policy; applicant question collection is not enabled
-until program changes and all relevant writers can preserve the snapshot's
-question binding.
+conflict-detected. Applicant question collection is not enabled until the
+wizard renders and validates frozen questions and all relevant writers
+coordinate their changes.
 
 ---
 
@@ -126,8 +128,11 @@ malformed or unanswered required entries. A form can render and validate that
 frozen set. A persistence helper can freeze a program-bound snapshot while
 locking and reloading the application; it rejects stale programs, inconsistent
 ownership, completed applications, and malformed or unbound snapshots instead
-of overwriting them. It is not yet wired to the wizard: other application
-writers must be coordinated before it can safely be used publicly. Staff review
+of overwriting them. Program switches preserve frozen answer sets by archiving
+the outgoing snapshot and restoring any prior snapshot for the selected
+program. The freezer is not yet wired to applicant question forms: other
+application writers must be coordinated before questions can safely be shown
+publicly. Staff review
 renders existing custom snapshots as questions and answers and flags malformed
 snapshots. Lead Mentors may edit answers on submitted or approved applications;
 the question text and metadata are retained, required answers remain required,

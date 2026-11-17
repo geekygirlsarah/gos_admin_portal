@@ -21,6 +21,7 @@ from programs.utils import (
     get_academic_year_ending,
 )
 
+from ..answers import switch_custom_question_snapshot
 from ..forms import (
     NOT_LISTED_SCHOOL,
     ApplicantTypeForm,
@@ -296,7 +297,25 @@ class Step4ProgramView(View):
                     current_application.organization
                 )
                 selected_program = form.cleaned_data["program"]
-                if selected_program.pk not in {
+                if current_application.program_id != application.program_id:
+                    current_form = ProgramSelectForm(
+                        request.POST, future_programs=current_future
+                    )
+                    current_form.is_valid()
+                    current_form.add_error(
+                        None,
+                        "The selected program changed while this form was being "
+                        "saved. Please review your program selection and submit it "
+                        "again.",
+                    )
+                    render_args = (
+                        current_application,
+                        current_form,
+                        current_future,
+                        current_programs,
+                        current_past,
+                    )
+                elif selected_program.pk not in {
                     program.pk for program in current_future
                 }:
                     current_form = ProgramSelectForm(
@@ -311,13 +330,42 @@ class Step4ProgramView(View):
                         current_past,
                     )
                 else:
-                    current_application.program_id = selected_program.pk
-                    current_application.current_step = max(
-                        current_application.current_step, 5
-                    )
-                    current_application.save(
-                        update_fields=["program", "current_step", "updated_at"]
-                    )
+                    try:
+                        if current_application.program_id != selected_program.pk:
+                            switch_custom_question_snapshot(
+                                current_application, selected_program
+                            )
+                    except ValueError:
+                        current_form = ProgramSelectForm(
+                            request.POST, future_programs=current_future
+                        )
+                        current_form.is_valid()
+                        current_form.add_error(
+                            None,
+                            "We couldn't safely preserve the saved custom "
+                            "application answers. Please contact staff before "
+                            "changing programs.",
+                        )
+                        render_args = (
+                            current_application,
+                            current_form,
+                            current_future,
+                            current_programs,
+                            current_past,
+                        )
+                    else:
+                        current_application.program_id = selected_program.pk
+                        current_application.current_step = max(
+                            current_application.current_step, 5
+                        )
+                        current_application.save(
+                            update_fields=[
+                                "data",
+                                "program",
+                                "current_step",
+                                "updated_at",
+                            ]
+                        )
 
         if response is not None:
             return response

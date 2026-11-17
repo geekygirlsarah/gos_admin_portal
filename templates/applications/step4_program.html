@@ -8,6 +8,12 @@
 <form method="post" novalidate>
     {% csrf_token %}
 
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {{ form.non_field_errors|join:" " }}
+        </div>
+    {% endif %}
+
     <fieldset class="mb-4">
         <legend class="form-label fw-semibold">Upcoming programs</legend>
         {% if form.program.help_text %}

@@ -2,7 +2,11 @@ from unittest.mock import patch
 
 from django.test import RequestFactory, TestCase
 
-from applications.answers import freeze_custom_question_snapshot
+from applications.answers import (
+    CUSTOM_QUESTION_SNAPSHOTS_KEY,
+    freeze_custom_question_snapshot,
+    switch_custom_question_snapshot,
+)
 from applications.models import Application, ProgramApplicationQuestion
 from applications.views.steps_mentor import MentorClearanceInterestView
 from applications.views.utils import _save_step_data
@@ -172,9 +176,66 @@ class CustomQuestionPersistenceTests(TestCase):
         self.question.is_active = False
         self.question.save()
         self.assertEqual(freeze_custom_question_snapshot(self.app), [])
-        self.question.is_active = True
-        self.question.save()
-        self.assertEqual(freeze_custom_question_snapshot(self.app), [])
+
+    def test_program_switch_archives_empty_frozen_snapshot(self):
+        other_program = Program.objects.create(organization=self.org, name="Other")
+        self.app.data = {
+            "step6-custom": [],
+            "_custom_question_program_id": self.program.pk,
+            "unrelated": "preserved",
+        }
+
+        switched_data = switch_custom_question_snapshot(self.app, other_program)
+
+        self.assertNotIn("step6-custom", switched_data)
+        self.assertNotIn("_custom_question_program_id", switched_data)
+        self.assertEqual(
+            switched_data[CUSTOM_QUESTION_SNAPSHOTS_KEY],
+            {str(self.program.pk): []},
+        )
+        self.assertEqual(switched_data["unrelated"], "preserved")
+
+    def test_program_switch_without_custom_snapshot_preserves_legacy_data(self):
+        other_program = Program.objects.create(organization=self.org, name="Other")
+        self.app.data = {"step6-experience": {"referral_source": "Friend"}}
+
+        switched_data = switch_custom_question_snapshot(self.app, other_program)
+
+        self.assertEqual(
+            switched_data, {"step6-experience": {"referral_source": "Friend"}}
+        )
+
+    def test_program_switch_rejects_malformed_snapshot_and_foreign_target(self):
+        other_program = Program.objects.create(organization=self.org, name="Other")
+        self.app.data = {"step6-custom": []}
+        malformed_data = self.app.data.copy()
+
+        with self.assertRaisesMessage(ValueError, "ownership is missing"):
+            switch_custom_question_snapshot(self.app, other_program)
+        self.assertEqual(self.app.data, malformed_data)
+
+        foreign_program = Program.objects.create(
+            organization=self.other, name="Foreign"
+        )
+        self.app.data = {}
+        with self.assertRaisesMessage(ValueError, "does not belong"):
+            switch_custom_question_snapshot(self.app, foreign_program)
+        self.assertEqual(self.app.data, {})
+
+    def test_program_switch_rejects_ambiguous_snapshot_archive(self):
+        other_program = Program.objects.create(organization=self.org, name="Other")
+        self.app.data = {
+            "step6-custom": [],
+            "_custom_question_program_id": self.program.pk,
+            CUSTOM_QUESTION_SNAPSHOTS_KEY: {str(self.program.pk): []},
+        }
+
+        with self.assertRaisesMessage(ValueError, "ambiguous"):
+            switch_custom_question_snapshot(self.app, other_program)
+        self.assertEqual(
+            self.app.data[CUSTOM_QUESTION_SNAPSHOTS_KEY],
+            {str(self.program.pk): []},
+        )
 
     def test_stale_program_and_mismatched_snapshot_are_rejected(self):
         other_program = Program.objects.create(organization=self.org, name="Other")

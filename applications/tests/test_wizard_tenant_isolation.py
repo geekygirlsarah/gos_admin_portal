@@ -6,6 +6,7 @@ import datetime
 import shutil
 import tempfile
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -23,7 +24,11 @@ from applications.forms import (
     ProgramSelectForm,
     StudentExperienceForm,
 )
-from applications.models import Application, ApplicationDocumentSubmission
+from applications.models import (
+    Application,
+    ApplicationDocumentSubmission,
+    ProgramApplicationQuestion,
+)
 from applications.services import send_lead_notification_email
 from applications.tests.access_helpers import grant_applicant_document_access
 from applications.views.documents import Step10DocumentsView
@@ -610,6 +615,7 @@ class ApplicationWizardTenantIsolationTests(TestCase):
     def test_program_selection_preserves_newer_answers_and_progress(self):
         application = self.make_application(
             email="program-merge@example.test",
+            program=self.alpha_program,
             status=Application.Status.EMAIL_VERIFIED,
             current_step=4,
             data={"existing": "before"},
@@ -620,8 +626,14 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         def update_latest_application():
             latest = Application.objects.get(pk=application.pk)
             latest.data["step6-custom"] = [
-                {"question_text": "Latest question?", "answer": "Latest answer"}
+                {
+                    "question_id": str(uuid4()),
+                    "question_text": "Latest question?",
+                    "required": False,
+                    "answer": "Latest answer",
+                }
             ]
+            latest.data["_custom_question_program_id"] = self.alpha_program.pk
             latest.current_step = 8
             latest.save(update_fields=["data", "current_step", "updated_at"])
 
@@ -639,6 +651,148 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         self.assertEqual(application.current_step, 8)
         self.assertEqual(application.data["existing"], "before")
         self.assertEqual(application.data["step6-custom"][0]["answer"], "Latest answer")
+
+    def test_program_selection_round_trips_program_bound_custom_answers(self):
+        next_program = Program.objects.create(
+            organization=self.alpha,
+            name="Alpha Next Program",
+            start_date=self.alpha_program.start_date,
+            end_date=self.alpha_program.end_date,
+            applications_open=self.alpha_program.applications_open,
+            applications_close=self.alpha_program.applications_close,
+            active=True,
+        )
+        first_snapshot = [
+            {
+                "question_id": str(uuid4()),
+                "question_text": "What would you like to learn?",
+                "required": True,
+                "answer": "Build a robot",
+            }
+        ]
+        next_snapshot = [
+            {
+                "question_id": str(uuid4()),
+                "question_text": "What interests you about this program?",
+                "required": False,
+                "answer": "Working with a team",
+            }
+        ]
+        application = self.make_application(
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=6,
+            data={
+                "step6-custom": first_snapshot,
+                "_custom_question_program_id": self.alpha_program.pk,
+                "_custom_question_snapshots": {
+                    str(next_program.pk): next_snapshot,
+                },
+            },
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+        url = reverse("apply_step4", kwargs={"app_id": application.application_id})
+
+        response = self.tenant_post(url, {"program": next_program.pk})
+
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.program_id, next_program.pk)
+        self.assertEqual(application.data["step6-custom"], next_snapshot)
+        self.assertEqual(
+            application.data["_custom_question_program_id"], next_program.pk
+        )
+        self.assertEqual(
+            application.data["_custom_question_snapshots"],
+            {str(self.alpha_program.pk): first_snapshot},
+        )
+
+        response = self.tenant_post(url, {"program": self.alpha_program.pk})
+
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.program_id, self.alpha_program.pk)
+        self.assertEqual(application.data["step6-custom"], first_snapshot)
+        self.assertEqual(
+            application.data["_custom_question_program_id"], self.alpha_program.pk
+        )
+        self.assertEqual(
+            application.data["_custom_question_snapshots"],
+            {str(next_program.pk): next_snapshot},
+        )
+
+    def test_program_selection_rejects_malformed_snapshot_without_changing_program(
+        self,
+    ):
+        next_program = Program.objects.create(
+            organization=self.alpha,
+            name="Alpha Malformed Snapshot Program",
+            start_date=self.alpha_program.start_date,
+            end_date=self.alpha_program.end_date,
+            applications_open=self.alpha_program.applications_open,
+            applications_close=self.alpha_program.applications_close,
+            active=True,
+        )
+        malformed_data = {
+            "step6-custom": [],
+            "_custom_question_program_id": True,
+            "keep": "untouched",
+        }
+        application = self.make_application(
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=6,
+            data=malformed_data,
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        response = self.tenant_post(
+            reverse("apply_step4", kwargs={"app_id": application.application_id}),
+            {"program": next_program.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertEqual(application.program_id, self.alpha_program.pk)
+        self.assertEqual(application.data, malformed_data)
+        self.assertContains(response, "custom")
+
+    def test_program_selection_rejects_stale_original_program(self):
+        next_program = Program.objects.create(
+            organization=self.alpha,
+            name="Alpha Concurrent Program",
+            start_date=self.alpha_program.start_date,
+            end_date=self.alpha_program.end_date,
+            applications_open=self.alpha_program.applications_open,
+            applications_close=self.alpha_program.applications_close,
+            active=True,
+        )
+        application = self.make_application(
+            program=self.alpha_program,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=4,
+            data={"keep": "latest"},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def change_program_during_validation():
+            Application.objects.filter(pk=application.pk).update(program=next_program)
+
+        with self.patch_validation_after_intervening_write(
+            ProgramSelectForm, change_program_during_validation
+        ):
+            response = self.tenant_post(
+                reverse("apply_step4", kwargs={"app_id": application.application_id}),
+                {"program": self.alpha_program.pk},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertEqual(application.program_id, next_program.pk)
+        self.assertEqual(application.data, {"keep": "latest"})
 
     def test_program_selection_does_not_update_application_submitted_during_request(
         self,
