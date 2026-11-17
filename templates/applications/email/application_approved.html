@@ -17,7 +17,7 @@
     <li><strong>Mentor:</strong> {{ application.mentor_name|default:"(not specified)" }}</li>
     <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
 </ul>
-{% else %}
+{% elif not has_required_documents or not required_documents_complete %}
 <table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0">
     <tr>
         <td style="background:#fff4e5;border:1px solid #ffcc99;border-radius:6px;padding:14px 16px">
@@ -49,6 +49,15 @@
 <p>
     <a href="{{ documents_url }}">{{ documents_url }}</a>
 </p>{% endif %}
+{% else %}
+<p>
+    We have received the required signed forms, and your application has been approved.
+</p>
+<ul>
+    <li><strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}</li>
+    <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
+    <li><strong>Program:</strong> {{ application.program|default:"(not specified)" }}</li>
+</ul>
 {% endif %}
 
 <p>If you have any questions, just reply to this email.</p>

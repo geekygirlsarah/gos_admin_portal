@@ -186,14 +186,14 @@
                         {% endif %}
                       </td>
                       <td>
-                        {% if row.submission %}
+                        {% if row.submission and row.submission.file %}
                           <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill"><i class="bi bi-check-circle me-1"></i>Uploaded</span>
                         {% else %}
                           <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-25 rounded-pill"><i class="bi bi-clock me-1"></i>Not uploaded</span>
                         {% endif %}
                       </td>
                       <td class="text-muted small">
-                        {% if row.submission %}
+                        {% if row.submission and row.submission.file %}
                           {{ row.submission.uploaded_at|date:"Y-m-d H:i" }}
                         {% else %}
                           —
@@ -309,10 +309,16 @@
             <form method="post" action="{% url 'application_review_approve' application.application_id %}">
               {% csrf_token %}
               <button class="btn btn-success w-100" type="submit"
-                      {% if application.status == 'approved' or application.status == 'approved_signed' %}disabled{% endif %}>
+                      {% if not can_approve %}disabled{% endif %}>
                 <i class="bi bi-check-circle me-1"></i>Approve Application
               </button>
             </form>
+            {% if application.status == 'submitted' and not application.is_mentor and not all_required_uploaded %}
+              <div class="alert alert-warning small mb-0">
+                Required permission forms must be uploaded before this application can be accepted.
+                Upload the paper copies here if the parent or guardian submitted them in person.
+              </div>
+            {% endif %}
             <form method="post" action="{% url 'application_review_convert' application.application_id %}">
               {% csrf_token %}
               <button class="btn btn-primary w-100" type="submit"

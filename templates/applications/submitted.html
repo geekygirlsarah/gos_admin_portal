@@ -50,6 +50,19 @@
     Our lead mentors have been notified and will review your application.
     You can check back any time using your application ID.
 </p>
+{% if required_documents_pending %}
+<div class="alert alert-warning" role="status">
+    <p class="mb-2">
+        A lead mentor cannot accept this application until the required permission forms are uploaded.
+        A separate document request was sent to the responsible parent or guardian.
+    </p>
+    <a class="btn btn-warning btn-sm"
+       href="{% url 'apply_step10_document_access' app_id=application.application_id %}">
+        Complete required documents
+    </a>
+    <p class="small mb-0 mt-2">The document verification code is sent to the parent or guardian, not the student.</p>
+</div>
+{% endif %}
 {% endif %}
 
 <p>

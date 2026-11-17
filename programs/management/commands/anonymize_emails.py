@@ -132,7 +132,7 @@ class Command(BaseCommand):
                             )
 
             # 4. Applications
-            for app in Application.objects.all():
+            for app in Application.objects.select_for_update().all():
                 new_app_email = f"application_{app.pk}@{domain}"
                 if app.email != new_app_email:
                     app_count += 1

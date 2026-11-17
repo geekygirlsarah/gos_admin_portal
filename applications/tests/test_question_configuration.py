@@ -52,7 +52,8 @@ class QuestionConfigurationTests(TestCase):
             reverse("program_edit", args=[self.program.pk]), **self.host
         )
         self.assertContains(response, "What do you like?")
-        self.assertContains(response, "not yet shown to applicants")
+        self.assertContains(response, "Active questions appear on Step 6")
+        self.assertContains(response, "Frozen applications keep their saved wording")
         edit = reverse(
             "program_application_question_edit", args=[self.program.pk, question.pk]
         )

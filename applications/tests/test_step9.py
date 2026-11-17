@@ -14,8 +14,15 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application, ApplicationDocumentSubmission
-from applications.services import send_application_approved_email
-from applications.tests.access_helpers import grant_applicant_document_access
+from applications.services import (
+    send_application_approved_email,
+    send_application_documents_required_email,
+)
+from applications.tests.access_helpers import (
+    grant_applicant_document_access,
+    verify_application_browser,
+)
+from organizations.models import Organization
 from programs.models import Program, ProgramDocument
 
 # Use an isolated MEDIA_ROOT so file uploads from tests don't pollute the
@@ -25,6 +32,7 @@ _TMP_MEDIA = tempfile.mkdtemp(prefix="gos-step9-media-")
 
 def _approved_application(program, **overrides):
     defaults = dict(
+        organization=program.organization,
         applicant_type=Application.Type.PARENT,
         email="parent@example.com",
         program=program,
@@ -73,12 +81,19 @@ class Step9DocumentsTests(TestCase):
 
     def setUp(self):
         today = timezone.localdate()
+        self.organization = Organization.objects.create(
+            name="Document Tests",
+            slug="document-tests",
+            subdomain="document-tests",
+        )
         self.program = Program.objects.create(
             name="Summer 2030",
+            organization=self.organization,
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
             active=True,
         )
+        self.client.defaults["HTTP_HOST"] = "document-tests.localhost"
         self.doc_required = ProgramDocument.objects.create(
             program=self.program,
             name="Photo release form",
@@ -101,7 +116,7 @@ class Step9DocumentsTests(TestCase):
 
     # -- Access gating ------------------------------------------------------
 
-    def test_non_approved_application_is_redirected_away(self):
+    def test_submitted_application_requires_document_otp(self):
         app = _approved_application(
             self.program,
             status=Application.Status.SUBMITTED,
@@ -109,9 +124,89 @@ class Step9DocumentsTests(TestCase):
         )
         url = reverse("apply_step10", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-        # Either to submitted page or to a wizard step, but NEVER 200 on /step10/.
         self.assertEqual(response.status_code, 302)
-        self.assertNotIn("/step10/", response.url)
+        self.assertEqual(
+            response.url,
+            reverse(
+                "apply_step10_document_access", kwargs={"app_id": app.application_id}
+            ),
+        )
+
+    def test_submitted_application_can_view_documents_after_document_verification(self):
+        app = _approved_application(
+            self.program,
+            status=Application.Status.SUBMITTED,
+            current_step=10,
+        )
+        self.authorize_document_access(app)
+
+        response = self.client.get(
+            reverse("apply_step10", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Photo release form")
+        self.assertContains(response, "Optional handbook ack")
+
+    def test_document_request_is_sent_to_parent_with_protected_access_link(self):
+        app = _approved_application(
+            self.program,
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.com",
+            status=Application.Status.SUBMITTED,
+        )
+
+        send_application_documents_required_email(app)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["parent@example.com"])
+        self.assertNotIn("student@example.com", mail.outbox[0].to)
+        self.assertIn("Photo release form", mail.outbox[0].body)
+        self.assertIn(
+            reverse(
+                "apply_step10_document_access", kwargs={"app_id": app.application_id}
+            ),
+            mail.outbox[0].body,
+        )
+
+    def test_final_submission_sends_required_document_notice(self):
+        app = _approved_application(
+            self.program,
+            current_step=9,
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5-student": {
+                    "legal_first_name": "Ada",
+                    "last_name": "Lovelace",
+                    "email": "student@example.com",
+                },
+                "step6-experience": {},
+                "step7-primaryparent": {
+                    "legal_first_name": "Pat",
+                    "last_name": "Parent",
+                    "email": "parent@example.com",
+                    "email_updates": True,
+                },
+            },
+        )
+        self.client.defaults["HTTP_HOST"] = f"{app.organization.subdomain}.localhost"
+        verify_application_browser(self.client, app)
+
+        response = self.client.post(
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            {"confirm": "on"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        document_notices = [
+            message
+            for message in mail.outbox
+            if message.subject.startswith("Action needed: required forms")
+        ]
+        self.assertEqual(len(document_notices), 1)
+        self.assertEqual(document_notices[0].to, ["parent@example.com"])
 
     def test_approved_application_can_view_documents(self):
         app = _approved_application(self.program)
@@ -184,6 +279,31 @@ class Step9DocumentsTests(TestCase):
         sub = subs.get()
         self.assertEqual(sub.document_id, self.doc_required.pk)
         self.assertTrue(sub.file.name.endswith(".pdf"))
+
+    def test_submitted_upload_does_not_approve_application(self):
+        app = _approved_application(
+            self.program,
+            status=Application.Status.SUBMITTED,
+            current_step=10,
+        )
+        self.authorize_document_access(app)
+
+        response = self.client.post(
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
+            {
+                "document_id": self.doc_required.pk,
+                "file": _make_signed_upload("preapproval_release.pdf"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertTrue(
+            ApplicationDocumentSubmission.objects.filter(
+                application=app, document=self.doc_required
+            ).exists()
+        )
 
     def test_reupload_replaces_existing_submission(self):
         app = _approved_application(self.program)

@@ -12,7 +12,7 @@ from django.urls import resolve, reverse
 from django.utils import timezone
 
 from applications.forms import NOT_LISTED_SCHOOL
-from applications.models import Application
+from applications.models import Application, ProgramApplicationQuestion
 from applications.tests.access_helpers import verify_application_browser
 from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Program, School, Student
@@ -330,6 +330,129 @@ class Step8SecondaryParentTests(TestCase):
         )
 
 
+class Step6CustomQuestionTests(TestCase):
+    def setUp(self):
+        self.app = _verified(current_step=6)
+        verify_application_browser(self.client, self.app)
+
+    def test_step6_renders_and_freezes_program_questions(self):
+        program = Program.objects.create(
+            organization=self.app.organization, name="Question program"
+        )
+        self.app.program = program
+        self.app.save(update_fields=["program"])
+        question = ProgramApplicationQuestion.objects.create(
+            organization=self.app.organization,
+            program=program,
+            text="What would you like to learn?",
+            is_required=True,
+        )
+
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, question.text)
+        self.assertTrue(response.context["form"].initial["experience_version"])
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data["_custom_question_program_id"], program.pk)
+        self.assertEqual(
+            self.app.data["step6-custom"],
+            [
+                {
+                    "question_id": str(question.question_id),
+                    "question_text": question.text,
+                    "required": True,
+                    "answer": "",
+                }
+            ],
+        )
+
+    def test_step6_saves_custom_answers_with_fixed_answers(self):
+        program = Program.objects.create(
+            organization=self.app.organization, name="Question program"
+        )
+        self.app.program = program
+        self.app.save(update_fields=["program"])
+        required = ProgramApplicationQuestion.objects.create(
+            organization=self.app.organization,
+            program=program,
+            text="Required question?",
+            is_required=True,
+        )
+        optional = ProgramApplicationQuestion.objects.create(
+            organization=self.app.organization,
+            program=program,
+            text="Optional question?",
+        )
+        url = reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        get_response = self.client.get(url)
+        version = get_response.context["form"].initial["experience_version"]
+
+        response = self.client.post(
+            url,
+            {
+                "experience_version": version,
+                "interest_reason": "I like robotics.",
+                f"question_{required.question_id}": "Build useful skills.",
+                f"question_{optional.question_id}": "Meet other students.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_step7", kwargs={"app_id": self.app.application_id}),
+            fetch_redirect_response=False,
+        )
+        self.app.refresh_from_db()
+        self.assertEqual(
+            self.app.data["step6-experience"]["interest_reason"],
+            "I like robotics.",
+        )
+        self.assertEqual(
+            [item["answer"] for item in self.app.data["step6-custom"]],
+            ["Build useful skills.", "Meet other students."],
+        )
+
+    def test_step6_rejects_stale_custom_answers(self):
+        program = Program.objects.create(
+            organization=self.app.organization, name="Question program"
+        )
+        self.app.program = program
+        self.app.save(update_fields=["program"])
+        question = ProgramApplicationQuestion.objects.create(
+            organization=self.app.organization,
+            program=program,
+            text="Question?",
+            is_required=True,
+        )
+        url = reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        get_response = self.client.get(url)
+        stale_version = get_response.context["form"].initial["experience_version"]
+        self.app.refresh_from_db()
+        self.app.data["step6-custom"][0]["answer"] = "Newer answer"
+        self.app.data["step6-experience"] = {"interest_reason": "Newer response"}
+        self.app.save(update_fields=["data"])
+
+        response = self.client.post(
+            url,
+            {
+                "experience_version": stale_version,
+                "interest_reason": "Stale response",
+                f"question_{question.question_id}": "Stale answer",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "answers changed")
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data["step6-custom"][0]["answer"], "Newer answer")
+        self.assertEqual(
+            self.app.data["step6-experience"]["interest_reason"], "Newer response"
+        )
+
+
 class Step9ConfirmTests(TestCase):
     def setUp(self):
         today = timezone.localdate()
@@ -417,6 +540,84 @@ class Step9ConfirmTests(TestCase):
         confirm = confirm_msgs[0]
         self.assertIn(app.email, confirm.to)
         self.assertIn("parent@example.com", confirm.to)
+
+    def test_confirmation_displays_frozen_custom_question_answers(self):
+        app = self._verified_with_data()
+        question = ProgramApplicationQuestion.objects.create(
+            organization=app.organization,
+            program=self.program,
+            text="What would you like to learn?",
+            is_required=True,
+        )
+        app.data["step6-custom"] = [
+            {
+                "question_id": str(question.question_id),
+                "question_text": question.text,
+                "required": True,
+                "answer": "Build useful skills.",
+            }
+        ]
+        app.data["_custom_question_program_id"] = self.program.pk
+        app.save(update_fields=["data"])
+
+        response = self.client.get(
+            reverse("apply_step9", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, question.text)
+        self.assertContains(response, "Build useful skills.")
+
+    def test_direct_confirmation_requires_configured_questions_to_be_seen(self):
+        app = self._verified_with_data()
+        ProgramApplicationQuestion.objects.create(
+            organization=app.organization,
+            program=self.program,
+            text="Required question?",
+            is_required=True,
+        )
+
+        response = self.client.post(
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            {"confirm": "on"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        self.assertNotEqual(app.status, Application.Status.SUBMITTED)
+
+    def test_confirmation_rejects_unanswered_required_snapshot(self):
+        app = self._verified_with_data()
+        question = ProgramApplicationQuestion.objects.create(
+            organization=app.organization,
+            program=self.program,
+            text="Required question?",
+            is_required=True,
+        )
+        app.data["step6-custom"] = [
+            {
+                "question_id": str(question.question_id),
+                "question_text": question.text,
+                "required": True,
+                "answer": "",
+            }
+        ]
+        app.data["_custom_question_program_id"] = self.program.pk
+        app.save(update_fields=["data"])
+
+        response = self.client.post(
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            {"confirm": "on"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Required custom questions are unanswered")
+        app.refresh_from_db()
+        self.assertNotEqual(app.status, Application.Status.SUBMITTED)
 
     def test_submit_sends_only_parent_when_student_has_no_email(self):
         app = _verified(

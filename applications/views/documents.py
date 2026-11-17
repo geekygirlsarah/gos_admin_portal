@@ -24,7 +24,12 @@ from programs.models import ProgramDocument
 from ..forms import DocumentSubmissionForm, OtpVerifyForm
 from ..models import Application, ApplicationDocumentSubmission, generate_otp_code
 from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
-from ..services import document_recipient, send_otp_email
+from ..services import (
+    document_recipient,
+    has_required_application_documents,
+    required_application_documents_complete,
+    send_otp_email,
+)
 from .utils import (
     TOTAL_STEPS,
     _get_application_or_404,
@@ -52,6 +57,15 @@ def _has_applicant_document_access(request, application):
         and access.get("organization_id") == application.organization_id
         and access.get("email") == recipient
         and access.get("expires_at", 0) > int(time.time())
+    )
+
+
+def _document_status_allowed(application):
+    return application.status in (
+        Application.Status.APPROVED,
+        Application.Status.APPROVED_SIGNED,
+    ) or (
+        application.status == Application.Status.SUBMITTED and not application.is_mentor
     )
 
 
@@ -101,75 +115,79 @@ class Step10DocumentsView(View):
                 "apply_step10_document_access", app_id=application.application_id
             )
 
-        # Identify which ProgramDocument this upload is for. Must belong to
-        # the application's program and be active.
         doc_id = request.POST.get("document_id")
-        document = (
-            ProgramDocument.objects.filter(
-                pk=doc_id,
-                program=application.program,
-                program__organization=organization,
-                is_active=True,
-            ).first()
-            if doc_id
-            else None
-        )
-        if document is None:
-            messages.error(request, "We couldn't find that document. Please try again.")
-            return redirect("apply_step10", app_id=application.application_id)
-
         form = DocumentSubmissionForm(request.POST, request.FILES)
         if not form.is_valid():
-            return self._render(request, application, form, focus_doc_id=document.pk)
+            return self._render(request, application, form, focus_doc_id=doc_id)
 
-        submission, created = ApplicationDocumentSubmission.objects.get_or_create(
-            application=application,
-            document=document,
-            defaults={"organization": organization},
-        )
-        if not created and submission.organization_id != organization.pk:
-            messages.error(
-                request,
-                "This document submission has inconsistent organization ownership and cannot be changed.",
-            )
-            return redirect("apply_step10", app_id=application.application_id)
-        submission.file = form.cleaned_data["file"]
+        using = application._state.db
         try:
-            with transaction.atomic():
+            with transaction.atomic(using=using):
+                current = get_object_or_404(
+                    Application.objects.using(using)
+                    .for_organization(organization)
+                    .select_for_update(),
+                    pk=application.pk,
+                )
+                guard = self._gate(current)
+                if guard is not None:
+                    return guard
+                if not current.program_id:
+                    raise Http404
+                if not _has_applicant_document_access(request, current):
+                    return redirect(
+                        "apply_step10_document_access", app_id=current.application_id
+                    )
+
+                document = (
+                    ProgramDocument.objects.filter(
+                        pk=doc_id,
+                        program_id=current.program_id,
+                        program__organization=organization,
+                        is_active=True,
+                    ).first()
+                    if doc_id
+                    else None
+                )
+                if document is None:
+                    messages.error(
+                        request, "We couldn't find that document. Please try again."
+                    )
+                    return redirect("apply_step10", app_id=current.application_id)
+
+                submission, created = (
+                    ApplicationDocumentSubmission.objects.get_or_create(
+                        application=current,
+                        document=document,
+                        defaults={"organization": organization},
+                    )
+                )
+                if not created and submission.organization_id != organization.pk:
+                    messages.error(
+                        request,
+                        "This document submission has inconsistent organization ownership and cannot be changed.",
+                    )
+                    return redirect("apply_step10", app_id=current.application_id)
+                submission.file = form.cleaned_data["file"]
                 submission.save()
+
+                if (
+                    current.status == Application.Status.APPROVED
+                    and has_required_application_documents(current)
+                    and required_application_documents_complete(current)
+                ):
+                    # Preserve the legacy post-approval upload transition for
+                    # applications approved before the required-document gate.
+                    current.status = Application.Status.APPROVED_SIGNED
+                    current.save(update_fields=["status", "updated_at"])
+                application = current
         except SuspiciousFileOperation:
             messages.error(
                 request,
                 "The filename of your uploaded document is too long or contains invalid characters. "
                 "Please rename the file to something shorter and try again.",
             )
-            return self._render(request, application, form, focus_doc_id=document.pk)
-
-        # If every required ProgramDocument now has a submission, promote
-        # the application from APPROVED -> APPROVED_SIGNED so lead mentors
-        # can see at a glance that the paperwork is in.
-        if application.status == Application.Status.APPROVED:
-            required_doc_ids = set(
-                ProgramDocument.objects.filter(
-                    program=application.program,
-                    program__organization=organization,
-                    is_active=True,
-                    is_required=True,
-                ).values_list("pk", flat=True)
-            )
-            if required_doc_ids:
-                uploaded_doc_ids = set(
-                    ApplicationDocumentSubmission.objects.for_organization(organization)
-                    .filter(
-                        application=application,
-                        document_id__in=required_doc_ids,
-                        document__program__organization=organization,
-                    )
-                    .values_list("document_id", flat=True)
-                )
-                if required_doc_ids.issubset(uploaded_doc_ids):
-                    application.status = Application.Status.APPROVED_SIGNED
-                    application.save(update_fields=["status", "updated_at"])
+            return self._render(request, application, form, focus_doc_id=doc_id)
 
         messages.success(
             request,
@@ -178,11 +196,8 @@ class Step10DocumentsView(View):
         return redirect("apply_step10", app_id=application.application_id)
 
     def _gate(self, application: Application):
-        """Only approved applications may access Step 9."""
-        if application.status not in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-        ):
+        """Allow submitted student/parent applications and legacy approvals."""
+        if not _document_status_allowed(application):
             # Send them somewhere sensible: their current step, or the
             # post-submit confirmation page if they've already submitted.
             return _redirect_to_current_step(application)
@@ -213,7 +228,7 @@ class Step10DocumentsView(View):
         all_required_done = True
         for doc in documents:
             submission = submissions_by_doc.get(doc.pk)
-            if doc.is_required and submission is None:
+            if doc.is_required and (submission is None or not submission.file):
                 all_required_done = False
             rows.append({"document": doc, "submission": submission})
         return render(
@@ -224,7 +239,11 @@ class Step10DocumentsView(View):
                 "form": form,
                 "rows": rows,
                 "all_required_done": all_required_done,
+                "has_required_documents": has_required_application_documents(
+                    application
+                ),
                 "focus_doc_id": focus_doc_id,
+                "awaiting_review": application.status == Application.Status.SUBMITTED,
                 "current_step": 10,
                 "total_steps": TOTAL_STEPS,
             },
@@ -236,10 +255,7 @@ class Step10DocumentDownloadView(View):
     def get(self, request, app_id: str, document_id: int):
         organization = _require_organization(request)
         application = _get_application_or_404(app_id, organization)
-        if not application.program_id or application.status not in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-        ):
+        if not application.program_id or not _document_status_allowed(application):
             raise Http404
         if not _has_applicant_document_access(request, application):
             return redirect(
@@ -271,10 +287,7 @@ class Step10DocumentAccessView(View):
     def get(self, request, app_id: str):
         organization = _require_organization(request)
         application = _get_application_or_404(app_id, organization)
-        if application.status not in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-        ):
+        if not _document_status_allowed(application):
             raise Http404
         if not document_recipient(application):
             return self._render(
@@ -287,10 +300,7 @@ class Step10DocumentAccessView(View):
     def post(self, request, app_id: str):
         organization = _require_organization(request)
         application = _get_application_or_404(app_id, organization)
-        if application.status not in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-        ):
+        if not _document_status_allowed(application):
             raise Http404
 
         recipient = document_recipient(application)

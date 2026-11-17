@@ -242,6 +242,7 @@ def _save_step_data(
     next_step: int,
     remove_keys=(),
     validate_current=None,
+    data_updates=None,
 ):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
@@ -261,6 +262,7 @@ def _save_step_data(
         for remove_key in remove_keys:
             data.pop(remove_key, None)
         data[key] = payload
+        data.update(data_updates or {})
         current.data = data
         current.current_step = max(current.current_step, next_step)
         current.save(update_fields=["data", "current_step", "updated_at"])

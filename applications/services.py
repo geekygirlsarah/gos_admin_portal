@@ -21,10 +21,15 @@ from programs.models import (
     AdultStudentRelationship,
     Enrollment,
     Program,
+    ProgramDocument,
     Student,
 )
 
-from .models import Application, normalize_step_keys
+from .models import (
+    Application,
+    ApplicationDocumentSubmission,
+    normalize_step_keys,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -562,7 +567,6 @@ def send_parent_handoff_email(
     organization_name = (
         application.organization.name if application.organization else "Momentum"
     )
-
     ctx = _build_app_email_ctx(
         application,
         {
@@ -620,6 +624,42 @@ def document_recipient(application: Application) -> str:
             if isinstance(email, str) and email.strip():
                 return email.strip().lower()
     return ""
+
+
+def required_application_documents(application: Application):
+    """Return the active, tenant-owned required forms for a student application."""
+    if application.is_mentor or not application.program_id:
+        return ProgramDocument.objects.none()
+    return ProgramDocument.objects.filter(
+        program_id=application.program_id,
+        program__organization_id=application.organization_id,
+        is_active=True,
+        is_required=True,
+    )
+
+
+def has_required_application_documents(application: Application) -> bool:
+    return required_application_documents(application).exists()
+
+
+def required_application_documents_complete(application: Application) -> bool:
+    required_ids = set(
+        required_application_documents(application).values_list("pk", flat=True)
+    )
+    if not required_ids:
+        return True
+    uploaded_ids = set(
+        ApplicationDocumentSubmission.objects.for_organization(application.organization)
+        .filter(
+            application=application,
+            organization_id=application.organization_id,
+            document_id__in=required_ids,
+            document__program__organization_id=application.organization_id,
+        )
+        .exclude(file="")
+        .values_list("document_id", flat=True)
+    )
+    return required_ids.issubset(uploaded_ids)
 
 
 def _collect_applicant_recipients(application: Application) -> List[str]:
@@ -696,9 +736,53 @@ def send_application_submitted_email(application: Application, request=None) -> 
     )
 
 
+def send_application_documents_required_email(
+    application: Application, request=None
+) -> None:
+    """Send the required-document link only to the responsible guardian."""
+    documents = list(required_application_documents(application))
+    if not documents or required_application_documents_complete(application):
+        return
+    recipient = document_recipient(application)
+    if not recipient:
+        return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
+    documents_url = _application_email_url(
+        application,
+        reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": application.application_id},
+        ),
+    )
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "documents": documents,
+            "documents_url": documents_url,
+        },
+    )
+    text_body = render_to_string(
+        "applications/email/application_documents_required.txt", ctx
+    )
+    html_body = render_to_string(
+        "applications/email/application_documents_required.html", ctx
+    )
+    _send_html_email(
+        subject=f"Action needed: required forms for your {organization_name} application",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=[recipient],
+        organization=application.organization,
+        request=request,
+        history_category="application_document_request",
+        retain_history_body=False,
+    )
+
+
 def send_application_approved_email(application: Application, request=None) -> None:
-    """Notify the applicant that their application was approved and that
-    they have signed documents to download/upload (Step 9).
+    """Notify the applicant that their application has been approved.
 
     Student document notices go to the parent responsible for document access.
     """
@@ -720,16 +804,22 @@ def send_application_approved_email(application: Application, request=None) -> N
     # will redirect to /apply/<id>/step9/ for APPROVED applications.
 
     documents_url = _absolute_apply_url(request, application)
+    has_required_documents = has_required_application_documents(application)
+    required_documents_complete = required_application_documents_complete(application)
     ctx = _build_app_email_ctx(
         application,
         {
             "documents_url": documents_url,
+            "has_required_documents": has_required_documents,
+            "required_documents_complete": required_documents_complete,
         },
     )
     text_body = render_to_string("applications/email/application_approved.txt", ctx)
     html_body = render_to_string("applications/email/application_approved.html", ctx)
     if application.is_mentor:
         subject = f"Your {organization_name} application has been approved"
+    elif has_required_documents and required_documents_complete:
+        subject = f"Approved: your {organization_name} application"
     else:
         subject = (
             f"Approved: action needed to finish your {organization_name} enrollment"

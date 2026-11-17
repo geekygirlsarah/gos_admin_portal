@@ -50,6 +50,8 @@ from ..services import (
     _collect_applicant_recipients,
     convert_application_to_student,
     get_primary_parent_email,
+    has_required_application_documents,
+    required_application_documents_complete,
     send_application_approved_email,
     send_application_converted_email,
     send_application_declined_email,
@@ -856,7 +858,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
             for doc in program_docs:
                 any_documents = True
                 submission = submissions.get(doc.id)
-                if doc.is_required and submission is None:
+                if doc.is_required and (submission is None or not submission.file):
                     all_required_uploaded = False
                 documents_status.append(
                     {
@@ -874,6 +876,12 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         can_convert = application.status == Application.Status.APPROVED_SIGNED or (
             application.status == Application.Status.APPROVED and all_required_uploaded
         )
+        can_approve = application.status not in (
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+            Application.Status.CONVERTED,
+            Application.Status.DECLINED,
+        ) and (application.is_mentor or all_required_uploaded)
         custom_question_error = False
         data = application.data or {}
         if "step6-custom" in data:
@@ -896,6 +904,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
                 "all_required_uploaded": all_required_uploaded,
                 "any_documents": any_documents,
                 "can_convert": can_convert,
+                "can_approve": can_approve,
             },
         )
 
@@ -918,51 +927,78 @@ class ApplicationReviewDocumentDownloadView(_ReviewerRequiredMixin, View):
 
 
 class ApplicationApproveView(_ReviewerRequiredMixin, View):
-    """POST: mark an application APPROVED and email the applicant."""
+    """POST: approve an application after required forms are received."""
 
     def post(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
-        if application.status in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-            Application.Status.CONVERTED,
-            Application.Status.DECLINED,
-        ):
-            if application.status == Application.Status.DECLINED:
-                messages.info(request, "Cannot approve a declined application.")
-            else:
-                messages.info(request, "Application is already approved.")
-            return redirect(
-                "application_review_detail", app_id=application.application_id
+        using = application._state.db
+        with transaction.atomic(using=using):
+            current = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update(),
+                pk=application.pk,
+            )
+            if (
+                current.program_id
+                and not Program.objects.filter(
+                    pk=current.program_id, organization=request.organization
+                ).exists()
+            ):
+                raise Http404
+            if current.status in (
+                Application.Status.APPROVED,
+                Application.Status.APPROVED_SIGNED,
+                Application.Status.CONVERTED,
+                Application.Status.DECLINED,
+            ):
+                if current.status == Application.Status.DECLINED:
+                    messages.info(request, "Cannot approve a declined application.")
+                else:
+                    messages.info(request, "Application is already approved.")
+                return redirect(
+                    "application_review_detail", app_id=current.application_id
+                )
+
+            if not required_application_documents_complete(current):
+                messages.error(
+                    request,
+                    "Required permission forms must be uploaded before this application can be approved.",
+                )
+                return redirect(
+                    "application_review_detail", app_id=current.application_id
+                )
+
+            old_status = current.status
+            current.status = (
+                Application.Status.APPROVED_SIGNED
+                if has_required_application_documents(current)
+                else Application.Status.APPROVED
+            )
+            current.reviewed_at = timezone.now()
+            current.reviewed_by = request.user
+            current.decline_reason = ""
+            current.current_step = max(current.current_step, 9)
+            current.save(
+                update_fields=[
+                    "status",
+                    "reviewed_at",
+                    "reviewed_by",
+                    "decline_reason",
+                    "current_step",
+                    "updated_at",
+                ]
             )
 
-        old_status = application.status
-        application.status = Application.Status.APPROVED
-        application.reviewed_at = timezone.now()
-        application.reviewed_by = request.user
-        application.decline_reason = ""
-        # Move them past the wizard's submit step; Step 9 will surface
-        # the signed-document upload page next time they resume.
-        application.current_step = max(application.current_step, 9)
-        application.save(
-            update_fields=[
-                "status",
-                "reviewed_at",
-                "reviewed_by",
-                "decline_reason",
-                "current_step",
-                "updated_at",
-            ]
-        )
-
-        log_event(
-            request=request,
-            event=AuditEvent.ADMISSION_DECISION,
-            resource=application,
-            before={"status": old_status},
-            after={"status": Application.Status.APPROVED},
-            notes=f"Application approved by {request.user}.",
-        )
+            log_event(
+                request=request,
+                event=AuditEvent.ADMISSION_DECISION,
+                resource=current,
+                before={"status": old_status},
+                after={"status": current.status},
+                notes=f"Application approved by {request.user}.",
+            )
+            application = current
 
         try:
             send_application_approved_email(application, request=request)
@@ -1606,42 +1642,74 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request, app_id: str):
-        from programs.models import ProgramDocument
-
         application = _get_tenant_application(request, app_id)
         organization = application.organization
-        form = StaffDocumentUploadForm(
-            request.POST, request.FILES, program=application.program
-        )
-        if not form.is_valid():
-            messages.error(
-                request,
-                "Please select a document and choose a file to upload.",
-            )
-            return redirect(
-                "application_review_detail", app_id=application.application_id
-            )
-
-        document = form.cleaned_data["document"]
-        submission, created = ApplicationDocumentSubmission.objects.get_or_create(
-            application=application,
-            document=document,
-            defaults={"organization": organization},
-        )
-        if not created and (
-            submission.organization_id != organization.pk
-            or document.program.organization_id != organization.pk
-        ):
-            messages.error(
-                request,
-                "This document submission has inconsistent organization ownership and cannot be changed.",
-            )
-            return redirect(
-                "application_review_detail", app_id=application.application_id
-            )
-        submission.file = form.cleaned_data["file"]
+        using = application._state.db
         try:
-            submission.save()
+            with transaction.atomic(using=using):
+                current = get_object_or_404(
+                    Application.objects.using(using)
+                    .for_organization(organization)
+                    .select_for_update(),
+                    pk=application.pk,
+                )
+                if (
+                    not current.program_id
+                    or not Program.objects.filter(
+                        pk=current.program_id, organization=organization
+                    ).exists()
+                ):
+                    raise Http404
+                form = StaffDocumentUploadForm(
+                    request.POST, request.FILES, program=current.program
+                )
+                if not form.is_valid():
+                    messages.error(
+                        request,
+                        "Please select a document and choose a file to upload.",
+                    )
+                    return redirect(
+                        "application_review_detail",
+                        app_id=current.application_id,
+                    )
+
+                document = form.cleaned_data["document"]
+                if document.program.organization_id != organization.pk:
+                    messages.error(
+                        request,
+                        "This document does not belong to the application's organization.",
+                    )
+                    return redirect(
+                        "application_review_detail",
+                        app_id=current.application_id,
+                    )
+                submission, created = (
+                    ApplicationDocumentSubmission.objects.get_or_create(
+                        application=current,
+                        document=document,
+                        defaults={"organization": organization},
+                    )
+                )
+                if not created and submission.organization_id != organization.pk:
+                    messages.error(
+                        request,
+                        "This document submission has inconsistent organization ownership and cannot be changed.",
+                    )
+                    return redirect(
+                        "application_review_detail",
+                        app_id=current.application_id,
+                    )
+                submission.file = form.cleaned_data["file"]
+                submission.save()
+
+                if (
+                    current.status == Application.Status.APPROVED
+                    and has_required_application_documents(current)
+                    and required_application_documents_complete(current)
+                ):
+                    current.status = Application.Status.APPROVED_SIGNED
+                    current.save(update_fields=["status", "updated_at"])
+                application = current
         except SuspiciousFileOperation:
             messages.error(
                 request,
@@ -1652,29 +1720,6 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
             return redirect(
                 "application_review_detail", app_id=application.application_id
             )
-
-        # Auto-promote from APPROVED → APPROVED_SIGNED when all required
-        # docs are now uploaded (mirrors the applicant's Step 10 logic).
-        if application.status == Application.Status.APPROVED:
-            required_doc_ids = set(
-                ProgramDocument.objects.filter(
-                    program=application.program,
-                    is_active=True,
-                    is_required=True,
-                ).values_list("pk", flat=True)
-            )
-            if required_doc_ids:
-                uploaded_doc_ids = set(
-                    ApplicationDocumentSubmission.objects.filter(
-                        organization=organization,
-                        application=application,
-                        document_id__in=required_doc_ids,
-                        document__program__organization=organization,
-                    ).values_list("document_id", flat=True)
-                )
-                if required_doc_ids.issubset(uploaded_doc_ids):
-                    application.status = Application.Status.APPROVED_SIGNED
-                    application.save(update_fields=["status", "updated_at"])
 
         messages.success(
             request,

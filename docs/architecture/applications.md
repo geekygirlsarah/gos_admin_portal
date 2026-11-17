@@ -56,12 +56,13 @@ updates opt-in. The status transition is saved once, and applicant/lead notices
 are sent only after the transaction, so stale or repeated confirmation posts
 do not reset submission time or resend notifications.
 
-Other JSON writers do not yet all use this locking protocol, so this is not a
-complete concurrency guarantee; SQLite does not provide row-level
-`select_for_update` locking, and concurrent edits to the same step are not
-conflict-detected. Applicant question collection is not enabled until the
-wizard renders and validates frozen questions and all relevant writers
-coordinate their changes.
+Application JSON writers outside these coordinated paths may not all use the
+same locking protocol, so this is not a complete concurrency guarantee; SQLite
+does not provide row-level `select_for_update` locking. Step 6 freezes the
+program's active question set and saves it with experience answers under the
+application lock. A signed version rejects competing Step 6 answer edits, and
+the locked confirmation path checks required answers again so direct submission
+cannot bypass them.
 
 ---
 
@@ -69,6 +70,7 @@ coordinate their changes.
 
 Staff manage applications via `/applications/review/`:
 - **Workflow States**: `draft` → `submitted` → `under_review` → `accepted` / `waitlisted` / `rejected`.
+- **Required forms before acceptance**: Active required student/parent program documents must have tenant-owned uploaded submissions before the reviewer can accept an application. The locked decision rechecks current uploads; an applicant or staff upload does not itself accept a submitted application. New approvals with required documents use `APPROVED_SIGNED`; existing approved applications remain accessible so families and staff can finish their uploads without changing the prior decision.
 - **Edit conflict protection**: Staff edit forms carry a signed version of the tenant-bound application state. The locked POST rejects missing, forged, or stale versions before saving and redisplays submitted values with a reload notice. GET first persists legacy step-key normalization and then signs the refreshed row so its timestamp matches the normalized data.
 - **Conversion Workflow (`convert_application_to_student`)**:
   - Automatically provisions or links the `Student` profile.
@@ -107,40 +109,34 @@ manual review; see `report_application_answer_backfill` in `docs/operations.md`.
 Unlinked approved applications are expected until conversion. The backfill
 cannot recover data already lost before it ran. Answer rows follow the source
 application's and student's deletion lifecycle, and student merges transfer
-them only after validating their ownership. Question configuration and the
-replacement application wizard are not part of this phase.
-Conversion stops with an error if an experience answer is malformed rather than
-discarding it during step-key normalization.
+them only after validating their ownership. Conversion stops with an error if
+an experience answer is malformed rather than discarding it during step-key
+normalization.
 
-Conversion also recognizes a `step6-custom` snapshot: a list of objects with
-`question_id` (UUID), `question_text`, and `answer` (strings). It preserves each
-nonblank answer with the exact question text shown, alongside legacy answers.
-Invalid snapshots or repeated question IDs stop conversion without changing the
-source data. Snapshot creation is not yet connected to applicant forms, and
-application-answer editing is not yet implemented. Lead Mentors can prepare
-free-text questions in program settings,
-mark them required or optional, set their order, and deactivate them. These
-definitions are organization-scoped and do not yet change the public wizard.
-Each definition has a stable UUID intended for future answer snapshots. Existing
-applications and their answers are unaffected by configuring questions.
-Snapshot-building and validation helpers select active questions from the same
-program and organization, retain the wording and required flag, and reject
-malformed or unanswered required entries. A form can render and validate that
-frozen set. A persistence helper can freeze a program-bound snapshot while
-locking and reloading the application; it rejects stale programs, inconsistent
-ownership, completed applications, and malformed or unbound snapshots instead
-of overwriting them. Program switches preserve frozen answer sets by archiving
-the outgoing snapshot and restoring any prior snapshot for the selected
-program. The freezer is not yet wired to applicant question forms: other
-application writers must be coordinated before questions can safely be shown
-publicly. Staff review
-renders existing custom snapshots as questions and answers and flags malformed
-snapshots. Lead Mentors may edit answers on submitted or approved applications;
-the question text and metadata are retained, required answers remain required,
-and stale edits are rejected. Answer edits use the existing application edit
-audit event. Custom answers are read-only during an in-progress application
-until concurrent applicant writes are coordinated, and after conversion to
-avoid diverging from the student profile.
+Lead Mentors can configure organization-scoped, free-text questions for a
+program, including active/inactive state, required/optional status, and display
+order. When an applicant reaches Step 6, the application freezes the active
+question set—including exact wording and required status—against its selected
+program. Later configuration changes do not rewrite that application's frozen
+questions. Switching programs archives the outgoing snapshot and restores a
+saved snapshot for the target program; malformed, unbound, or ambiguous state
+is retained for staff assistance rather than guessed or discarded.
+
+Applicants answer the frozen questions alongside the existing experience
+questions. Required answers are checked by the Step 6 form and again against the
+freshly locked application during confirmation; direct submission cannot skip
+an unfrozen set or submit an unanswered required question. The confirmation
+page shows the saved wording and answers. Step 6 reads legacy fixed experience
+answers through the existing key normalizer without rewriting legacy data just
+because the page was viewed. New conversions preserve nonblank custom answers
+with the exact wording shown, alongside the legacy experience answers.
+
+Staff review renders custom snapshots and flags malformed data. Lead Mentors may
+edit answers on submitted or approved applications; the wording and metadata are
+retained, required answers remain required, and stale edits are rejected. Answer
+edits use the existing application edit audit event. Staff edits remain
+read-only for in-progress applications and after conversion to avoid diverging
+from applicant answers or the student profile.
 
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
@@ -161,7 +157,7 @@ Stale cleanup only considers applications belonging to the current organization.
 
 Public wizard routes require a resolved organization and load application IDs only within that organization. New applications are assigned to the request organization; program choices, duplicate-draft actions, and returning student/adult prefill are likewise organization-scoped. A missing tenant context fails closed. Lead notifications go only to active users with an active `LeadMentor` membership in the application organization; if there are no eligible email addresses, no lead notification is sent.
 
-Step 10 displays and accepts documents only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. Document notices use that same recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping.
+Step 10 displays and accepts documents for submitted student/parent applications before approval, as well as approved legacy applications, only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. After submission, a separate required-document notice and protected link are sent only to that same parent/guardian; the student is never used as a fallback recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping; staff uploads recheck the application and program under a row lock. Completing uploads while the application is still submitted does not auto-accept it. Previously approved applications with missing required documents retain their approval and can complete uploads; completion preserves the existing `APPROVED_SIGNED` transition.
 
 Approved and later application states are read-only through earlier public wizard steps. An application ID alone is not proof of applicant identity. Other in-progress wizard routes continue to follow the existing email-verification and parent-handoff workflow; this Step 10 challenge is an additional control for signed-document access.
 

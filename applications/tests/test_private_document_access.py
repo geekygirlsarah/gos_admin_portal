@@ -208,6 +208,7 @@ class PrivateApplicationDocumentAccessTests(TestCase):
     def test_student_handoff_sends_document_code_to_parent_not_student(self):
         self.application.applicant_type = Application.Type.STUDENT
         self.application.email = "student@example.test"
+        self.application.status = Application.Status.SUBMITTED
         self.application.data = {
             "step7_handoff": {"parent_email": "parent@example.test"},
             "step7-primaryparent": {"email": "parent@example.test"},

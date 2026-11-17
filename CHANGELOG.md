@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Switching an application to a different program preserves its program-bound custom-question answers and restores them if the applicant switches back.
 - Staff application edits now require a signed current-state version and reject stale, missing, or forged form submissions without overwriting newer answers.
+- Program-specific questions now appear on the applicant experience step, retain their wording per application, and required answers are checked again before submission.
+- Required permission forms are collected before application acceptance; the reviewer rechecks uploads, while existing approved applications and guardian-protected document access remain supported.
 
 ## 2026-11-16
 
@@ -30,7 +32,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
-- Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
+- Program settings can store custom application questions with required, active, and display-order settings.
 
 ### Changed
 - Lead Mentors can edit stored custom answers on submitted or approved applications, with stale-edit detection.

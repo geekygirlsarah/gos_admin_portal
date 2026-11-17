@@ -1,8 +1,10 @@
 """Preserve answers captured by the existing student application wizard."""
 
+import json
 from uuid import UUID
 
 from django.db import transaction
+from django.utils.crypto import salted_hmac
 
 from programs.models import Program
 
@@ -84,6 +86,47 @@ def validate_custom_question_snapshot(snapshot, require_answers=False):
         seen.add(canonical_id)
         if require_answers and item["required"] and not item["answer"].strip():
             raise ValueError("Required custom questions are unanswered.")
+
+
+def experience_form_version(application):
+    """Return a signed version of the Step 6 state relevant to the form."""
+    data = application.data
+    if not isinstance(data, dict):
+        raise ValueError("Application answer data is malformed.")
+    has_snapshot = "step6-custom" in data
+    has_program = "_custom_question_program_id" in data
+    if has_snapshot != has_program:
+        raise ValueError("Custom application question ownership is missing.")
+    snapshot = None
+    snapshot_program_id = None
+    if has_snapshot:
+        snapshot_program_id = data["_custom_question_program_id"]
+        if (
+            type(snapshot_program_id) is not int
+            or snapshot_program_id != application.program_id
+        ):
+            raise ValueError("Custom questions belong to a different program.")
+        snapshot = data["step6-custom"]
+        validate_custom_question_snapshot(snapshot)
+    fixed_answers = data.get("step6-experience", {})
+    legacy_answers = data.get("step6", {})
+    if not isinstance(fixed_answers, dict) or not isinstance(legacy_answers, dict):
+        raise ValueError("Application experience-step data is malformed.")
+    state = json.dumps(
+        {
+            "organization_id": application.organization_id,
+            "program_id": application.program_id,
+            "snapshot_program_id": snapshot_program_id,
+            "snapshot": snapshot,
+            "fixed_answers": fixed_answers,
+            "legacy_answers": legacy_answers,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return salted_hmac(
+        "application-experience-form", state, algorithm="sha256"
+    ).hexdigest()
 
 
 def freeze_custom_question_snapshot(application):

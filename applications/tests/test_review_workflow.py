@@ -15,7 +15,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from applications.models import Application
+from applications.models import Application, ApplicationDocumentSubmission
 from applications.views.review import ApplicationEmailView
 from organizations.models import (
     Organization,
@@ -225,6 +225,101 @@ class ApproveDeclineEditDeleteTests(TestCase):
         recipients = {r.lower() for r in msg.to}
         self.assertIn("parent@example.com", recipients)
         self.assertNotIn("ada@example.com", recipients)
+
+    def test_required_documents_block_approval_until_uploaded(self):
+        program = Program.objects.create(
+            name="Required Documents Program",
+            organization=self.app.organization,
+            active=True,
+        )
+        ProgramDocument.objects.create(
+            program=program,
+            name="Permission form",
+            file="forms/permission.pdf",
+            is_required=True,
+        )
+        self.app.program = program
+        self.app.save(update_fields=["program", "updated_at"])
+
+        response = self.client.post(
+            reverse(
+                "application_review_approve",
+                kwargs={"app_id": self.app.application_id},
+            ),
+            follow=True,
+        )
+
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.SUBMITTED)
+        self.assertIsNone(self.app.reviewed_at)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertContains(
+            response,
+            "Required permission forms must be uploaded before this application can be approved.",
+        )
+
+    def test_required_documents_completed_before_approval_are_marked_signed(self):
+        program = Program.objects.create(
+            name="Complete Documents Program",
+            organization=self.app.organization,
+            active=True,
+        )
+        document = ProgramDocument.objects.create(
+            program=program,
+            name="Permission form",
+            file="forms/permission.pdf",
+            is_required=True,
+        )
+        self.app.program = program
+        self.app.save(update_fields=["program", "updated_at"])
+        ApplicationDocumentSubmission.objects.create(
+            application=self.app,
+            organization=self.app.organization,
+            document=document,
+            file="signed/permission.pdf",
+        )
+
+        response = self.client.post(
+            reverse(
+                "application_review_approve",
+                kwargs={"app_id": self.app.application_id},
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.APPROVED_SIGNED)
+        self.assertIsNotNone(self.app.reviewed_at)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("received the required signed forms", mail.outbox[0].body)
+
+    def test_student_permission_documents_do_not_block_mentor_approval(self):
+        program = Program.objects.create(
+            name="Mentor Application Program",
+            organization=self.app.organization,
+            active=True,
+        )
+        ProgramDocument.objects.create(
+            program=program,
+            name="Student permission form",
+            file="forms/student-permission.pdf",
+            is_required=True,
+        )
+        self.app.applicant_type = Application.Type.MENTOR
+        self.app.program = program
+        self.app.save(update_fields=["applicant_type", "program", "updated_at"])
+
+        response = self.client.post(
+            reverse(
+                "application_review_approve",
+                kwargs={"app_id": self.app.application_id},
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.APPROVED)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_approving_already_approved_is_a_noop(self):
         self.app.status = Application.Status.APPROVED
@@ -905,6 +1000,26 @@ class StaffDocumentUploadTests(TestCase):
             application=self.app, document=self.doc
         )
         self.assertEqual(submission.organization_id, self.app.organization_id)
+
+    def test_staff_upload_for_submitted_application_does_not_approve_it(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        self.app.status = Application.Status.SUBMITTED
+        self.app.save(update_fields=["status", "updated_at"])
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+
+        response = self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.SUBMITTED)
+        self.assertTrue(
+            ApplicationDocumentSubmission.objects.filter(
+                application=self.app, document=self.doc
+            ).exists()
+        )
 
     def test_upload_promotes_approved_to_approved_signed(self):
         from applications.models import ApplicationDocumentSubmission

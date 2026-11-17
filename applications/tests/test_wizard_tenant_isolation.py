@@ -210,6 +210,9 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             email_verified_at=timezone.now(),
         )
         self.verify_application_browser(application)
+        step_url = reverse("apply_step6", kwargs={"app_id": application.application_id})
+        get_response = self.tenant_get(step_url)
+        version = get_response.context["form"].initial["experience_version"]
 
         def submit_latest_application():
             Application.objects.filter(pk=application.pk).update(
@@ -220,8 +223,9 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             StudentExperienceForm, submit_latest_application
         ):
             response = self.tenant_post(
-                reverse("apply_step6", kwargs={"app_id": application.application_id}),
+                step_url,
                 {
+                    "experience_version": version,
                     "interest_reason": "Robotics",
                     "hoped_gains": "Experience",
                     "prior_robotics_experience": "Current submission",
@@ -251,6 +255,9 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             email_verified_at=timezone.now(),
         )
         self.verify_application_browser(application)
+        step_url = reverse("apply_step6", kwargs={"app_id": application.application_id})
+        get_response = self.tenant_get(step_url)
+        version = get_response.context["form"].initial["experience_version"]
 
         def clear_latest_program():
             Application.objects.filter(pk=application.pk).update(program=None)
@@ -259,8 +266,9 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             StudentExperienceForm, clear_latest_program
         ):
             response = self.tenant_post(
-                reverse("apply_step6", kwargs={"app_id": application.application_id}),
+                step_url,
                 {
+                    "experience_version": version,
                     "interest_reason": "Robotics",
                     "hoped_gains": "Experience",
                     "prior_robotics_experience": "Current submission",

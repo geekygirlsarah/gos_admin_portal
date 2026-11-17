@@ -1,0 +1,31 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Required Application Forms{% endblock %}
+{% block header %}Required Application Forms{% endblock %}
+
+{% block content %}
+<p>Hi {{ application.applicant_name|default:"" }},</p>
+
+<p>
+    Before a lead mentor can approve {{ application.student_name|default:"your student" }}'s
+    application to <strong>{{ application.program|default:"the program" }}</strong>,
+    please download, sign, and upload these required forms:
+</p>
+<ul>
+    {% for document in documents %}
+    <li>
+        <strong>{{ document.name }}</strong>{% if document.description %}: {{ document.description }}{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+<p>The verification code for the protected document page is sent to the responsible parent or guardian.</p>
+{% if documents_url %}
+<p>
+    <a href="{{ documents_url }}">Open the protected document page</a>
+</p>
+{% endif %}
+<p><strong>Application ID:</strong> <code>{{ application.application_id }}</code></p>
+<p>If you have any questions, just reply to this email.</p>
+
+<p>— {{ org_email_settings.organization_name|default:"Momentum" }}</p>
+{% endblock %}

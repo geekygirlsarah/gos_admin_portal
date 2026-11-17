@@ -434,8 +434,10 @@ class CustomApplicationQuestionsForm(forms.Form):
         ]
 
 
-class StudentExperienceForm(forms.Form):
+class StudentExperienceForm(CustomApplicationQuestionsForm):
     """New Step 6: qualitative questions about student interest/experience."""
+
+    experience_version = forms.CharField(required=False, widget=forms.HiddenInput)
 
     interest_reason = forms.CharField(
         label="Why are you interested in participating in this program this season?",
@@ -459,8 +461,8 @@ class StudentExperienceForm(forms.Form):
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
     )
 
-    def __init__(self, *args, applicant_type=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, applicant_type=None, snapshot=None, **kwargs):
+        super().__init__(*args, snapshot=snapshot or [], **kwargs)
         if applicant_type == Application.Type.PARENT:
             self.fields["interest_reason"].label = (
                 "Why is your child interested in participating in this program this season?"

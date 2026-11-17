@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -21,7 +22,13 @@ from programs.utils import (
     get_academic_year_ending,
 )
 
-from ..answers import switch_custom_question_snapshot
+from ..answers import (
+    build_custom_question_snapshot,
+    experience_form_version,
+    freeze_custom_question_snapshot,
+    switch_custom_question_snapshot,
+    validate_custom_question_snapshot,
+)
 from ..forms import (
     NOT_LISTED_SCHOOL,
     ApplicantTypeForm,
@@ -34,7 +41,12 @@ from ..forms import (
     StudentExperienceForm,
     StudentInfoForm,
 )
-from ..models import Application, ApplicationDocumentSubmission, OtpVerifyResult
+from ..models import (
+    Application,
+    ApplicationDocumentSubmission,
+    OtpVerifyResult,
+    normalize_step_keys,
+)
 from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import (
     adult_to_prefill,
@@ -42,6 +54,7 @@ from ..services import (
     find_student_by_email,
     get_program_buckets,
     get_student_emails,
+    send_application_documents_required_email,
     send_application_submitted_email,
     send_lead_notification_email,
     send_otp_email,
@@ -1012,28 +1025,67 @@ class Step6ExperienceView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
-        initial = (application.data or {}).get("step6-experience") or {}
+        snapshot, version, error = self._prepare_question_state(application)
+        initial = normalize_step_keys(application.data).get("step6-experience") or {}
+        initial["experience_version"] = version
         form = StudentExperienceForm(
-            initial=initial, applicant_type=application.applicant_type
+            initial=initial,
+            applicant_type=application.applicant_type,
+            snapshot=snapshot,
         )
+        if error:
+            form.is_valid()
+            form.add_error(None, error)
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
 
+        snapshot, version, state_error = self._prepare_question_state(application)
         form = StudentExperienceForm(
-            request.POST, applicant_type=application.applicant_type
+            request.POST,
+            applicant_type=application.applicant_type,
+            snapshot=snapshot,
         )
+        if state_error:
+            form.is_valid()
+            form.add_error(None, state_error)
+            return self._render(request, application, form)
         if not form.is_valid():
             return self._render(request, application, form)
-        payload = _sanitize_payload(form.cleaned_data)
+        current_data = application.data or {}
+        needs_version = bool(snapshot) or bool(current_data.get("step6-experience"))
+        posted_version = request.POST.get("experience_version", "")
+        if (needs_version or posted_version) and not constant_time_compare(
+            posted_version, version
+        ):
+            form.add_error(
+                None,
+                "Your application answers changed after you opened this page. "
+                "Your entries are still shown but were not saved. Reload the page "
+                "before trying again.",
+            )
+            return self._render(request, application, form)
+        cleaned_data = {
+            key: value
+            for key, value in form.cleaned_data.items()
+            if key != "experience_version" and not key.startswith("question_")
+        }
+        payload = _sanitize_payload(cleaned_data)
+        answered_snapshot = form.answered_snapshot()
 
         def validate_current(current):
             guard = _step_write_guard(request, current, application)
@@ -1046,6 +1098,19 @@ class Step6ExperienceView(View):
                     "Please review your answers and submit them again.",
                 )
                 return self._render(request, current, form)
+            try:
+                current_version = experience_form_version(current)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+                return self._render(request, current, form)
+            if not constant_time_compare(current_version, version):
+                form.add_error(
+                    None,
+                    "Your application answers changed while this form was being "
+                    "saved. Your entries are still shown but were not saved. "
+                    "Reload the page before trying again.",
+                )
+                return self._render(request, current, form)
             return None
 
         response = _save_step_data(
@@ -1054,10 +1119,30 @@ class Step6ExperienceView(View):
             payload,
             next_step=7,
             validate_current=validate_current,
+            data_updates=(
+                {
+                    "step6-custom": answered_snapshot,
+                    "_custom_question_program_id": application.program_id,
+                }
+                if application.program_id
+                else None
+            ),
         )
         if response is not None:
             return response
         return redirect("apply_step7", app_id=application.application_id)
+
+    @staticmethod
+    def _prepare_question_state(application):
+        snapshot = []
+        try:
+            if application.program_id:
+                snapshot = freeze_custom_question_snapshot(application)
+                application.refresh_from_db()
+            version = experience_form_version(application)
+            return snapshot, version, None
+        except ValueError as exc:
+            return [], "", str(exc)
 
     def _render(self, request, application, form):
         return render(
@@ -1826,7 +1911,18 @@ class Step9ConfirmView(View):
                 {"application": application},
             )
 
-        return self._render(request, application, ConfirmSubmitForm())
+        try:
+            snapshot, needs_question_step = self._confirmation_snapshot(application)
+        except ValueError as exc:
+            form = ConfirmSubmitForm()
+            form.is_valid()
+            form.add_error(None, str(exc))
+            return self._render(request, application, form, custom_snapshot=[])
+        if needs_question_step:
+            return redirect("apply_step6", app_id=application.application_id)
+        return self._render(
+            request, application, ConfirmSubmitForm(), custom_snapshot=snapshot
+        )
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
@@ -1873,6 +1969,19 @@ class Step9ConfirmView(View):
                 )
                 return self._render(request, current, form)
 
+            try:
+                snapshot, needs_question_step = self._confirmation_snapshot(current)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+                return self._render(request, current, form, custom_snapshot=[])
+            if needs_question_step:
+                return redirect("apply_step6", app_id=current.application_id)
+            try:
+                validate_custom_question_snapshot(snapshot, require_answers=True)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+                return self._render(request, current, form, custom_snapshot=snapshot)
+
             # Ensure at least one parent opted in to notifications.
             data = current.data or {}
             p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
@@ -1905,6 +2014,15 @@ class Step9ConfirmView(View):
                 application.application_id,
             )
         try:
+            send_application_documents_required_email(application, request=request)
+        except Exception:
+            from .utils import logger
+
+            logger.exception(
+                "Failed to send required-document notice for %s",
+                application.application_id,
+            )
+        try:
             send_lead_notification_email(application, request=request)
         except Exception:
             from .utils import logger
@@ -1916,8 +2034,47 @@ class Step9ConfirmView(View):
 
         return redirect("apply_submitted", app_id=application.application_id)
 
-    def _render(self, request, application, form):
-        data = application.data or {}
+    @staticmethod
+    def _confirmation_snapshot(application):
+        data = application.data
+        if not isinstance(data, dict):
+            raise ValueError("Application answer data is malformed.")
+        has_snapshot = "step6-custom" in data
+        has_owner = "_custom_question_program_id" in data
+        if has_snapshot != has_owner:
+            raise ValueError("Custom application question ownership is missing.")
+        if not has_snapshot:
+            if application.program_id and build_custom_question_snapshot(application):
+                return [], True
+            return [], False
+        owner_id = data["_custom_question_program_id"]
+        if (
+            type(owner_id) is not int
+            or owner_id != application.program_id
+            or application.program_id is None
+        ):
+            raise ValueError("Custom questions belong to a different program.")
+        snapshot = data["step6-custom"]
+        validate_custom_question_snapshot(snapshot)
+        return snapshot, False
+
+    def _render(self, request, application, form, custom_snapshot=None):
+        data = application.data if isinstance(application.data, dict) else {}
+        custom_snapshot_error = None
+        if custom_snapshot is None:
+            try:
+                custom_snapshot, needs_question_step = self._confirmation_snapshot(
+                    application
+                )
+                if needs_question_step:
+                    custom_snapshot_error = (
+                        "Please complete the program-specific questions before "
+                        "submitting your application."
+                    )
+                    custom_snapshot = []
+            except ValueError as exc:
+                custom_snapshot = []
+                custom_snapshot_error = str(exc)
         return render(
             request,
             self.template_name,
@@ -1926,6 +2083,8 @@ class Step9ConfirmView(View):
                 "form": form,
                 "step5_data": data.get("step5-student") or {},
                 "step6_data": data.get("step6-experience") or {},
+                "step6_custom_data": custom_snapshot,
+                "custom_snapshot_error": custom_snapshot_error,
                 "step7_data": data.get("step7-primaryparent") or {},
                 "step8_data": data.get("step8-secondaryparent") or {},
                 "step8_skipped": bool(
