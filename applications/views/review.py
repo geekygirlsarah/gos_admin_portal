@@ -383,10 +383,10 @@ class ApplicationDataEditForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.sections = list(sections)
         self.custom_snapshot = custom_snapshot
+        self.fields["custom_snapshot_version"] = forms.CharField(
+            required=False, widget=forms.HiddenInput
+        )
         if custom_snapshot is not None:
-            self.fields["custom_snapshot_version"] = forms.CharField(
-                widget=forms.HiddenInput
-            )
             for item in custom_snapshot:
                 self.fields[f"custom_answer_{item['question_id']}"] = forms.CharField(
                     label=item["question_text"],
@@ -1124,7 +1124,9 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
             sort_keys=True,
             separators=(",", ":"),
         )
-        return salted_hmac("application-review-custom-snapshot", state).hexdigest()
+        return salted_hmac(
+            "application-review-custom-snapshot", state, algorithm="sha1"
+        ).hexdigest()
 
     def _form(self, application, post_data=None):
         snapshot = None
@@ -1139,8 +1141,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
             Application.Status.APPROVED_SIGNED,
         )
         initial = self._initial(application)
-        if snapshot is not None and editable:
-            initial["custom_snapshot_version"] = self._custom_version(application)
+        initial["custom_snapshot_version"] = self._custom_version(application)
         form = ApplicationDataEditForm(
             post_data,
             sections=_sections_for(application),
@@ -1210,6 +1211,9 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         # Persist any legacy step-key migration up front so the form (and any
         # subsequent save) always operate on the current key names.
         application.normalize_step_data(save=True)
+        # Normalization may have changed ``updated_at`` while persisting the
+        # merged data; sign the persisted row rather than the pre-save value.
+        application.refresh_from_db()
         form = self._form(application)
         return self._render(request, application, form)
 
@@ -1228,25 +1232,23 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
             raise Http404
         application.normalize_step_data(save=False)
         form = self._form(application, request.POST)
+        if not constant_time_compare(
+            request.POST.get("custom_snapshot_version", ""),
+            self._custom_version(application),
+        ):
+            form.is_valid()
+            form.add_error(
+                None,
+                "The application changed after you opened this form. Your entries "
+                "are still shown but were not saved. Reload this page before "
+                "trying again.",
+            )
+            return self._render(request, application, form)
         if form.custom_snapshot_error:
             form.is_valid()
             form.add_error(None, form.custom_snapshot_error)
             return self._render(request, application, form)
-        if form.custom_snapshot is None and "custom_snapshot_version" in request.POST:
-            form.is_valid()
-            form.add_error(
-                None, "The application changed. Reload this page before saving."
-            )
-            return self._render(request, application, form)
         if not form.is_valid():
-            return self._render(request, application, form)
-        if form.custom_snapshot is not None and not constant_time_compare(
-            form.cleaned_data["custom_snapshot_version"],
-            self._custom_version(application),
-        ):
-            form.add_error(
-                None, "The application changed. Reload this page before saving."
-            )
             return self._render(request, application, form)
         old_data = application.data
         application.data = form.rebuild_data(

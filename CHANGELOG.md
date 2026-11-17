@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Switching an application to a different program preserves its program-bound custom-question answers and restores them if the applicant switches back.
+- Staff application edits now require a signed current-state version and reject stale, missing, or forged form submissions without overwriting newer answers.
 
 ## 2026-11-16
 

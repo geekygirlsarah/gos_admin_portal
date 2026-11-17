@@ -79,6 +79,92 @@ class ReviewEditFormTests(TestCase):
             "application_review_edit", kwargs={"app_id": self.app.application_id}
         )
 
+    def _application_version(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        return response.context["form"].initial["custom_snapshot_version"]
+
+    def test_get_renders_version_for_draft_without_custom_questions(self):
+        self.app.status = Application.Status.DRAFT
+        self.app.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].initial["custom_snapshot_version"])
+        self.assertContains(response, 'name="custom_snapshot_version"')
+
+    def test_post_without_version_is_rejected_for_application_without_snapshot(self):
+        original_data = self.app.data.copy()
+        response = self.client.post(
+            self.url,
+            {"step5-student__legal_first_name": "Stale name"},
+        )
+
+        self.assertContains(response, "application changed")
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data, original_data)
+
+    def test_stale_version_does_not_overwrite_newer_application_state(self):
+        version = self._application_version()
+        self.app.data["step5-student"]["legal_first_name"] = "Applicant update"
+        self.app.email = "new-contact@example.com"
+        self.app.status = Application.Status.APPROVED
+        self.app.save()
+
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": version,
+                "step5-student__legal_first_name": "Stale name",
+            },
+        )
+
+        self.assertContains(response, "application changed")
+        self.app.refresh_from_db()
+        self.assertEqual(
+            self.app.data["step5-student"]["legal_first_name"], "Applicant update"
+        )
+        self.assertEqual(self.app.email, "new-contact@example.com")
+        self.assertEqual(self.app.status, Application.Status.APPROVED)
+
+    def test_second_staff_edit_cannot_overwrite_first_edit(self):
+        version = self._application_version()
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": version,
+                "email": "first-staff-edit@example.com",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": version,
+                "email": "stale-staff-edit@example.com",
+            },
+        )
+
+        self.assertContains(response, "application changed")
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.email, "first-staff-edit@example.com")
+
+    def test_forged_version_is_rejected_for_application_without_snapshot(self):
+        original_data = self.app.data.copy()
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": "forged",
+                "step5-student__legal_first_name": "Forged edit",
+            },
+        )
+
+        self.assertContains(response, "application changed")
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.data, original_data)
+
     def test_get_renders_student_sections_in_order(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
@@ -109,9 +195,11 @@ class ReviewEditFormTests(TestCase):
         self.assertNotIn("Student information", response.content.decode())
 
     def test_post_saves_fields_and_preserves_internal_keys(self):
+        version = self._application_version()
         response = self.client.post(
             self.url,
             {
+                "custom_snapshot_version": version,
                 "step5-student__legal_first_name": "Grace",
                 "step5-student__last_name": "Hopper",
                 "step7-primaryparent__legal_first_name": "Pam",
@@ -130,7 +218,13 @@ class ReviewEditFormTests(TestCase):
         )
 
     def test_post_updates_application_email(self):
-        response = self.client.post(self.url, {"email": "new-parent@example.com"})
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": self._application_version(),
+                "email": "new-parent@example.com",
+            },
+        )
         self.assertEqual(response.status_code, 302)
         self.app.refresh_from_db()
         self.assertEqual(self.app.email, "new-parent@example.com")
@@ -139,15 +233,26 @@ class ReviewEditFormTests(TestCase):
         # A completely untouched section should not be added to data.
         self.app.data = {"step5-student": {"last_name": "Lovelace"}}
         self.app.save()
-        response = self.client.post(self.url, {"step5-student__last_name": "Lovelace"})
+        response = self.client.post(
+            self.url,
+            {
+                "custom_snapshot_version": self._application_version(),
+                "step5-student__last_name": "Lovelace",
+            },
+        )
         self.assertEqual(response.status_code, 302)
         self.app.refresh_from_db()
         self.assertNotIn("step6-experience", self.app.data)
         self.assertNotIn("step8-secondaryparent", self.app.data)
 
     def test_post_rejects_invalid_date(self):
+        version = self._application_version()
         response = self.client.post(
-            self.url, {"step5-student__date_of_birth": "not-a-date"}
+            self.url,
+            {
+                "custom_snapshot_version": version,
+                "step5-student__date_of_birth": "not-a-date",
+            },
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Enter a valid date")

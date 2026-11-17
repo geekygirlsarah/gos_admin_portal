@@ -344,9 +344,13 @@ class ApproveDeclineEditDeleteTests(TestCase):
         url = reverse(
             "application_review_edit", kwargs={"app_id": self.app.application_id}
         )
+        version = (
+            self.client.get(url).context["form"].initial["custom_snapshot_version"]
+        )
         response = self.client.post(
             url,
             {
+                "custom_snapshot_version": version,
                 "email": "new-parent@example.com",
                 "step5-student__legal_first_name": "Grace",
                 "step5-student__last_name": "Hopper",

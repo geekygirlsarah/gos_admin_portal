@@ -69,6 +69,7 @@ coordinate their changes.
 
 Staff manage applications via `/applications/review/`:
 - **Workflow States**: `draft` → `submitted` → `under_review` → `accepted` / `waitlisted` / `rejected`.
+- **Edit conflict protection**: Staff edit forms carry a signed version of the tenant-bound application state. The locked POST rejects missing, forged, or stale versions before saving and redisplays submitted values with a reload notice. GET first persists legacy step-key normalization and then signs the refreshed row so its timestamp matches the normalized data.
 - **Conversion Workflow (`convert_application_to_student`)**:
   - Automatically provisions or links the `Student` profile.
   - Provisions or links primary and secondary parent `Adult` profiles.
