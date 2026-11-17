@@ -427,6 +427,35 @@ A pull request must pass all applicable checks.
 python manage.py test --parallel
 ```
 
+GitHub Actions runs the Django suite in four independent module-level shards,
+with Django's own `--parallel` workers enabled inside each shard. The shard
+helper in `.github/scripts/django_test_shards.py` assigns whole test modules
+using test counts as an initial runtime estimate and verifies that the union of
+the shard labels matches full test discovery exactly before writing any labels.
+Each CI job passes its labels file as individually quoted arguments to
+`manage.py test`, preserving Django's parallel workers and timing output. Run a
+dry-run locally to inspect a shard:
+
+```bash
+python .github/scripts/django_test_shards.py --shards 4 --shard-index 0 --dry-run
+```
+
+To run a shard locally, write the verified labels to a file and pass them to
+Django as separate arguments (the following Bash commands mirror CI):
+
+```bash
+python .github/scripts/django_test_shards.py --shards 4 --shard-index 0 --labels-file django-test-labels.txt
+mapfile -t test_labels < django-test-labels.txt
+python manage.py test --noinput "${test_labels[@]}" --parallel auto --timing --durations 20
+```
+
+The matrix uses `fail-fast: false`, so all shard failures are reported. After
+merging this workflow change, update branch protection to require `django-checks`
+and every `Django tests (shard N/4)` check. Review shard counts and GitHub
+Actions runtimes over several runs; if module counts do not approximate runtime
+well, rebalance based on measured durations or increase the shard count only
+after accounting for repeated setup and database migration costs.
+
 ### Frontend Tests
 
 ```bash
