@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models.query import QuerySet
 from django.db.models.signals import post_init
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -692,6 +693,58 @@ class TravelViewTest(TestCase):
             self.assertIn("425.00", message.body)
             self.assertIn("300.00", message.body)
             self.assertIn("approval", message.body.lower())
+
+    def test_cost_repricing_locks_only_signups_with_nullable_departures(self):
+        direct_signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        direct_signup.cost_items.set([self.hotel])
+        departed_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Departed",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        departure_signup = TravelSignup.objects.create(
+            student=departed_student,
+            event=self.event,
+            departure=self.departure,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        departure_signup.cost_items.set([self.hotel])
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        original_select_for_update = QuerySet.select_for_update
+        lock_scopes = []
+
+        def capture_select_for_update(queryset, *args, **kwargs):
+            if queryset.model is TravelSignup:
+                lock_scopes.append(kwargs.get("of"))
+            return original_select_for_update(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, "select_for_update", capture_select_for_update):
+            with self.captureOnCommitCallbacks(execute=False):
+                response = self.client.post(
+                    reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                    payload,
+                )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(lock_scopes, [("self",)])
+        for signup in (direct_signup, departure_signup):
+            signup.refresh_from_db()
+            self.assertEqual(signup.status, TravelSignup.INTERESTED)
+            self.assertIsNone(signup.approved_total)
+            self.assertEqual(signup.balance_amount, Decimal("425.00"))
 
     def test_trip_cost_update_emails_keep_each_student_total_private(self):
         first_signup = TravelSignup.objects.create(

@@ -423,6 +423,10 @@ A pull request must pass all applicable checks.
 
 ### Django Tests
 
+The Django tests include a check for the generated email-editor bundle. Each
+independent CI test shard builds it before running tests; for a fresh local
+checkout, run `npm ci && npm run build` first.
+
 ```bash
 python manage.py test --parallel
 ```

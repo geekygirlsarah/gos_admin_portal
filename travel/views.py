@@ -458,7 +458,7 @@ class TravelInlineFormsetsMixin:
                     departure__event_id=F("event_id"),
                 )
             )
-            .select_for_update()
+            .select_for_update(of=("self",))
             .select_related("student", "event", "departure")
             .prefetch_related("cost_items", "event__cost_options")
             .order_by("pk")

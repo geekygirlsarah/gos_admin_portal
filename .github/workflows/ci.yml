@@ -166,6 +166,15 @@ jobs:
         enable-cache: true
     - name: Install Dependencies
       run: uv pip install --system -r requirements.txt
+    - name: Set up Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - name: Install frontend dependencies
+      run: npm ci
+    - name: Build frontend bundle
+      run: npm run build
     - name: Run Django test shard
       run: |
         pip install tblib
