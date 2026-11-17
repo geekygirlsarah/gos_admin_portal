@@ -188,17 +188,33 @@ class TravelViewTest(TestCase):
         self.assertIn("Trip details", html)
 
     def test_mentor_sees_trips_read_only(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            departure=self.departure,
+            status=TravelSignup.APPROVED,
+            approved_total="350.00",
+            permission_acknowledged=True,
+        )
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse("travel:event_list", args=[self.program.id])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.context["can_manage"])
         self.assertFalse(resp.context["can_add"])
+        self.assertFalse(resp.context["can_edit"])
         html = resp.content.decode()
         self.assertNotIn(">Edit</a>", html)
         self.assertNotIn(">Delete</a>", html)
         self.assertNotIn("Add Trip", html)
-        self.assertNotIn("Student Sign-ups", html)
+        self.assertIn("Student Sign-ups", html)
+        self.assertIn(self.student.display_name, html)
+        self.assertIn(signup.get_status_display(), html)
+        self.assertIn(self.departure.display_label, html)
+        self.assertNotIn("Approved cost: $350.00", html)
+        self.assertNotIn("Permission form acknowledged", html)
+        self.assertNotIn(">Withdraw</button>", html)
+        self.assertNotIn("Add a student", html)
         self.assertNotIn("Add a mentor", html)
         self.assertRegex(
             html,
@@ -206,6 +222,210 @@ class TravelViewTest(TestCase):
             r'aria-labelledby="mentor-signups-title">.*?'
             r"Mentors are welcome to come along as chaperones:",
         )
+
+        create_url = reverse("travel:event_create", args=[self.program.id])
+        edit_url = reverse("travel:event_edit", args=[self.program.id, self.event.id])
+        for url in (create_url, edit_url):
+            self.assertEqual(self.client.get(url).status_code, 302)
+            self.assertEqual(self.client.post(url, {}).status_code, 302)
+
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, "Competition Trip")
+
+    def test_mentor_without_trip_read_permission_cannot_view_trips(self):
+        from programs.models import RolePermission
+
+        RolePermission.objects.update_or_create(
+            organization=self.organization,
+            role="Mentor",
+            section="travel_details",
+            defaults={"can_read": False, "can_write": False},
+        )
+        self.client.login(username="mentor", password="password")  # nosec B106
+
+        url = reverse("travel:event_list", args=[self.program.id])
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+    def test_students_and_parents_do_not_see_the_full_student_roster(self):
+        TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+        )
+        other_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Other",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        TravelSignup.objects.create(
+            student=other_student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+        )
+
+        url = reverse("travel:event_list", args=[self.program.id])
+        for username in ("student", "parent"):
+            self.client.login(username=username, password="password")  # nosec B106
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200, msg=username)
+            html = response.content.decode()
+            self.assertNotIn("Student Sign-ups", html, msg=username)
+            self.assertNotIn(other_student.display_name, html, msg=username)
+
+    def test_mentor_with_trip_write_can_edit_but_not_manage_rosters_or_delete(self):
+        from programs.models import RolePermission
+
+        RolePermission.objects.update_or_create(
+            organization=self.organization,
+            role="Mentor",
+            section="travel_details",
+            defaults={"can_read": True, "can_write": True},
+        )
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            departure=self.departure,
+            status=TravelSignup.INTERESTED,
+        )
+        self.client.login(username="mentor", password="password")  # nosec B106
+
+        list_url = reverse("travel:event_list", args=[self.program.id])
+        response = self.client.get(list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["can_add"])
+        self.assertTrue(response.context["can_edit"])
+        self.assertFalse(response.context["can_manage"])
+        html = response.content.decode()
+        self.assertIn(">Edit</a>", html)
+        self.assertNotIn(">Delete</a>", html)
+        self.assertIn("Student Sign-ups", html)
+        self.assertIn(self.student.display_name, html)
+        self.assertIn(signup.get_status_display(), html)
+        self.assertNotIn("Add a student", html)
+        self.assertNotIn(">Withdraw</button>", html)
+        self.assertNotIn("Add a mentor", html)
+
+        create_url = reverse("travel:event_create", args=[self.program.id])
+        edit_url = reverse("travel:event_edit", args=[self.program.id, self.event.id])
+        self.assertEqual(self.client.get(create_url).status_code, 200)
+        self.assertEqual(self.client.get(edit_url).status_code, 200)
+
+        payload = self.event_edit_payload()
+        payload["name"] = "Mentor Updated Trip"
+        response = self.client.post(edit_url, payload)
+        self.assertEqual(response.status_code, 302)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, "Mentor Updated Trip")
+        delete_url = reverse(
+            "travel:event_delete", args=[self.program.id, self.event.id]
+        )
+        self.assertEqual(self.client.get(delete_url).status_code, 302)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, "Mentor Updated Trip")
+
+    def test_mentor_trip_roster_omits_inconsistent_organization_links(self):
+        other_organization = Organization.objects.create(
+            name="Travel Beta",
+            slug="travel-beta",
+            subdomain="travel-beta",
+        )
+        foreign_event = TravelEvent.objects.create(
+            organization=other_organization,
+            program=self.program,
+            name="Foreign Trip",
+            start_date=self.event.start_date,
+            end_date=self.event.end_date,
+        )
+        foreign_departure = TravelDeparture.objects.create(
+            organization=other_organization,
+            event=foreign_event,
+            label="Foreign Bus",
+            leave_date=self.departure.leave_date,
+        )
+        foreign_student = Student.objects.create(
+            organization=other_organization,
+            legal_first_name="Foreign",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Wrong Departure",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        wrong_departure_student = Student.objects.get(
+            legal_first_name="Wrong Departure"
+        )
+        misowned_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Wrong Signup Owner",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        TravelSignup.objects.create(
+            organization=self.organization,
+            student=foreign_student,
+            event=self.event,
+            departure=self.departure,
+        )
+        TravelSignup.objects.create(
+            organization=self.organization,
+            student=wrong_departure_student,
+            event=self.event,
+            departure=foreign_departure,
+        )
+        TravelSignup.objects.create(
+            organization=other_organization,
+            student=misowned_student,
+            event=self.event,
+            departure=self.departure,
+        )
+
+        self.client.login(username="mentor", password="password")  # nosec B106
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        event = response.context["events"][0]
+        self.assertEqual(list(event.signups.all()), [])
+
+    def test_mentor_with_trip_write_cannot_manage_student_signups(self):
+        from programs.models import RolePermission
+
+        RolePermission.objects.update_or_create(
+            organization=self.organization,
+            role="Mentor",
+            section="travel_details",
+            defaults={"can_read": True, "can_write": True},
+        )
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+        self.client.login(username="mentor", password="password")  # nosec B106
+
+        add_url = reverse("travel:signup", args=[self.program.id, self.event.id])
+        self.client.post(
+            add_url,
+            {"student": self.student.pk, "departure": self.departure.pk},
+        )
+        self.assertEqual(
+            TravelSignup.objects.filter(event=self.event).count(),
+            1,
+        )
+
+        withdraw_url = reverse(
+            "travel:signup_withdraw", args=[self.program.id, signup.pk]
+        )
+        self.client.post(withdraw_url)
+        signup.refresh_from_db()
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
 
     def test_membership_lead_sees_trip_management_controls(self):
         self.client.login(username="lead", password="password")  # nosec B106

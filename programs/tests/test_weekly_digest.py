@@ -41,6 +41,7 @@ from programs.models import (
     Program,
     ProgramDocument,
     ProgramFeature,
+    RolePermission,
     Student,
     StudentDocument,
 )
@@ -228,6 +229,39 @@ class WeeklyDigestServiceTests(TestCase):
 
         # shift2 needs a mentor (0 signed up)
         self.assertGreaterEqual(len(data["needs_support_shifts"]), 1)
+
+    def test_mentor_digest_travel_highlights_respect_trip_details_permission(self):
+        event = TravelEvent.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Mentor Digest Trip",
+            start_date=self.today + datetime.timedelta(days=5),
+            end_date=self.today + datetime.timedelta(days=6),
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.program.organization,
+            adult=self.mentor,
+            event=event,
+        )
+
+        data = collect_mentor_digest_data(
+            self.mentor, days_ahead=7, reference_date=self.today
+        )
+        self.assertEqual(
+            [trip["event_name"] for trip in data["travel_highlights"]],
+            ["Mentor Digest Trip"],
+        )
+
+        RolePermission.objects.update_or_create(
+            organization=self.program.organization,
+            role="Mentor",
+            section="travel_details",
+            defaults={"can_read": False, "can_write": False},
+        )
+        restricted_data = collect_mentor_digest_data(
+            self.mentor, days_ahead=7, reference_date=self.today
+        )
+        self.assertEqual(restricted_data["travel_highlights"], [])
 
     def test_mentor_digest_excludes_foreign_outreach_travel_and_attendance(self):
         foreign_org = Organization.objects.create(

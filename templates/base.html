@@ -193,8 +193,11 @@
                                         {% if current_program_has_outreach %}
                                         <li><a class="dropdown-item{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a></li>
                                         {% endif %}
+                                        {% can_read user 'travel_details' current_program as can_read_trip_details %}
                                         {% if current_program_has_travel %}
+                                            {% if navbar_role != 'Mentor' or can_read_trip_details %}
                                         <li><a class="dropdown-item{% if 'travel' in request.path %} active{% endif %}" href="{% url 'travel:event_list' current_program.pk %}">Travel</a></li>
+                                            {% endif %}
                                         {% endif %}
                                     {% endif %}
                                     {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' %}

@@ -53,6 +53,17 @@ to the mentor's organization. Mismatched rows are omitted rather than repaired.
 
 Program-scoped travel management for competition trips and events (`/programs/<id>/travel/`). Gated by the `ProgramFeature` key `"travel"`.
 
+Mentor access to trip details is controlled by the organization-scoped
+`RolePermission` section `travel_details`. Mentors default to read-only access;
+write access allows creating and editing trip details, including departures,
+costs, and permission-form uploads. Mentors with read or write access can view
+student signup names, statuses, and departures; approved costs, permission-form
+acknowledgements, trip deletion, and student/parent/mentor roster management
+remain Lead-Mentor-only. This setting does not change the
+separate student and parent signup, approval, or chaperone self-service rules.
+Mentor travel links, profile commitments, and digest highlights follow the
+trip-details read permission; calendar feeds retain their separate access rules.
+
 ### Travel Models
 - **`TravelEvent`**: Destination, `start_date`, `end_date`, location, and optional `permission_form` file upload.
 - **`TravelDeparture`**: Specific bus/flight departures and departure times.

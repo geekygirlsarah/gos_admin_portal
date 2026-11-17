@@ -116,6 +116,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_read": orders_ok,
                         "can_write": orders_ok,
                     }
+                elif section_code == "travel_details":
+                    defaults = {
+                        "can_read": role_code == "Mentor",
+                        "can_write": False,
+                    }
                 elif section_code in ("mail_merge", "program_groups"):
                     defaults = {"can_read": False, "can_write": False}
                 RolePermission.objects.get_or_create(
@@ -132,7 +137,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         for section_code, section_name in sections:
             active_column = ORDERS_SECTIONS.get(section_code)
             is_mail_merge = section_code == "mail_merge"
-            mentor_only = section_code in ("mail_merge", "program_groups")
+            mentor_only = section_code in (
+                "mail_merge",
+                "program_groups",
+                "travel_details",
+            )
             uses_read = (
                 is_mail_merge or active_column is None or active_column == "view"
             )
