@@ -803,40 +803,44 @@ def collect_mentor_digest_data(
     # 4. Travel commitments
     travel_highlights = []
     try:
+        from programs.permission_views import can_user_read
         from travel.models import TravelMentorSignup
 
-        travel_signups = list(
-            TravelMentorSignup.objects.for_organization(organization_id)
-            .filter(
-                organization_id=organization_id,
-                adult=adult,
-                adult__organization_id=organization_id,
-                event__organization_id=organization_id,
-                event__end_date__gte=ref_date,
-                event__start_date__lte=end_date + datetime.timedelta(days=14),
-            )
-            .select_related("event")
-            .filter(
-                Q(event__program__isnull=True)
-                | Q(event__program__organization_id=organization_id)
-            )
-            .filter(
-                Q(departure__isnull=True)
-                | Q(
-                    departure__organization_id=organization_id,
-                    departure__event_id=F("event_id"),
+        if adult.user and can_user_read(
+            adult.user, "travel_details", org=adult.organization
+        ):
+            travel_signups = list(
+                TravelMentorSignup.objects.for_organization(organization_id)
+                .filter(
+                    organization_id=organization_id,
+                    adult=adult,
+                    adult__organization_id=organization_id,
+                    event__organization_id=organization_id,
+                    event__end_date__gte=ref_date,
+                    event__start_date__lte=end_date + datetime.timedelta(days=14),
+                )
+                .select_related("event")
+                .filter(
+                    Q(event__program__isnull=True)
+                    | Q(event__program__organization_id=organization_id)
+                )
+                .filter(
+                    Q(departure__isnull=True)
+                    | Q(
+                        departure__organization_id=organization_id,
+                        departure__event_id=F("event_id"),
+                    )
                 )
             )
-        )
-        for ts in travel_signups:
-            travel_highlights.append(
-                {
-                    "event_name": ts.event.name,
-                    "start_date": ts.event.start_date,
-                    "end_date": ts.event.end_date,
-                    "is_driver": ts.is_driver,
-                }
-            )
+            for ts in travel_signups:
+                travel_highlights.append(
+                    {
+                        "event_name": ts.event.name,
+                        "start_date": ts.event.start_date,
+                        "end_date": ts.event.end_date,
+                        "is_driver": ts.is_driver,
+                    }
+                )
     except Exception:
         travel_highlights = []
 

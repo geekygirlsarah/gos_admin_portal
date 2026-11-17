@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from outreach.models import OutreachMentorSignup
 from outreach.tests.factories import create_outreach_event
-from programs.models import Adult, Program, ProgramFeature
+from programs.models import Adult, Program, ProgramFeature, RolePermission
 from travel.models import TravelEvent, TravelMentorSignup
 
 
@@ -155,3 +155,17 @@ class MentorDashboardOutreachTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Location TBD")
+
+    def test_travel_signup_summary_respects_trip_details_read_permission(self):
+        RolePermission.objects.update_or_create(
+            organization=self.program.organization,
+            role="Mentor",
+            section="travel_details",
+            defaults={"can_read": False, "can_write": False},
+        )
+
+        response = self._travel_dashboard("Private Trip Location")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Future Travel Event")
+        self.assertNotContains(response, "Private Trip Location")

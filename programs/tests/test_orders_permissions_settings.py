@@ -194,3 +194,43 @@ class OrdersPermissionsSettingsTests(TestCase):
             response,
             f'id="perm_{mentor_req_perm.id}_write" value="write" checked',
         )
+
+    def test_travel_details_permission_defaults_to_mentor_read_only_and_persists(self):
+        self.client.force_login(self.lead_mentor)
+        response = self.client.get(self.settings_url)
+        self.assertEqual(response.status_code, 200)
+
+        organization = self.program.organization
+        mentor_perm = RolePermission.objects.for_organization(organization).get(
+            organization=organization,
+            role="Mentor",
+            section="travel_details",
+        )
+        self.assertTrue(mentor_perm.can_read)
+        self.assertFalse(mentor_perm.can_write)
+        self.assertContains(
+            response,
+            f'id="perm_{mentor_perm.id}_read" value="read" checked',
+        )
+        self.assertNotContains(
+            response,
+            f'id="perm_{mentor_perm.id}_write" value="write" checked',
+        )
+
+        for role in ("Parent", "Student"):
+            permission = RolePermission.objects.for_organization(organization).get(
+                organization=organization,
+                role=role,
+                section="travel_details",
+            )
+            self.assertFalse(permission.can_read)
+            self.assertFalse(permission.can_write)
+            self.assertNotContains(response, f'name="perm_{permission.id}"')
+
+        response = self.client.post(
+            self.update_url, {f"perm_{mentor_perm.id}": "write"}
+        )
+        self.assertEqual(response.status_code, 302)
+        mentor_perm.refresh_from_db()
+        self.assertTrue(mentor_perm.can_read)
+        self.assertTrue(mentor_perm.can_write)

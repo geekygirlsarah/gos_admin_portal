@@ -1,9 +1,9 @@
 from datetime import date
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
-from django.db.models import Prefetch, Value
+from django.db.models import F, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -16,6 +16,8 @@ from programs.models import Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
     can_user_delete,
+    can_user_read,
+    can_user_write,
     get_user_role,
     user_is_lead_mentor,
     user_is_mentor_or_lead,
@@ -83,8 +85,25 @@ class TravelProgramMixin:
         return reverse("travel:event_list", kwargs={"program_id": self.program.id})
 
 
+class MentorTripDetailsReadPermissionMixin:
+    def dispatch(self, request, *args, **kwargs):
+        org = getattr(request, "organization", None)
+        if get_user_role(request.user, org=org) == "Mentor" and not can_user_read(
+            request.user, "travel_details", self.program, org=org
+        ):
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class TravelEventListView(
-    LoginRequiredMixin, TravelProgramMixin, DynamicReadPermissionMixin, ListView
+    LoginRequiredMixin,
+    TravelProgramMixin,
+    MentorTripDetailsReadPermissionMixin,
+    DynamicReadPermissionMixin,
+    ListView,
 ):
     model = TravelEvent
     template_name = "travel/event_list.html"
@@ -95,7 +114,15 @@ class TravelEventListView(
         org = getattr(self.request, "organization", None)
         signups_qs = (
             TravelSignup.objects.for_organization(org)
-            .filter(event__program=self.program)
+            .filter(
+                event__program=self.program,
+                event__organization=org,
+                student__organization=org,
+            )
+            .filter(
+                Q(departure__isnull=True)
+                | Q(departure__organization=org, departure__event_id=F("event_id"))
+            )
             .select_related("student", "departure", "approved_by", "event")
             .prefetch_related("cost_items")
             .order_by(
@@ -239,11 +266,18 @@ class TravelEventListView(
         context["can_manage"] = False
         context["viewer_is_mentor"] = user_is_mentor_or_lead(user, org=org)
 
-        # Lead mentors manage trips; only they add/edit/delete or mark drivers.
+        # Trip details are editable by mentors when configured; trip rosters
+        # and deletion remain Lead-Mentor-only.
         is_lead = user_is_lead_mentor(user, org=org)
         context["is_lead"] = is_lead
         context["can_manage"] = is_lead
-        context["can_add"] = is_lead
+        context["can_view_student_signups"] = is_lead or role == "Mentor"
+        can_edit = is_lead or (
+            role == "Mentor"
+            and can_user_write(user, "travel_details", self.program, org=org)
+        )
+        context["can_edit"] = can_edit
+        context["can_add"] = can_edit
         context["staff_signup_forms"] = (
             self._staff_forms(upcoming_events) if is_lead else {}
         )
@@ -435,10 +469,29 @@ class TravelInlineFormsetsMixin:
         return response
 
 
+class MentorTripDetailsWritePermissionMixin(UserPassesTestMixin):
+    def test_func(self):
+        org = getattr(self.request, "organization", None)
+        role = get_user_role(self.request.user, org=org)
+        if role == "LeadMentor":
+            return True
+        return role == "Mentor" and can_user_write(
+            self.request.user, "travel_details", self.program, org=org
+        )
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(
+                self.request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+        return super().handle_no_permission()
+
+
 class TravelEventCreateView(
     LoginRequiredMixin,
     TravelProgramMixin,
-    LeadMentorRequiredMixin,
+    MentorTripDetailsWritePermissionMixin,
     TravelInlineFormsetsMixin,
     CreateView,
 ):
@@ -455,7 +508,7 @@ class TravelEventCreateView(
 class TravelEventUpdateView(
     LoginRequiredMixin,
     TravelProgramMixin,
-    LeadMentorRequiredMixin,
+    MentorTripDetailsWritePermissionMixin,
     TravelInlineFormsetsMixin,
     UpdateView,
 ):

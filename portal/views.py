@@ -508,6 +508,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 if adult and adult.is_mentor:
                     # Upcoming outreach shifts this mentor volunteered to support.
                     from outreach.models import OutreachMentorSignup
+                    from programs.permission_views import can_user_read
 
                     mentor_signups = (
                         OutreachMentorSignup.objects.filter(adult=adult)
@@ -523,7 +524,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     # Upcoming trips this mentor is going on.
                     from travel.utils import get_mentor_travel_signups
 
-                    context["mentor_travel_signups"] = get_mentor_travel_signups(adult)
+                    context["mentor_travel_signups"] = (
+                        get_mentor_travel_signups(adult)
+                        if can_user_read(self.request.user, "travel_details", org=org)
+                        else []
+                    )
 
             if adult.is_alumni:
                 student_record = adult.student_record

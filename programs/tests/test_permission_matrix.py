@@ -5,7 +5,9 @@ Tests match the actual implementation in programs.permission_views.
 
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.utils import timezone
 
+from organizations.models import Organization
 from programs.models import Adult, Program, RolePermission, Student
 from programs.permission_views import (
     can_user_read,
@@ -13,6 +15,7 @@ from programs.permission_views import (
     get_user_role,
     user_is_parent,
 )
+from travel.models import TravelEvent
 
 
 class PermissionMatrixTests(TestCase):
@@ -81,6 +84,7 @@ class PermissionMatrixTests(TestCase):
             "program_groups",
             "badge_award",
             "badge_manage",
+            "travel_details",
         }
         cls.mentor_default_no_read = {
             "attendance",
@@ -646,9 +650,77 @@ class PermissionEdgeCaseTests(TestCase):
             can_user_write(self.student_user, "outreach", org=self.organization)
         )
 
+    def test_travel_details_default_to_mentor_read_only(self):
+        self._clear_permissions()
+
+        self.assertTrue(
+            can_user_read(self.mentor_user, "travel_details", org=self.organization)
+        )
+        self.assertFalse(
+            can_user_write(self.mentor_user, "travel_details", org=self.organization)
+        )
+
+        for user in (self.parent_user, self.student_user, self.alumni_user):
+            with self.subTest(user=user.username):
+                self.assertFalse(
+                    can_user_read(user, "travel_details", org=self.organization)
+                )
+                self.assertFalse(
+                    can_user_write(user, "travel_details", org=self.organization)
+                )
+
+    def test_travel_details_permission_is_organization_scoped(self):
+        self._set_permission("Mentor", "travel_details", True, True)
+        other_organization = Organization.objects.create(
+            name="Other Organization",
+            slug="other-organization",
+            subdomain="other-organization",
+        )
+        other_program = Program.objects.create(
+            organization=other_organization, name="Other Program"
+        )
+        other_event = TravelEvent.objects.create(
+            organization=other_organization,
+            program=other_program,
+            name="Other Trip",
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+        )
+
+        self.assertFalse(
+            can_user_read(
+                self.mentor_user,
+                "travel_details",
+                obj=other_event,
+                org=self.organization,
+            )
+        )
+        self.assertFalse(
+            can_user_write(
+                self.mentor_user,
+                "travel_details",
+                obj=other_event,
+                org=self.organization,
+            )
+        )
+
+    def test_trip_details_permission_does_not_change_travel_signup_write(self):
+        self._set_permission("Mentor", "travel_details", False, False)
+
+        self.assertTrue(
+            can_user_write(self.mentor_user, "travel", org=self.organization)
+        )
+        self.assertTrue(
+            can_user_write(self.student_user, "travel", org=self.organization)
+        )
+
     def _set_permission(self, role, section, can_read=True, can_write=False):
         RolePermission.objects.update_or_create(
+            organization=self.organization,
             role=role,
             section=section,
             defaults={"can_read": can_read, "can_write": can_write},
         )
+
+    def _clear_permissions(self):
+        RolePermission.objects.all().delete()

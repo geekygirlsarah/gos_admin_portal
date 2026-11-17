@@ -344,6 +344,11 @@ def can_user_read(user, section, obj=None, org=None):
         return True
     if role is None:
         return False
+    if section == "travel_details":
+        if role != "Mentor":
+            return False
+        perm = _get_role_permission(role, section, org=org)
+        return perm.can_read if perm else True
     if section == "program_groups" and role != "Mentor":
         return False
     if section == "mail_merge" and role != "Mentor":
@@ -556,6 +561,11 @@ def can_user_write(user, section, obj=None, org=None):
     role = get_user_role(user, org=org)
     if role == "LeadMentor":
         return True
+    if section == "travel_details":
+        if role != "Mentor":
+            return False
+        perm = _get_role_permission(role, section, org=org)
+        return perm.can_write if perm else False
     if role == "Student" and section == "outreach":
         if obj:
             from outreach.models import OutreachEvent, OutreachShift, OutreachSignup

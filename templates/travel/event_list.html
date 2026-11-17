@@ -50,8 +50,10 @@
                             <i class="bi bi-file-earmark-pdf me-1"></i>Permission Form
                         </a>
                         {% endif %}
-                        {% if can_manage %}
+                        {% if can_edit %}
                         <a href="{% url 'travel:event_edit' program.id event.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        {% endif %}
+                        {% if can_manage %}
                         <a href="{% url 'travel:event_delete' program.id event.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
                         {% endif %}
                     </div>
@@ -101,8 +103,8 @@
                     </div>
                 </div>
 
-                {% if can_manage %}
-                {# ── Lead mentor: roster + add student ────────────────────── #}
+                {% if can_view_student_signups %}
+                {# ── Student roster; management remains Lead-Mentor-only ─── #}
                 <section class="card shadow-sm mt-3" aria-labelledby="student-signups-title">
                     <div class="card-header bg-white">
                         <h4 class="h6 fw-semibold mb-0" id="student-signups-title">Student Sign-ups</h4>
@@ -114,13 +116,13 @@
                         <strong>{{ signup.student.display_name }}</strong>
                         <span class="badge {% if signup.status == 'approved' %}bg-success{% elif signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ signup.get_status_display }}</span>
                         {% if signup.departure %}<span class="text-muted small ms-2">{{ signup.departure.display_label }}</span>{% endif %}
-                        {% if signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
+                        {% if can_manage and signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
                     </div>
                     <div class="d-flex gap-2 align-items-center">
-                        {% if signup.status == 'approved' and signup.permission_acknowledged %}
+                        {% if can_manage and signup.status == 'approved' and signup.permission_acknowledged %}
                         <span class="small text-muted"><i class="bi bi-check2-circle text-success me-1"></i>Permission form acknowledged</span>
                         {% endif %}
-                        {% if signup.can_be_withdrawn %}
+                        {% if can_manage and signup.can_be_withdrawn %}
                         <form action="{% url 'travel:signup_withdraw' program.id signup.id %}" method="post" class="mb-0">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Withdraw {{ signup.student.display_name }} from {{ event.name }}?">Withdraw</button>
@@ -132,6 +134,7 @@
                 <p class="text-muted small">No students signed up yet.</p>
                 {% endfor %}
 
+                {% if can_manage %}
                 {% with staff_form=staff_signup_forms|get_item:event.id %}
                 {% if staff_form %}
                 <form action="{% url 'travel:signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-end gap-2 mt-3">
@@ -164,6 +167,7 @@
                 </form>
                 {% endif %}
                 {% endwith %}
+                {% endif %}
                     </div>
                 </section>
                 {% endif %}
@@ -459,10 +463,12 @@
                 <span class="text-muted small ms-2">{{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}</span>
                 {% if event.location_name %}<span class="text-muted small ms-2">{{ event.location_name }}</span>{% endif %}
             </div>
-            {% if can_manage %}
+            {% if can_edit or can_manage %}
             <div class="d-flex gap-2">
-                <a href="{% url 'travel:event_edit' program.id event.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                {% if can_edit %}<a href="{% url 'travel:event_edit' program.id event.id %}" class="btn btn-sm btn-outline-primary">Edit</a>{% endif %}
+                {% if can_manage %}
                 <a href="{% url 'travel:event_delete' program.id event.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                {% endif %}
             </div>
             {% endif %}
         </div>
