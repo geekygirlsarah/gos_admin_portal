@@ -168,6 +168,11 @@ class TravelCostOption(models.Model):
         help_text="e.g. 'Hotel (2 nights)', 'Van ride', 'Flight'",
     )
     amount = models.DecimalField(max_digits=8, decimal_places=2)
+    is_required = models.BooleanField(
+        default=True,
+        verbose_name="Required fee",
+        help_text="Include this cost for every student traveling on this trip.",
+    )
     unit_label = models.CharField(
         max_length=50,
         default="per person",
@@ -245,6 +250,20 @@ class TravelSignup(models.Model):
         editable=False,
         help_text="Snapshot of the cost the parent approved.",
     )
+    balance_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Current trip charge included in the student's program balance.",
+    )
+    balance_effective_date = models.DateField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Date the current travel charge was posted to the program balance.",
+    )
     approved_by = models.ForeignKey(
         Adult,
         on_delete=models.SET_NULL,
@@ -280,9 +299,22 @@ class TravelSignup(models.Model):
 
     @property
     def total_cost(self):
-        """Sum of the selected cost check-list items (current prices)."""
-        amounts = self.cost_items.values_list("amount", flat=True)
-        return sum((Decimal(a) for a in amounts), Decimal("0"))
+        """Sum required costs and selected optional costs at current prices."""
+        selected_ids = {
+            option.pk
+            for option in self.cost_items.all()
+            if option.event_id == self.event_id
+            and option.organization_id == self.organization_id
+        }
+        return sum(
+            (
+                option.amount
+                for option in self.event.cost_options.all()
+                if option.organization_id == self.organization_id
+                and (option.is_required or option.pk in selected_ids)
+            ),
+            Decimal("0"),
+        )
 
     @property
     def can_be_approved(self):
@@ -319,6 +351,8 @@ class TravelSignup(models.Model):
 
         self.status = self.APPROVED
         self.approved_total = self.total_cost
+        self.balance_amount = self.approved_total
+        self.balance_effective_date = timezone.localdate()
         # Keep a parental snapshot: ensure approved_by is never empty. Approval
         # is parent-only in views, so adult is the approving parent.
         self.approved_by = adult
@@ -343,6 +377,8 @@ class TravelSignup(models.Model):
         self.approved_by = None
         self.approved_at = None
         self.approved_total = None
+        self.balance_amount = None
+        self.balance_effective_date = None
 
     def undo_decision(self):
         """Return an approved/declined signup to 'interested' so the family can
@@ -353,6 +389,8 @@ class TravelSignup(models.Model):
         self.approved_by = None
         self.approved_at = None
         self.approved_total = None
+        self.balance_amount = None
+        self.balance_effective_date = None
         self.permission_acknowledged = False
         self.permission_acknowledged_by = ""
         self.permission_acknowledged_at = None
@@ -366,6 +404,8 @@ class TravelSignup(models.Model):
         self.approved_by = None
         self.approved_at = None
         self.approved_total = None
+        self.balance_amount = None
+        self.balance_effective_date = None
 
     def rejoin(self):
         if not self.can_be_signed_up_again:

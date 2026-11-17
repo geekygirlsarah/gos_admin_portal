@@ -3,15 +3,17 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
-from django.db.models import F, Prefetch, Q, Value
+from django.db.models import Case, F, IntegerField, Prefetch, Q, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
+from audit.events import AuditEvent
 from audit.mixins import AuditedDeleteMixin
-from audit.service import log_deletion
+from audit.service import log_deletion, log_event
 from programs.models import Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -126,6 +128,14 @@ class TravelEventListView(
             .select_related("student", "departure", "approved_by", "event")
             .prefetch_related("cost_items")
             .order_by(
+                Case(
+                    When(status=TravelSignup.APPROVED, then=Value(0)),
+                    When(status=TravelSignup.INTERESTED, then=Value(1)),
+                    When(status=TravelSignup.DECLINED, then=Value(2)),
+                    When(status=TravelSignup.WITHDRAWN, then=Value(3)),
+                    default=Value(4),
+                    output_field=IntegerField(),
+                ),
                 Lower(
                     Coalesce(
                         NullIf("student__preferred_first_name", Value("")),
@@ -133,6 +143,7 @@ class TravelEventListView(
                     )
                 ),
                 Lower("student__last_name"),
+                "student__pk",
             )
         )
         departures_qs = TravelDeparture.objects.for_organization(org).filter(
@@ -428,6 +439,100 @@ class TravelInlineFormsetsMixin:
             )
         return context
 
+    def _update_approved_signup_charges(self):
+        organization = self.object.organization
+        signups = (
+            TravelSignup.objects.for_organization(organization)
+            .filter(
+                event=self.object,
+                event__organization=organization,
+                event__program=self.program,
+                event__program__organization=organization,
+                student__organization=organization,
+                status=TravelSignup.APPROVED,
+            )
+            .filter(
+                Q(departure__isnull=True)
+                | Q(
+                    departure__organization=organization,
+                    departure__event_id=F("event_id"),
+                )
+            )
+            .select_for_update()
+            .select_related("student", "event", "departure")
+            .prefetch_related("cost_items", "event__cost_options")
+            .order_by("pk")
+        )
+        updates = []
+        for signup in signups:
+            if signup.approved_total is None:
+                continue
+            previous_total = signup.approved_total
+            new_total = signup.total_cost
+            if previous_total == new_total:
+                continue
+
+            effective_date = timezone.localdate()
+            before = {
+                "status": signup.status,
+                "approved_total": str(previous_total),
+                "approved_by_id": signup.approved_by_id,
+                "approved_at": (
+                    signup.approved_at.isoformat() if signup.approved_at else None
+                ),
+                "balance_amount": (
+                    str(signup.balance_amount)
+                    if signup.balance_amount is not None
+                    else None
+                ),
+                "balance_effective_date": (
+                    signup.balance_effective_date.isoformat()
+                    if signup.balance_effective_date
+                    else None
+                ),
+            }
+            signup.status = TravelSignup.INTERESTED
+            signup.approved_by = None
+            signup.approved_at = None
+            signup.approved_total = None
+            signup.balance_amount = new_total
+            signup.balance_effective_date = effective_date
+            signup.save(
+                update_fields=[
+                    "status",
+                    "approved_by",
+                    "approved_at",
+                    "approved_total",
+                    "balance_amount",
+                    "balance_effective_date",
+                    "updated_at",
+                ]
+            )
+            log_event(
+                event=AuditEvent.TRAVEL_CHARGE_UPDATED,
+                resource=signup,
+                request=self.request,
+                organization=organization,
+                before=before,
+                after={
+                    "status": signup.status,
+                    "approved_total": None,
+                    "approved_by_id": None,
+                    "approved_at": None,
+                    "balance_amount": str(new_total),
+                    "balance_effective_date": effective_date.isoformat(),
+                },
+                notes="Travel fee total changed; parent reapproval is required.",
+            )
+            updates.append(
+                {
+                    "signup_id": signup.pk,
+                    "previous_total": previous_total,
+                    "new_total": new_total,
+                }
+            )
+        return updates
+
     def form_valid(self, form):
         context = self.get_context_data(form=form)
         departure_formset = context["departure_formset"]
@@ -452,10 +557,16 @@ class TravelInlineFormsetsMixin:
                     ):
                         inline_form.instance.organization = self.object.organization
                 formset.save()
+            signup_updates = (
+                self._update_approved_signup_charges() if is_update and changes else []
+            )
             if is_update and changes:
                 transaction.on_commit(
-                    lambda event_id=self.object.pk, organization_id=self.object.organization_id, changes=changes: notify_approved_trip_changes(
-                        event_id, organization_id, changes
+                    lambda event_id=self.object.pk, organization_id=self.object.organization_id, changes=changes, signup_updates=signup_updates: notify_approved_trip_changes(
+                        event_id,
+                        organization_id,
+                        changes,
+                        signup_updates=signup_updates,
                     )
                 )
         if is_update and changes:

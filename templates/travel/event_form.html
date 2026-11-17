@@ -137,7 +137,7 @@
                 <h2 class="h5 fw-semibold mt-4 mb-2">
                     <i class="bi bi-cash-coin me-1 text-success"></i>Costs
                 </h2>
-                <p class="text-muted small mb-2">Check-list items that make up the trip's cost (hotel, van, flight, additional fees). Students/parents will pick the ones that apply to them. Sort order: lower numbers appear first.</p>
+                <p class="text-muted small mb-2">Add costs such as hotels, vans, or flights. New costs are required for every traveler by default; mark a cost optional only when families may decline it. Required costs are included automatically. Sort order: lower numbers appear first.</p>
                 {{ cost_formset.management_form }}
                 {% if cost_formset.non_form_errors %}
                 <div class="alert alert-danger">{{ cost_formset.non_form_errors }}</div>
@@ -147,7 +147,7 @@
                     <div class="card card-body bg-light mb-3">
                         {{ form.id }}
                         <div class="row g-2">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
                                 {{ form.name }}
                             </div>
@@ -155,13 +155,19 @@
                                 <label class="form-label small mb-0" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
                                 {{ form.amount }}
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label small mb-0" for="{{ form.unit_label.id_for_label }}">{{ form.unit_label.label }}</label>
                                 {{ form.unit_label }}
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label small mb-0" for="{{ form.sort_order.id_for_label }}">{{ form.sort_order.label }}</label>
                                 {{ form.sort_order }}
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check pt-3">
+                                    {{ form.is_required }}
+                                    <label class="form-check-label small" for="{{ form.is_required.id_for_label }}">Required for every student</label>
+                                </div>
                             </div>
                             <div class="col-md-12">
                                 <label class="form-label small mb-0" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
@@ -227,7 +233,7 @@
     <div class="card card-body bg-light mb-3">
         {{ cost_formset.empty_form.id }}
         <div class="row g-2">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small mb-0" for="{{ cost_formset.empty_form.name.id_for_label }}">{{ cost_formset.empty_form.name.label }}</label>
                 {{ cost_formset.empty_form.name }}
             </div>
@@ -235,13 +241,19 @@
                 <label class="form-label small mb-0" for="{{ cost_formset.empty_form.amount.id_for_label }}">{{ cost_formset.empty_form.amount.label }}</label>
                 {{ cost_formset.empty_form.amount }}
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-0" for="{{ cost_formset.empty_form.unit_label.id_for_label }}">{{ cost_formset.empty_form.unit_label.label }}</label>
                 {{ cost_formset.empty_form.unit_label }}
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-0" for="{{ cost_formset.empty_form.sort_order.id_for_label }}">{{ cost_formset.empty_form.sort_order.label }}</label>
                 {{ cost_formset.empty_form.sort_order }}
+            </div>
+            <div class="col-md-3">
+                <div class="form-check pt-3">
+                    {{ cost_formset.empty_form.is_required }}
+                    <label class="form-check-label small" for="{{ cost_formset.empty_form.is_required.id_for_label }}">Required for every student</label>
+                </div>
             </div>
             <div class="col-md-12">
                 <label class="form-label small mb-0" for="{{ cost_formset.empty_form.notes.id_for_label }}">{{ cost_formset.empty_form.notes.label }}</label>

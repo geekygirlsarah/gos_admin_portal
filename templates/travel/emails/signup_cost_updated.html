@@ -1,0 +1,11 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel cost updated{% endblock %}
+{% block header %}Updated Travel Cost: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p>The travel cost for <strong>{{ student.display_name }}</strong> on <strong>{{ event.name }}</strong> has changed.</p>
+<p>Previously approved amount: <strong>${{ previous_total|floatformat:2 }}</strong><br>
+Current amount: <strong>${{ new_total|floatformat:2 }}</strong></p>
+<p>The current amount is reflected in the student's program balance while approval is pending. The previous approval is no longer valid, and a parent or guardian needs to review and approve the updated amount.</p>
+<p><a href="{{ trip_link }}">Review the trip details</a></p>
+{% endblock %}

@@ -110,7 +110,12 @@
                         <h4 class="h6 fw-semibold mb-0" id="student-signups-title">Student Sign-ups</h4>
                     </div>
                     <div class="card-body">
-                {% for signup in event.signups.all %}
+                {% regroup event.signups.all by status as signup_status_groups %}
+                {% if signup_status_groups %}
+                {% for status_group in signup_status_groups %}
+                <div class="student-signup-status-group mb-3" data-status="{{ status_group.grouper }}">
+                    <h5 class="h6 fw-semibold">{% if status_group.grouper == 'approved' %}Parent Approved{% elif status_group.grouper == 'interested' %}Interested{% elif status_group.grouper == 'declined' %}Declined{% else %}{{ status_group.list.0.get_status_display }}{% endif %}</h5>
+                {% for signup in status_group.list %}
                 <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom">
                     <div>
                         <strong>{{ signup.student.display_name }}</strong>
@@ -130,9 +135,12 @@
                         {% endif %}
                     </div>
                 </div>
-                {% empty %}
-                <p class="text-muted small">No students signed up yet.</p>
                 {% endfor %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted small">No students signed up yet.</p>
+                {% endif %}
 
                 {% if can_manage %}
                 {% with staff_form=staff_signup_forms|get_item:event.id %}
@@ -262,7 +270,7 @@
                             <span class="badge {% if my_signup.status == 'approved' %}bg-success{% elif my_signup.status == 'withdrawn' %}bg-secondary{% else %}bg-warning text-dark{% endif %} ms-1 rounded-pill">{{ my_signup.get_status_display }}</span>
                             {% if my_signup.departure %}<span class="small text-muted ms-2">{{ my_signup.departure.display_label }}</span>{% endif %}
                             {% if my_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ my_signup.approved_total|floatformat:2 }}</span>
-                            {% elif my_signup.status == 'interested' and my_signup.total_cost %}<span class="small text-muted ms-2">Planned cost: ${{ my_signup.total_cost|floatformat:2 }}</span>{% endif %}
+                            {% elif my_signup.status == 'interested' %}<span class="small text-muted ms-2">Current trip cost: ${{ my_signup.total_cost|floatformat:2 }}</span>{% endif %}
                         </div>
                         <div class="d-flex gap-2">
                             {% if my_signup.can_be_withdrawn %}
@@ -301,11 +309,16 @@
                         </button>
                     </div>
                     <div class="d-flex flex-wrap gap-3 mt-2">
-                        <span class="small text-muted me-2">I'd like to be charged for:</span>
+                        <span class="small text-muted me-2">Trip costs (required items are included automatically):</span>
                         {% for opt in event.ordered_cost_options %}
                         <div class="form-check form-check-inline small">
+                            {% if opt.is_required %}
+                            <input class="form-check-input" type="checkbox" checked disabled id="student_cost_{{ event.id }}_{{ opt.id }}">
+                            <input type="hidden" name="cost_items" value="{{ opt.id }}">
+                            {% else %}
                             <input class="form-check-input" type="checkbox" name="cost_items" value="{{ opt.id }}" id="student_cost_{{ event.id }}_{{ opt.id }}">
-                            <label class="form-check-label" for="student_cost_{{ event.id }}_{{ opt.id }}">{{ opt.name }} (${{ opt.amount|floatformat:2 }})</label>
+                            {% endif %}
+                            <label class="form-check-label" for="student_cost_{{ event.id }}_{{ opt.id }}">{{ opt.name }} (${{ opt.amount|floatformat:2 }}){% if opt.is_required %} <strong>Required</strong>{% endif %}</label>
                         </div>
                         {% endfor %}
                     </div>
@@ -331,7 +344,8 @@
                         <strong>{{ parent_row.student.display_name }}</strong>
                         <span class="badge {% if parent_signup.status == 'approved' %}bg-success{% elif parent_signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ parent_signup.get_status_display }}</span>
                         {% if parent_signup.departure %}<span class="small text-muted ms-2">{{ parent_signup.departure.display_label }}</span>{% endif %}
-                        {% if parent_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ parent_signup.approved_total|floatformat:2 }}</span>{% endif %}
+                        {% if parent_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ parent_signup.approved_total|floatformat:2 }}</span>
+                        {% elif parent_signup.status == 'interested' %}<span class="small text-muted ms-2">Current trip cost: ${{ parent_signup.total_cost|floatformat:2 }}</span>{% endif %}
                     </div>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
                         {% if parent_signup.status == 'interested' %}

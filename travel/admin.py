@@ -19,7 +19,7 @@ class TravelDepartureInline(admin.TabularInline):
 class TravelCostOptionInline(admin.TabularInline):
     model = TravelCostOption
     extra = 2
-    fields = ("name", "amount", "unit_label", "sort_order")
+    fields = ("name", "amount", "is_required", "unit_label", "sort_order")
 
 
 class TravelSignupInline(admin.TabularInline):
@@ -87,7 +87,14 @@ class TravelDepartureAdmin(admin.ModelAdmin):
 
 @admin.register(TravelCostOption)
 class TravelCostOptionAdmin(admin.ModelAdmin):
-    list_display = ("event", "name", "amount", "unit_label", "sort_order")
+    list_display = (
+        "event",
+        "name",
+        "amount",
+        "is_required",
+        "unit_label",
+        "sort_order",
+    )
     list_select_related = ("event__program",)
     autocomplete_fields = ["event"]
 

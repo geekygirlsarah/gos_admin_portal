@@ -6,8 +6,10 @@ student (when they have a linked account) and/or their parents -- using
 ``programs/signals.py``.
 """
 
+from django.db.models import F, Prefetch, Q
 from django.urls import reverse
 
+from programs.models import AdultStudentRelationship
 from programs.utils import send_templated_notification
 from travel.models import (
     TravelEvent,
@@ -301,8 +303,8 @@ def trip_change_summary(event_form, departure_formset, cost_formset):
     return changes
 
 
-def notify_approved_trip_changes(event_id, organization_id, changes):
-    """Notify approved students, their guardians, and signed-up adult attendees."""
+def notify_approved_trip_changes(event_id, organization_id, changes, signup_updates=()):
+    """Notify affected families and signed-up adult attendees about trip edits."""
     if not changes:
         return
 
@@ -318,6 +320,76 @@ def notify_approved_trip_changes(event_id, organization_id, changes):
     if event.program_id and event.program.organization_id != organization.pk:
         return
 
+    signup_updates_by_id = {update["signup_id"]: update for update in signup_updates}
+    if signup_updates_by_id:
+        relationships = (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                adult__organization=organization,
+                student__organization=organization,
+            )
+            .select_related("adult", "student")
+        )
+        updated_signups = (
+            TravelSignup.objects.for_organization(organization)
+            .filter(
+                pk__in=signup_updates_by_id,
+                event=event,
+                event__organization=organization,
+                event__program__organization=organization,
+                student__organization=organization,
+            )
+            .filter(
+                Q(departure__isnull=True)
+                | Q(
+                    departure__organization=organization,
+                    departure__event_id=F("event_id"),
+                )
+            )
+            .select_related("student__user", "event", "event__program", "departure")
+            .prefetch_related(
+                Prefetch(
+                    "student__adultstudentrelationship_set",
+                    queryset=relationships,
+                    to_attr="tenant_contact_relationships",
+                )
+            )
+        )
+        for signup in updated_signups:
+            if (
+                _trusted_notification_organization(signup, signup.student)
+                != organization
+            ):
+                continue
+            if signup.departure_id and signup.departure.event_id != event.pk:
+                continue
+            update = signup_updates_by_id[signup.pk]
+            context = {
+                "event": event,
+                "program": event.program,
+                "student": signup.student,
+                "previous_total": update["previous_total"],
+                "new_total": update["new_total"],
+                "trip_link": trip_link(event),
+            }
+            recipients = student_recipients(signup.student) + parent_recipients(
+                signup.student, organization=organization
+            )
+            seen = set()
+            for email in recipients:
+                normalized_email = email.strip().casefold()
+                if not normalized_email or normalized_email in seen:
+                    continue
+                seen.add(normalized_email)
+                send_templated_notification(
+                    f"Travel: Updated cost for {event.name}",
+                    "travel/emails/signup_cost_updated.html",
+                    context,
+                    [email.strip()],
+                    organization=organization,
+                )
+
     signups = (
         TravelSignup.objects.for_organization(organization)
         .filter(
@@ -326,7 +398,7 @@ def notify_approved_trip_changes(event_id, organization_id, changes):
             student__organization=organization,
             status=TravelSignup.APPROVED,
         )
-        .select_related("student", "event", "departure")
+        .select_related("student__user", "event", "departure")
     )
     recipients = {}
     for signup in signups:

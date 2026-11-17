@@ -22,6 +22,7 @@ from programs.utils.balances import (
     get_student_program_balance,
     program_overlaps_sliding_window,
 )
+from travel.models import TravelEvent, TravelSignup
 
 
 class SlidingScaleRoundingEdgeCasesTests(TestCase):
@@ -261,6 +262,65 @@ class SlidingScaleDateWindowEdgeCasesTests(TestCase):
         data = get_student_balance_data(self.student, self.program)
         self.assertEqual(data["total_sliding"], Decimal("0"))
         self.assertEqual(data["balance"], Decimal("300.00"))
+
+    def test_travel_charge_uses_sliding_scale_and_existing_payments(self):
+        SlidingScale.objects.create(
+            student=self.student,
+            percent=50,
+            date=datetime.date(2026, 3, 1),
+            expiration_date=datetime.date(2026, 6, 30),
+            status=SlidingScale.STATUS_APPROVED,
+        )
+        event = TravelEvent.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Competition Trip",
+            start_date=datetime.date(2026, 4, 15),
+            end_date=datetime.date(2026, 4, 17),
+        )
+        TravelSignup.objects.create(
+            organization=self.program.organization,
+            student=self.student,
+            event=event,
+            status=TravelSignup.INTERESTED,
+            balance_amount=Decimal("120.00"),
+            balance_effective_date=datetime.date(2026, 4, 15),
+        )
+        Payment.objects.create(
+            student=self.student,
+            program=self.program,
+            amount=Decimal("20.00"),
+            paid_on=datetime.date(2026, 4, 20),
+            paid_via="cash",
+        )
+
+        data = get_student_balance_data(self.student, self.program)
+
+        self.assertEqual(data["total_fees"], Decimal("420.00"))
+        self.assertEqual(data["total_sliding"], Decimal("110.00"))
+        self.assertEqual(data["total_payments"], Decimal("20.00"))
+        self.assertEqual(data["balance"], Decimal("290.00"))
+        travel_entry = next(
+            entry for entry in data["entries"] if entry["type"] == "Travel Fee"
+        )
+        self.assertEqual(travel_entry["amount"], Decimal("120.00"))
+        self.assertEqual(travel_entry["adjusted_amount"], Decimal("60.00"))
+
+        event.delete()
+
+        data_after_trip_deletion = get_student_balance_data(self.student, self.program)
+        self.assertEqual(data_after_trip_deletion["total_fees"], Decimal("300.00"))
+        self.assertEqual(data_after_trip_deletion["total_payments"], Decimal("20.00"))
+        self.assertEqual(data_after_trip_deletion["balance"], Decimal("230.00"))
+        self.assertFalse(
+            any(
+                entry["type"] == "Travel Fee"
+                for entry in data_after_trip_deletion["entries"]
+            )
+        )
+        self.assertTrue(
+            Payment.objects.filter(student=self.student, program=self.program).exists()
+        )
 
 
 class MultiProgramAndOverpaymentEdgeCasesTests(TestCase):

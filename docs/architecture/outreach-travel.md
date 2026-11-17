@@ -67,8 +67,8 @@ trip-details read permission; calendar feeds retain their separate access rules.
 ### Travel Models
 - **`TravelEvent`**: Destination, `start_date`, `end_date`, location, and optional `permission_form` file upload.
 - **`TravelDeparture`**: Specific bus/flight departures and departure times.
-- **`TravelCostOption`**: Selectable checklist fee options whose totals sum into the signup `cost_total`.
-- **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`).
+- **`TravelCostOption`**: Per-traveler fee options. Required options are included for every signup; new options default to required, while existing options are migrated as optional.
+- **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`). Approval posts the approved total to the student's program balance.
 - **`TravelMentorSignup`**: Mentor registrations with `is_driver` flag and departure choice.
 - **`TravelParentChaperoneSignup`**: Parent chaperone roster.
 
@@ -88,7 +88,8 @@ records are preserved for review rather than detached or reassigned.
 - Students submit initial sign-ups (`interested`).
 - **Guardian Approval Invariant**: **Only a student's linked parents can approve or decline** (`_ParentSignupActionView` verifies `parent.students.filter(pk=...)`).
 - All state transitions dispatch transactional notification emails via `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`).
-- When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email. Existing approval and permission acknowledgements remain historical snapshots; a trip edit does not silently change them.
+- When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email.
+- If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending parent approval. An after-commit email with that student's previous and current totals goes only to the student and eligible local guardians; other attendees do not receive the individualized amount. Edits that do not change a student's total preserve the approval. Charge changes are audit logged.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.
 
 ### Parent Chaperone System
