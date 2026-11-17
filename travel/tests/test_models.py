@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -76,6 +77,28 @@ class TravelEventModelTest(TestCase):
         signup.cost_items.set([hotel, van])
         self.assertEqual(signup.total_cost, 350)
 
+    def test_new_cost_options_are_required_by_default(self):
+        hotel = TravelCostOption.objects.create(
+            event=self.event, name="Hotel", amount="200.00"
+        )
+        signup = TravelSignup.objects.create(student=self.student, event=self.event)
+
+        self.assertTrue(hotel.is_required)
+        self.assertEqual(signup.total_cost, Decimal("200.00"))
+
+    def test_total_cost_always_includes_required_options(self):
+        hotel = TravelCostOption.objects.create(
+            event=self.event, name="Hotel", amount="200.00", is_required=True
+        )
+        van = TravelCostOption.objects.create(
+            event=self.event, name="Van", amount="50.00", is_required=False
+        )
+        signup = TravelSignup.objects.create(student=self.student, event=self.event)
+
+        self.assertEqual(signup.total_cost, Decimal("200.00"))
+        signup.cost_items.set([van])
+        self.assertEqual(signup.total_cost, Decimal("250.00"))
+
     def test_approve_snapshot_and_clear_on_undo(self):
         option = TravelCostOption.objects.create(
             event=self.event, name="Hotel", amount="300.00"
@@ -87,6 +110,8 @@ class TravelEventModelTest(TestCase):
 
         self.assertEqual(signup.status, TravelSignup.APPROVED)
         self.assertEqual(signup.approved_total, 300)
+        self.assertEqual(signup.balance_amount, Decimal("300.00"))
+        self.assertEqual(signup.balance_effective_date, date.today())
         self.assertEqual(signup.approved_by, self.parent)
         self.assertIsNotNone(signup.approved_at)
 
@@ -94,6 +119,8 @@ class TravelEventModelTest(TestCase):
         signup.save()
         self.assertEqual(signup.status, TravelSignup.INTERESTED)
         self.assertIsNone(signup.approved_total)
+        self.assertIsNone(signup.balance_amount)
+        self.assertIsNone(signup.balance_effective_date)
         self.assertIsNone(signup.approved_by)
         self.assertIsNone(signup.approved_at)
 
@@ -111,6 +138,37 @@ class TravelEventModelTest(TestCase):
         self.assertTrue(signup.permission_acknowledged)
         self.assertEqual(signup.permission_acknowledged_by, "Mom")
         self.assertIsNotNone(signup.permission_acknowledged_at)
+
+    def test_decline_and_withdraw_remove_travel_balance_charges(self):
+        withdrawn = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total=Decimal("125.00"),
+            balance_amount=Decimal("125.00"),
+            balance_effective_date=date.today(),
+        )
+        withdrawn.withdraw()
+        withdrawn.save()
+
+        self.assertIsNone(withdrawn.balance_amount)
+        self.assertIsNone(withdrawn.balance_effective_date)
+
+        declined = TravelSignup.objects.create(
+            student=self.student,
+            event=TravelEvent.objects.create(
+                name="Second Trip",
+                start_date=date(2026, 5, 1),
+                end_date=date(2026, 5, 3),
+            ),
+            balance_amount=Decimal("75.00"),
+            balance_effective_date=date.today(),
+        )
+        declined.decline()
+        declined.save()
+
+        self.assertIsNone(declined.balance_amount)
+        self.assertIsNone(declined.balance_effective_date)
 
     def test_approve_not_allowed_outside_interested(self):
         signup = TravelSignup.objects.create(student=self.student, event=self.event)

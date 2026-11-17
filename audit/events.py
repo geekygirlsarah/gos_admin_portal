@@ -45,6 +45,9 @@ class AuditEvent(models.TextChoices):
     BADGE_UPDATED = "BADGE_UPDATED", "Badge updated"
     BADGE_DELETED = "BADGE_DELETED", "Badge deleted"
 
+    # --- Travel ---
+    TRAVEL_CHARGE_UPDATED = "TRAVEL_CHARGE_UPDATED", "Travel charge updated"
+
     # --- Multi-Tenant & Platform Admin ---
     USER_IMPERSONATED = "USER_IMPERSONATED", "User impersonated by superuser"
     IMPERSONATION_ENDED = "IMPERSONATION_ENDED", "User impersonation ended"

@@ -8,14 +8,17 @@ All notable changes to this project will be documented in this file.
 - Portal announcements support sanitized light formatting, separate unread and read sections, recipient dismissal, and scoped publisher management with non-destructive withdrawal.
 - Lead Mentors can add active, organization-local mentors to travel trips.
 - Portal Settings can grant mentors read-only or read/write access to trip details; trip deletion and roster management remain Lead-Mentor-only.
+- New travel fee options are required by default, and trip fees can be marked required for every traveler.
 
 ### Changed
 - Announcement menus and publisher workflows consistently use “Announcements”; `/programs/announcements/` and `/platform-admin/announcements/` are canonical, with previous `/notifications/` URLs retained for existing links.
 - Travel trip forms are grouped into clearer sections, and edits notify approved participants with a summary of changed details.
 - Trip participant lists and their add controls are grouped into separate student, parent chaperone, and mentor cards.
 - Mentors with travel read or write access can view student sign-ups; approval details and roster management remain Lead-Mentor-only.
+- Trip student rosters group sign-ups by parent approval status and sort students by name within each group.
 - Successful trip edits now show an informational notice describing who receives update emails.
 - Trip change emails also reach opted-in signed-up mentors and parent chaperones, including when no students are approved.
+- Approved travel charges are included in program balances; a changed student total is applied immediately, returns approval to pending, and is emailed privately to that student and eligible guardians.
 
 ## 2026-11-15
 

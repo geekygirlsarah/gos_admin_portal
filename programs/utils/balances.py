@@ -42,14 +42,30 @@ def program_overlaps_sliding_window(program, sliding, fee_records=None):
 
     if prog_start is None or prog_end is None:
         if fee_records is None:
+            from travel.models import TravelSignup
+
             from ..models import Fee
 
-            fee_records = Fee.objects.filter(program=program)
+            fee_records = list(Fee.objects.filter(program=program))
+            fee_records.extend(
+                TravelSignup.objects.filter(
+                    event__program=program,
+                    balance_amount__isnull=False,
+                    organization_id=program.organization_id,
+                    student__organization_id=program.organization_id,
+                    event__organization_id=program.organization_id,
+                ).select_related("event")
+            )
 
-        fee_dates = [
-            f.effective_date or (f.created_at.date() if f.created_at else None)
-            for f in fee_records
-        ]
+        fee_dates = []
+        for record in fee_records:
+            effective_date = getattr(record, "effective_date", None) or getattr(
+                record, "balance_effective_date", None
+            )
+            created_at = getattr(record, "created_at", None)
+            fee_dates.append(
+                effective_date or (created_at.date() if created_at else None)
+            )
         valid_fee_dates = [d for d in fee_dates if d is not None]
         if valid_fee_dates:
             if prog_start is None:
@@ -91,7 +107,7 @@ def get_active_sliding_scale(student, on_date=None):
     return qs.order_by("-date", "-created_at").first()
 
 
-def get_sliding_scales_for_program(student, program):
+def get_sliding_scales_for_program(student, program, fee_records=None):
     """Return all SlidingScale records applicable to a student in a program,
     ordered by most recent start date.
     """
@@ -103,7 +119,16 @@ def get_sliding_scales_for_program(student, program):
     approved = SlidingScale.objects.filter(
         student=student, status=SlidingScale.STATUS_APPROVED
     ).order_by("-date", "-created_at")
-    return [s for s in approved if program_overlaps_sliding_window(program, s)]
+    if fee_records is None:
+        from ..models import Fee
+
+        fee_records = list(Fee.objects.filter(program=program))
+        fee_records.extend(_validated_travel_charges(student, program))
+    return [
+        scale
+        for scale in approved
+        if program_overlaps_sliding_window(program, scale, fee_records=fee_records)
+    ]
 
 
 def get_sliding_scale_for_program(student, program):
@@ -127,18 +152,24 @@ def get_student_balance_data(student, program, can_view_sliding=True):
 
     # Gather entries: fees (program), sliding scale (if exists), and payments
     entries = []
+    fees = list(Fee.objects.filter(program=program))
+    travel_charges = _validated_travel_charges(student, program)
+    balance_records = [*fees, *travel_charges]
     all_overlapping_sliding_scales = (
-        get_sliding_scales_for_program(student, program) if can_view_sliding else []
+        get_sliding_scales_for_program(student, program, balance_records)
+        if can_view_sliding
+        else []
     )
     sliding = (
         all_overlapping_sliding_scales[0] if all_overlapping_sliding_scales else None
     )
     sliding_overlaps = (
-        program_overlaps_sliding_window(program, sliding) if sliding else False
+        program_overlaps_sliding_window(program, sliding, balance_records)
+        if sliding
+        else False
     )
 
     # Fees: positive amounts
-    fees = Fee.objects.filter(program=program)
     for fee in fees:
         if (
             fee.assignments.exists()
@@ -174,10 +205,43 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             }
         )
 
+    for signup in travel_charges:
+        fee_date = signup.balance_effective_date or signup.event.start_date
+        adjusted_amount = signup.balance_amount
+        starts_ok = (
+            not sliding or not sliding.date or (fee_date and fee_date >= sliding.date)
+        )
+        ends_ok = (
+            not sliding
+            or not sliding.expiration_date
+            or (fee_date and fee_date <= sliding.expiration_date)
+        )
+        if (
+            sliding
+            and sliding.percent is not None
+            and can_view_sliding
+            and sliding_overlaps
+            and starts_ok
+            and ends_ok
+        ):
+            adjusted_amount -= compute_sliding_discount_rounded(
+                signup.balance_amount, sliding.percent
+            )
+        entries.append(
+            {
+                "date": fee_date,
+                "due_date": None,
+                "type": "Travel Fee",
+                "name": f"Travel: {signup.event.name}",
+                "amount": signup.balance_amount,
+                "adjusted_amount": adjusted_amount,
+            }
+        )
+
     # Compute total fees for discount: ONLY include fees applicable to this student
     # and on or after the sliding scale's effective date.
     applicable_fees_for_discount = []
-    for fee in Fee.objects.filter(program=program):
+    for fee in fees:
         if (
             fee.assignments.exists()
             and not fee.assignments.filter(student=student).exists()
@@ -198,6 +262,19 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             continue
 
         applicable_fees_for_discount.append(fee.amount)
+
+    for signup in travel_charges:
+        fee_date = signup.balance_effective_date or signup.event.start_date
+        if sliding and sliding.date and fee_date and fee_date < sliding.date:
+            continue
+        if (
+            sliding
+            and sliding.expiration_date
+            and fee_date
+            and fee_date > sliding.expiration_date
+        ):
+            continue
+        applicable_fees_for_discount.append(signup.balance_amount)
 
     total_fees_for_discount = sum(
         applicable_fees_for_discount,
@@ -249,7 +326,7 @@ def get_student_balance_data(student, program, can_view_sliding=True):
     # Sort by date
     entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
 
-    total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
+    total_fees = sum(e["amount"] for e in entries if e["type"] in ("Fee", "Travel Fee"))
     total_sliding = discount
     total_payments = -sum(
         [e["amount"] for e in entries if e["type"] == "Payment"]
@@ -281,10 +358,46 @@ class InconsistentBalanceStatementError(Exception):
     """The statement cannot be calculated safely from its related records."""
 
 
+def _validated_travel_charges(student, program):
+    """Return this student's charges only when every linked travel record is local."""
+    from travel.models import TravelSignup
+
+    signups = list(
+        TravelSignup.objects.filter(
+            student=student,
+            event__program=program,
+            balance_amount__isnull=False,
+        ).select_related(
+            "organization",
+            "student",
+            "event__organization",
+            "event__program__organization",
+            "departure",
+        )
+    )
+    for signup in signups:
+        if (
+            signup.organization_id != student.organization_id
+            or signup.event.organization_id != student.organization_id
+            or signup.event.program.organization_id != student.organization_id
+            or (
+                signup.departure_id
+                and (
+                    signup.departure.organization_id != student.organization_id
+                    or signup.departure.event_id != signup.event_id
+                )
+            )
+        ):
+            raise InconsistentBalanceStatementError
+    return signups
+
+
 class TenantBalanceStatementCalculator:
     """Calculate statements from a tenant-validated, batched set of records."""
 
     def __init__(self, organization, students, programs):
+        from travel.models import TravelSignup
+
         from ..models import Enrollment, Fee, FeeAssignment, Payment, SlidingScale
 
         self.organization_id = getattr(organization, "pk", None)
@@ -299,6 +412,7 @@ class TenantBalanceStatementCalculator:
             if program.pk and program.organization_id == self.organization_id
         }
         self.fees = defaultdict(list)
+        self.travel_signups = defaultdict(list)
         self.assignments = defaultdict(set)
         self.payments = defaultdict(list)
         self.scales = defaultdict(list)
@@ -318,6 +432,31 @@ class TenantBalanceStatementCalculator:
             fee_programs[fee.pk] = fee.program_id
             if fee.organization_id != self.organization_id:
                 self.invalid_programs.add(fee.program_id)
+
+        for signup in TravelSignup.objects.filter(
+            student_id__in=student_ids,
+            event__program_id__in=program_ids,
+            balance_amount__isnull=False,
+        ).select_related(
+            "student", "event__organization", "event__program", "departure"
+        ):
+            program_id = signup.event.program_id
+            if (
+                signup.organization_id != self.organization_id
+                or signup.student.organization_id != self.organization_id
+                or signup.event.organization_id != self.organization_id
+                or signup.event.program.organization_id != self.organization_id
+                or (
+                    signup.departure_id
+                    and (
+                        signup.departure.organization_id != self.organization_id
+                        or signup.departure.event_id != signup.event_id
+                    )
+                )
+            ):
+                self.invalid_programs.add(program_id)
+                continue
+            self.travel_signups[(signup.student_id, program_id)].append(signup)
 
         assignment_pairs = set()
         if fee_programs:
@@ -382,10 +521,14 @@ class TenantBalanceStatementCalculator:
             return self._cache[cache_key]
 
         fees = self.fees[pair[1]]
+        travel_charges = self.travel_signups[pair]
+        balance_records = [*fees, *travel_charges]
         overlapping_scales = [
             scale
             for scale in self.scales[pair[0]]
-            if program_overlaps_sliding_window(program, scale, fee_records=fees)
+            if program_overlaps_sliding_window(
+                program, scale, fee_records=balance_records
+            )
         ]
         if any(
             scale.organization_id != self.organization_id
@@ -442,6 +585,43 @@ class TenantBalanceStatementCalculator:
             ):
                 discountable_amounts.append(fee.amount)
 
+        for signup in travel_charges:
+            fee_date = signup.balance_effective_date or signup.event.start_date
+            starts_ok = (
+                not sliding
+                or not sliding.date
+                or (fee_date and fee_date >= sliding.date)
+            )
+            ends_ok = (
+                not sliding
+                or not sliding.expiration_date
+                or (fee_date and fee_date <= sliding.expiration_date)
+            )
+            adjusted_amount = signup.balance_amount
+            if sliding and sliding.percent is not None and starts_ok and ends_ok:
+                adjusted_amount -= compute_sliding_discount_rounded(
+                    signup.balance_amount, sliding.percent
+                )
+            entries.append(
+                {
+                    "date": fee_date,
+                    "due_date": None,
+                    "type": "Travel Fee",
+                    "name": f"Travel: {signup.event.name}",
+                    "amount": signup.balance_amount,
+                    "adjusted_amount": adjusted_amount,
+                }
+            )
+            if not (
+                sliding
+                and fee_date
+                and (
+                    (sliding.date and fee_date < sliding.date)
+                    or (sliding.expiration_date and fee_date > sliding.expiration_date)
+                )
+            ):
+                discountable_amounts.append(signup.balance_amount)
+
         discount = Decimal("0")
         if sliding and sliding.percent is not None:
             discount = compute_sliding_discount_rounded(
@@ -480,7 +660,11 @@ class TenantBalanceStatementCalculator:
         entries.sort(
             key=lambda entry: (entry["date"] is None, entry["date"], entry["type"])
         )
-        total_fees = sum(entry["amount"] for entry in entries if entry["type"] == "Fee")
+        total_fees = sum(
+            entry["amount"]
+            for entry in entries
+            if entry["type"] in ("Fee", "Travel Fee")
+        )
         total_payments = -sum(
             entry["amount"] for entry in entries if entry["type"] == "Payment"
         )

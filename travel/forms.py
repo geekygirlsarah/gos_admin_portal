@@ -17,9 +17,12 @@ from travel.models import (
 def _apply_bootstrap_classes(form):
     for field in form.fields.values():
         widget = field.widget
-        css_class = (
-            "form-select" if isinstance(widget, forms.Select) else "form-control"
-        )
+        if isinstance(widget, forms.Select):
+            css_class = "form-select"
+        elif isinstance(widget, forms.CheckboxInput):
+            css_class = "form-check-input"
+        else:
+            css_class = "form-control"
         existing_classes = widget.attrs.get("class", "").split()
         if css_class not in existing_classes:
             existing_classes.append(css_class)
@@ -65,7 +68,14 @@ class TravelDepartureForm(forms.ModelForm):
 class TravelCostOptionForm(forms.ModelForm):
     class Meta:
         model = TravelCostOption
-        fields = ["name", "amount", "unit_label", "notes", "sort_order"]
+        fields = [
+            "name",
+            "amount",
+            "is_required",
+            "unit_label",
+            "notes",
+            "sort_order",
+        ]
         widgets = {
             "amount": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
         }
@@ -116,12 +126,22 @@ class TravelSignupForm(forms.ModelForm):
         departures = kwargs.pop("departures", None)
         cost_options = kwargs.pop("cost_options", None)
         super().__init__(*args, **kwargs)
+        self.cost_options = (
+            cost_options
+            if cost_options is not None
+            else TravelCostOption.objects.none()
+        )
         if departures is not None:
             self.fields["departure"].queryset = departures
         if cost_options is not None:
             self.fields["cost_items"].queryset = cost_options
         self.fields["departure"].required = False
         self.fields["departure"].empty_label = "No specific departure"
+
+    def clean_cost_items(self):
+        selected = self.cleaned_data["cost_items"]
+        required = self.cost_options.filter(is_required=True)
+        return selected | required
 
 
 class TravelStaffSignupForm(TravelSignupForm):

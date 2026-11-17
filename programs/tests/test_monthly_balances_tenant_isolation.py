@@ -21,6 +21,11 @@ from programs.models import (
     SlidingScale,
     Student,
 )
+from programs.utils.balances import (
+    InconsistentBalanceStatementError,
+    get_student_balance_data,
+)
+from travel.models import TravelEvent, TravelSignup
 
 
 @override_settings(
@@ -216,6 +221,26 @@ class MonthlyBalancesTenantIsolationTests(TestCase):
                 self.assertNotIn(other_name, html)
                 self.assertIn(balance, html)
                 self.assertNotIn("$140.00", html)
+
+    def test_foreign_owned_travel_signup_invalidates_student_balance(self):
+        event = TravelEvent.objects.create(
+            organization=self.alpha,
+            program=self.alpha_program,
+            name="Alpha Trip",
+            start_date=self.today,
+            end_date=self.today + datetime.timedelta(days=2),
+        )
+        TravelSignup.objects.create(
+            organization=self.beta,
+            student=self.alpha_student,
+            event=event,
+            status=TravelSignup.APPROVED,
+            balance_amount=Decimal("45.00"),
+            balance_effective_date=self.today,
+        )
+
+        with self.assertRaises(InconsistentBalanceStatementError):
+            get_student_balance_data(self.alpha_student, self.alpha_program)
 
     def test_program_filters_apply_independently_for_same_student(self):
         credit_program = self.make_program(self.alpha, "Alpha Credit", "75.00")

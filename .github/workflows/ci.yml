@@ -81,7 +81,7 @@ jobs:
         exit-code: '1'
         severity: 'CRITICAL,HIGH'
 
-  django:
+  django-checks:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -113,6 +113,8 @@ jobs:
     - name: Install Dependencies
       run: |
         uv pip install --system -r requirements.txt
+    - name: Test Django shard helper
+      run: python -m unittest discover -s .github/scripts -p test_django_test_shards.py
     - name: Set up Node.js
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
       with:
@@ -128,12 +130,59 @@ jobs:
     - name: Migration Check
       run: python manage.py makemigrations --check --dry-run
 
-      #    - name: Run Tests with Coverage
-#      run: |
-#        coverage run manage.py test --noinput --parallel
-#        coverage combine
-#        coverage report
-    - name: Run Tests
+  django-tests:
+    name: Django tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --tmpfs /var/lib/postgresql/data
+        command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: Set up Python
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      with:
+        python-version: '3.14'
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    - name: Install Dependencies
+      run: uv pip install --system -r requirements.txt
+    - name: Set up Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - name: Install frontend dependencies
+      run: npm ci
+    - name: Build frontend bundle
+      run: npm run build
+    - name: Run Django test shard
       run: |
         pip install tblib
-        python manage.py test --noinput --parallel
+        labels_file="$RUNNER_TEMP/django-test-labels.txt"
+        python .github/scripts/django_test_shards.py --shards 4 --shard-index ${{ matrix.shard }} --labels-file "$labels_file"
+        mapfile -t test_labels < "$labels_file"
+        if [ "${#test_labels[@]}" -eq 0 ]; then
+          echo "Django test shard selected no labels" >&2
+          exit 1
+        fi
+        python manage.py test --noinput "${test_labels[@]}" --parallel auto --timing --durations 20

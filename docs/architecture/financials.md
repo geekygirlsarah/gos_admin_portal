@@ -49,12 +49,18 @@ do not contribute foreign details to local notices.
 ## Balance Calculations & Exports
 
 ### Monthly Balances & Background Statements
-- Balances are computed per student by summing applicable fees minus active sliding-scale discounts minus recorded payments.
+- Balances are computed per student by summing applicable fees and validated travel charges, minus active sliding-scale discounts and recorded payments.
 - Statement generation and emailing:
   ```bash
   python manage.py send_monthly_balances --all-balances --days-back 30
   ```
 - Balance sheets can be exported and emailed directly by Lead Mentors via `ProgramEmailBalancesView`.
+
+### Travel Charges
+
+Travel fees are per traveler and are not represented as ordinary `Fee` rows, which could charge every enrolled student. A guardian's approval posts that signup's approved total to the student's program balance using its effective date, so the existing sliding-scale and payment calculations apply. If a trip edit changes an approved student's total, the revised charge applies immediately while the signup returns to pending approval; the student and eligible guardians receive a private notice with the old and new totals. A decline, withdrawal, or trip deletion removes the travel charge without changing recorded payments.
+
+New travel fee options are required by default. The migration marks existing options optional and backfills non-null approved totals only when signup, student, trip, and program ownership is consistent. Missing amounts and mismatched records are left unchanged for review. Before deployment, review existing ordinary program fees for duplicate historical trip charges; the migration does not attempt to reconcile them automatically.
 
 Manual balance emails use the request organization for program and active-student selection, guardian relationships, sender identities, and branding. Choice labels, previews, and sent statements share a tenant-validated calculation. If a fee, fee assignment, enrollment, payment, or applicable sliding scale has inconsistent ownership or applicability, the affected statement is unavailable and is not sent; an authorized operator must review the records. Foreign contacts and enrollments are excluded, and no fixed debugging BCC is added.
 

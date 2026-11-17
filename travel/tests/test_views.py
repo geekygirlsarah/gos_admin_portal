@@ -7,11 +7,13 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models.query import QuerySet
 from django.db.models.signals import post_init
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from audit.models import AuditLog
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
@@ -113,7 +115,7 @@ class TravelViewTest(TestCase):
             event=self.event, name="Hotel", amount="300.00"
         )
         self.van = TravelCostOption.objects.create(
-            event=self.event, name="Van", amount="50.00"
+            event=self.event, name="Van", amount="50.00", is_required=False
         )
 
     def tearDown(self):
@@ -147,12 +149,14 @@ class TravelViewTest(TestCase):
             "costs-0-unit_label": self.hotel.unit_label,
             "costs-0-notes": self.hotel.notes,
             "costs-0-sort_order": str(self.hotel.sort_order),
+            "costs-0-is_required": "on" if self.hotel.is_required else "",
             "costs-1-id": str(self.van.pk),
             "costs-1-name": self.van.name,
             "costs-1-amount": str(self.van.amount),
             "costs-1-unit_label": self.van.unit_label,
             "costs-1-notes": self.van.notes,
             "costs-1-sort_order": str(self.van.sort_order),
+            "costs-1-is_required": "on" if self.van.is_required else "",
         }
 
     # ── Feature gating ────────────────────────────────────────────────────
@@ -231,6 +235,64 @@ class TravelViewTest(TestCase):
 
         self.event.refresh_from_db()
         self.assertEqual(self.event.name, "Competition Trip")
+
+    def test_student_roster_groups_statuses_then_sorts_students_by_name(self):
+        signup_data = [
+            ("Zoe", "Zulu", "Zara", TravelSignup.APPROVED),
+            ("Amy", "Alpha", "", TravelSignup.APPROVED),
+            ("Ivy", "Beta", "Bea", TravelSignup.INTERESTED),
+            ("Ben", "Alpha", "", TravelSignup.INTERESTED),
+            ("Eve", "Zulu", "", TravelSignup.DECLINED),
+            ("Drew", "Alpha", "", TravelSignup.DECLINED),
+            ("Will", "Withdrawn", "", TravelSignup.WITHDRAWN),
+        ]
+        for legal_first_name, last_name, preferred_first_name, status in signup_data:
+            student = Student.objects.create(
+                organization=self.organization,
+                legal_first_name=legal_first_name,
+                preferred_first_name=preferred_first_name,
+                last_name=last_name,
+                school=self.school,
+                graduation_year=2027,
+            )
+            TravelSignup.objects.create(
+                student=student,
+                event=self.event,
+                status=status,
+            )
+
+        expected_statuses = (
+            TravelSignup.APPROVED,
+            TravelSignup.INTERESTED,
+            TravelSignup.DECLINED,
+            TravelSignup.WITHDRAWN,
+        )
+        expected_names = (
+            "Amy Alpha",
+            "Zara Zulu",
+            "Bea Beta",
+            "Ben Alpha",
+            "Drew Alpha",
+            "Eve Zulu",
+            "Will Withdrawn",
+        )
+        for username in ("lead", "mentor"):
+            self.client.login(username=username, password="password")  # nosec B106
+            response = self.client.get(
+                reverse("travel:event_list", args=[self.program.id])
+            )
+            self.assertEqual(response.status_code, 200, msg=username)
+            html = response.content.decode()
+
+            group_order = [
+                html.index(f'data-status="{status}"') for status in expected_statuses
+            ]
+            self.assertEqual(group_order, sorted(group_order), msg=username)
+            for heading in ("Parent Approved", "Interested", "Declined", "Withdrawn"):
+                self.assertIn(heading, html)
+
+            name_order = [html.index(name) for name in expected_names]
+            self.assertEqual(name_order, sorted(name_order), msg=username)
 
     def test_mentor_without_trip_read_permission_cannot_view_trips(self):
         from programs.models import RolePermission
@@ -590,7 +652,10 @@ class TravelViewTest(TestCase):
             event=self.event,
             status=TravelSignup.APPROVED,
             approved_total="300.00",
+            balance_amount="300.00",
+            balance_effective_date=self.event.start_date,
         )
+        signup.cost_items.set([self.hotel])
         payload = self.event_edit_payload()
         payload["costs-0-amount"] = "425.00"
         self.client.login(username="lead", password="password")  # nosec B106
@@ -610,13 +675,270 @@ class TravelViewTest(TestCase):
         self.assertIn("eligible parents/guardians", page)
         self.assertIn("signed-up mentors and parent chaperones", page)
         signup.refresh_from_db()
-        self.assertEqual(signup.approved_total, Decimal("300.00"))
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
+        self.assertEqual(signup.approved_total, None)
+        self.assertEqual(signup.balance_amount, Decimal("425.00"))
+        audit_entry = AuditLog.objects.get(
+            organization=self.organization,
+            event="TRAVEL_CHARGE_UPDATED",
+            resource_type="TravelSignup",
+            resource_id=str(signup.pk),
+        )
+        self.assertEqual(audit_entry.before["balance_amount"], "300.00")
+        self.assertEqual(audit_entry.after["balance_amount"], "425.00")
         self.assertEqual(len(mail.outbox), 2)
         recipients = {message.to[0] for message in mail.outbox}
         self.assertEqual(recipients, {"student@example.com", "parent@example.com"})
         for message in mail.outbox:
-            self.assertIn("Hotel", message.body)
             self.assertIn("425.00", message.body)
+            self.assertIn("300.00", message.body)
+            self.assertIn("approval", message.body.lower())
+
+    def test_cost_repricing_locks_only_signups_with_nullable_departures(self):
+        direct_signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        direct_signup.cost_items.set([self.hotel])
+        departed_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Departed",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        departure_signup = TravelSignup.objects.create(
+            student=departed_student,
+            event=self.event,
+            departure=self.departure,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        departure_signup.cost_items.set([self.hotel])
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        original_select_for_update = QuerySet.select_for_update
+        lock_scopes = []
+
+        def capture_select_for_update(queryset, *args, **kwargs):
+            if queryset.model is TravelSignup:
+                lock_scopes.append(kwargs.get("of"))
+            return original_select_for_update(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, "select_for_update", capture_select_for_update):
+            with self.captureOnCommitCallbacks(execute=False):
+                response = self.client.post(
+                    reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                    payload,
+                )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(lock_scopes, [("self",)])
+        for signup in (direct_signup, departure_signup):
+            signup.refresh_from_db()
+            self.assertEqual(signup.status, TravelSignup.INTERESTED)
+            self.assertIsNone(signup.approved_total)
+            self.assertEqual(signup.balance_amount, Decimal("425.00"))
+
+    def test_trip_cost_update_emails_keep_each_student_total_private(self):
+        first_signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        first_signup.cost_items.set([self.hotel])
+
+        second_student_user = User.objects.create_user(
+            username="second-student",
+            email="second-student@example.com",
+        )
+        second_student = Student.objects.create(
+            organization=self.organization,
+            user=second_student_user,
+            legal_first_name="Second",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            organization=self.organization,
+            student=second_student,
+            program=self.program,
+            active=True,
+        )
+        second_parent = Adult.objects.create(
+            organization=self.organization,
+            is_parent=True,
+            login_enabled=True,
+            email_updates=True,
+            personal_email="second-parent@example.com",
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.organization,
+            adult=second_parent,
+            student=second_student,
+        )
+        second_signup = TravelSignup.objects.create(
+            organization=self.organization,
+            student=second_student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="350.00",
+            balance_amount="350.00",
+        )
+        second_signup.cost_items.set([self.hotel, self.van])
+
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        messages_by_recipient = {message.to[0]: message.body for message in mail.outbox}
+        self.assertEqual(
+            set(messages_by_recipient),
+            {
+                "student@example.com",
+                "parent@example.com",
+                "second-student@example.com",
+                "second-parent@example.com",
+            },
+        )
+        for recipient in ("student@example.com", "parent@example.com"):
+            self.assertIn("300.00", messages_by_recipient[recipient])
+            self.assertIn("425.00", messages_by_recipient[recipient])
+            self.assertNotIn("350.00", messages_by_recipient[recipient])
+            self.assertNotIn("475.00", messages_by_recipient[recipient])
+        for recipient in ("second-student@example.com", "second-parent@example.com"):
+            self.assertIn("350.00", messages_by_recipient[recipient])
+            self.assertIn("475.00", messages_by_recipient[recipient])
+            self.assertNotIn("300.00", messages_by_recipient[recipient])
+            self.assertNotIn("425.00", messages_by_recipient[recipient])
+
+    def test_trip_edit_keeps_approval_when_student_total_does_not_change(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        signup.cost_items.set([self.hotel])
+        payload = self.event_edit_payload()
+        payload["description"] = "Updated itinerary"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        signup.refresh_from_db()
+        self.assertEqual(signup.status, TravelSignup.APPROVED)
+        self.assertEqual(signup.approved_total, Decimal("300.00"))
+        self.assertEqual(signup.balance_amount, Decimal("300.00"))
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_making_an_optional_fee_required_reprices_approved_signups(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        signup.cost_items.set([self.hotel])
+        payload = self.event_edit_payload()
+        payload["costs-1-is_required"] = "on"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.van.refresh_from_db()
+        signup.refresh_from_db()
+        self.assertTrue(self.van.is_required)
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
+        self.assertEqual(signup.balance_amount, Decimal("350.00"))
+        self.assertEqual(len(mail.outbox), 2)
+        for message in mail.outbox:
+            self.assertIn("300.00", message.body)
+            self.assertIn("350.00", message.body)
+
+    def test_trip_edit_does_not_reprice_cross_organization_signups(self):
+        other_organization = Organization.objects.create(
+            name="Travel Other",
+            slug="travel-other",
+            subdomain="travel-other",
+        )
+        foreign_student = Student.objects.create(
+            organization=other_organization,
+            legal_first_name="Foreign",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        signup = TravelSignup.objects.create(
+            organization=self.organization,
+            student=foreign_student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total="300.00",
+            balance_amount="300.00",
+        )
+        signup.cost_items.set([self.hotel])
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        signup.refresh_from_db()
+        self.assertEqual(signup.status, TravelSignup.APPROVED)
+        self.assertEqual(signup.approved_total, Decimal("300.00"))
+        self.assertEqual(signup.balance_amount, Decimal("300.00"))
+        self.assertEqual(mail.outbox, [])
+
+    def test_student_signup_cannot_omit_a_required_cost(self):
+        self.hotel.is_required = True
+        self.hotel.save(update_fields=["is_required"])
+        self.client.login(username="student", password="password")  # nosec B106
+        page = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+        self.assertContains(page, "Required")
+
+        response = self.client.post(
+            reverse("travel:signup", args=[self.program.pk, self.event.pk]),
+            {},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        signup = TravelSignup.objects.get(student=self.student, event=self.event)
+        self.assertEqual(list(signup.cost_items.all()), [self.hotel])
+        self.assertEqual(signup.total_cost, Decimal("300.00"))
 
     def test_edit_with_changes_shows_notice_when_no_approved_recipients_exist(self):
         payload = self.event_edit_payload()
