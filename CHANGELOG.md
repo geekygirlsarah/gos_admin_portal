@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Staff application edits now require a signed current-state version and reject stale, missing, or forged form submissions without overwriting newer answers.
 - Program-specific questions now appear on the applicant experience step, retain their wording per application, and required answers are checked again before submission.
 - Required permission forms are collected before application acceptance; the reviewer rechecks uploads, while existing approved applications and guardian-protected document access remain supported.
+- Primary and secondary guardian forms reject matching email addresses, including changes introduced while a form is being saved; blank secondary emails and distinct plus-tag addresses remain supported.
 
 ## 2026-11-16
 

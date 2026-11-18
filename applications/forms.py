@@ -480,8 +480,16 @@ class StudentExperienceForm(CustomApplicationQuestionsForm):
 # ---------------------------------------------------------------------------
 
 
+def _email_comparison_key(email):
+    return email.strip().lower() if isinstance(email, str) else ""
+
+
 class ParentInfoForm(forms.Form):
     """Step 6 (primary) and Step 7 (secondary) parent/guardian info."""
+
+    DUPLICATE_PARENT_EMAIL_ERROR = (
+        "This email address is already used by the other parent or guardian."
+    )
 
     legal_first_name = forms.CharField(
         label="Adult's legal first name",
@@ -577,12 +585,14 @@ class ParentInfoForm(forms.Form):
         require_email=True,
         require_address=True,
         student_emails=None,
+        other_parent_email=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         # Store student emails in lower case but NOT normalized (keep +tags)
         # so we can distinguish between base@ and base+tag@.
         self.student_emails = [e.strip().lower() for e in (student_emails or []) if e]
+        self.other_parent_email = _email_comparison_key(other_parent_email)
         if not require_email:
             self.fields["email"].required = False
         if not require_address:
@@ -615,7 +625,17 @@ class ParentInfoForm(forms.Form):
             raise forms.ValidationError(
                 "This email address is already used by the student."
             )
+        if _email_comparison_key(email) == self.other_parent_email:
+            raise forms.ValidationError(self.DUPLICATE_PARENT_EMAIL_ERROR)
         return email
+
+    def email_matches_other_parent(self, other_parent_email):
+        email = self.cleaned_data.get("email")
+        return bool(
+            email
+            and _email_comparison_key(email)
+            == _email_comparison_key(other_parent_email)
+        )
 
 
 class ParentHandoffForm(forms.Form):
@@ -633,9 +653,10 @@ class ParentHandoffForm(forms.Form):
         widget=forms.EmailInput(attrs=_text_attrs),
     )
 
-    def __init__(self, *args, student_emails=None, **kwargs):
+    def __init__(self, *args, student_emails=None, other_parent_email=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.student_emails = [e.strip().lower() for e in (student_emails or []) if e]
+        self.other_parent_email = _email_comparison_key(other_parent_email)
 
     def clean_parent_email(self):
         email = self.cleaned_data.get("parent_email")
@@ -647,6 +668,8 @@ class ParentHandoffForm(forms.Form):
             raise forms.ValidationError(
                 "You cannot use your own email address for your parent/guardian."
             )
+        if _email_comparison_key(email) == self.other_parent_email:
+            raise forms.ValidationError(ParentInfoForm.DUPLICATE_PARENT_EMAIL_ERROR)
         return email
 
 

@@ -47,6 +47,13 @@ email-update opt-in against current data. Mentor clearance details are saved
 only while current clearance interest remains affirmative, and clearance
 interest edits reject a conflicting intervening change. Rejected forms are
 rendered with their submitted values so applicants can review and resubmit.
+Primary and secondary guardian forms reject addresses that match each other
+after trimming surrounding whitespace and comparing case-insensitively. The
+comparison is repeated against the locked application before saving, so an
+intervening change cannot introduce a shared guardian address. Blank secondary
+emails remain optional when email updates are not selected, and plus-tagged
+addresses remain distinct. This is an application-form check, not a global
+email uniqueness constraint; historical profile addresses are unchanged.
 
 Student/parent and mentor confirmation also reload and lock the organization-
 bound application after form validation. They recheck terminal status and the

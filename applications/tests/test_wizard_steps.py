@@ -38,6 +38,22 @@ def _verified(**kwargs):
     return Application.objects.create(**defaults)
 
 
+def _parent_info_payload(email):
+    return {
+        "legal_first_name": "Pat",
+        "last_name": "Parent",
+        "relationship_to_student": "parent",
+        "email": email,
+        "address": "123 Main St",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "zip_code": "15213",
+        "phone_number": "555-444-1212",
+        "phone_type": "cell",
+        "email_updates": "on",
+    }
+
+
 class Step5StudentInfoTests(TestCase):
     def setUp(self):
         School.objects.get_or_create(name="Pittsburgh High")
@@ -203,6 +219,43 @@ class Step7PrimaryParentTests(TestCase):
     def setUp(self):
         mail.outbox = []
 
+    def test_primary_parent_email_must_differ_from_secondary_parent(self):
+        app = _verified(
+            current_step=7,
+            data={"step8-secondaryparent": {"email": "guardian@example.com"}},
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.post(
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            _parent_info_payload("GUARDIAN@example.com"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.context["form"].errors)
+        app.refresh_from_db()
+        self.assertNotIn("step7-primaryparent", app.data)
+
+    def test_parent_handoff_email_must_differ_from_secondary_parent(self):
+        app = _verified(
+            applicant_type=Application.Type.STUDENT,
+            current_step=7,
+            data={"step8-secondaryparent": {"email": "guardian@example.com"}},
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.post(
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            {"parent_email": "GUARDIAN@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("parent_email", response.context["handoff_form"].errors)
+        app.refresh_from_db()
+        self.assertNotIn("step7_handoff", app.data)
+        self.assertEqual(app.status, Application.Status.EMAIL_VERIFIED)
+        self.assertEqual(mail.outbox, [])
+
     def test_student_initiated_no_existing_parent_shows_handoff(self):
         app = _verified(
             applicant_type=Application.Type.STUDENT,
@@ -328,6 +381,23 @@ class Step8SecondaryParentTests(TestCase):
         self.assertEqual(
             app.data.get("step8-secondaryparent", {}).get("legal_first_name"), "Sam"
         )
+
+    def test_secondary_parent_email_must_differ_from_primary_parent(self):
+        app = _verified(
+            current_step=8,
+            data={"step7-primaryparent": {"email": "Guardian@example.com"}},
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.post(
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            _parent_info_payload("guardian@example.com"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.context["form"].errors)
+        app.refresh_from_db()
+        self.assertNotIn("step8-secondaryparent", app.data)
 
 
 class Step6CustomQuestionTests(TestCase):

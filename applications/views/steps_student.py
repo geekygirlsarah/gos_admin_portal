@@ -1324,6 +1324,10 @@ class Step7PrimaryParentView(View):
                     "being saved. Please review the contact information and submit "
                     "it again.",
                 )
+            elif form.email_matches_other_parent(
+                ((current.data or {}).get("step8-secondaryparent") or {}).get("email")
+            ):
+                form.add_error("email", ParentInfoForm.DUPLICATE_PARENT_EMAIL_ERROR)
             else:
                 return None
             return self._render(
@@ -1394,6 +1398,9 @@ class Step7PrimaryParentView(View):
             )
 
         student_emails = get_student_emails(application)
+        other_parent_email = (
+            (application.data or {}).get("step8-secondaryparent") or {}
+        ).get("email")
         if student_initiated and not saved and not already_handed_off:
             # Student is applying — the parent still needs to take over.
             # If we already know the parent's email (returning student's
@@ -1404,13 +1411,23 @@ class Step7PrimaryParentView(View):
             if existing_adult and existing_adult.personal_email:
                 handoff_initial["parent_email"] = existing_adult.personal_email
             if post:
-                handoff_form = ParentHandoffForm(post, student_emails=student_emails)
+                handoff_form = ParentHandoffForm(
+                    post,
+                    student_emails=student_emails,
+                    other_parent_email=other_parent_email,
+                )
             else:
                 handoff_form = ParentHandoffForm(
-                    initial=handoff_initial, student_emails=student_emails
+                    initial=handoff_initial,
+                    student_emails=student_emails,
+                    other_parent_email=other_parent_email,
                 )
             return (
-                ParentInfoForm(initial=saved or {}, student_emails=student_emails),
+                ParentInfoForm(
+                    initial=saved or {},
+                    student_emails=student_emails,
+                    other_parent_email=other_parent_email,
+                ),
                 handoff_form,
                 mode,
                 existing_adult,
@@ -1433,7 +1450,10 @@ class Step7PrimaryParentView(View):
         if not saved and "email_updates" not in initial:
             initial["email_updates"] = True
         form = ParentInfoForm(
-            post or None, initial=initial, student_emails=student_emails
+            post or None,
+            initial=initial,
+            student_emails=student_emails,
+            other_parent_email=other_parent_email,
         )
         # form.fields["first_name"].help_text = (
         #     "Please provide the primary adult contact's information. "
@@ -1442,7 +1462,10 @@ class Step7PrimaryParentView(View):
         # )
         return (
             form,
-            ParentHandoffForm(student_emails=student_emails),
+            ParentHandoffForm(
+                student_emails=student_emails,
+                other_parent_email=other_parent_email,
+            ),
             "form",
             existing_adult,
         )
@@ -1738,11 +1761,15 @@ class Step8SecondaryParentView(View):
             )
 
         student_emails = get_student_emails(application)
+        other_parent_email = (
+            (application.data or {}).get("step7-primaryparent") or {}
+        ).get("email")
         form = ParentInfoForm(
             initial=self._initial(application),
             require_email=False,
             require_address=False,
             student_emails=student_emails,
+            other_parent_email=other_parent_email,
         )
         return self._render(request, application, form)
 
@@ -1760,11 +1787,15 @@ class Step8SecondaryParentView(View):
             )
 
         student_emails = get_student_emails(application)
+        other_parent_email = (
+            (application.data or {}).get("step7-primaryparent") or {}
+        ).get("email")
         form = ParentInfoForm(
             request.POST,
             require_email=False,
             require_address=False,
             student_emails=student_emails,
+            other_parent_email=other_parent_email,
         )
         if not form.is_valid():
             return self._render(request, application, form)
@@ -1792,16 +1823,20 @@ class Step8SecondaryParentView(View):
                 )
             else:
                 step7_data = (current.data or {}).get("step7-primaryparent") or {}
-                p1_opt = step7_data.get("email_updates", False)
-                p2_opt = form.cleaned_data.get("email_updates", False)
-                if not step7_data or p1_opt or p2_opt:
-                    return None
-                form.add_error(
-                    None,
-                    "At least one adult contact must opt in to receiving email "
-                    "updates from this organization. Please check the box on this "
-                    "page or go back and check it on the primary contact page.",
-                )
+                if form.email_matches_other_parent(step7_data.get("email")):
+                    form.add_error("email", ParentInfoForm.DUPLICATE_PARENT_EMAIL_ERROR)
+                else:
+                    p1_opt = step7_data.get("email_updates", False)
+                    p2_opt = form.cleaned_data.get("email_updates", False)
+                    if not step7_data or p1_opt or p2_opt:
+                        return None
+                    form.add_error(
+                        None,
+                        "At least one adult contact must opt in to receiving email "
+                        "updates from this organization. Please check the box on "
+                        "this page or go back and check it on the primary contact "
+                        "page.",
+                    )
             return self._render(request, current, form)
 
         response = _save_step_data(

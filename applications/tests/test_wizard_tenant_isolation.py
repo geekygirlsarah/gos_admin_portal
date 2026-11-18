@@ -20,6 +20,7 @@ from django.utils import timezone
 from applications.forms import (
     ApplicantTypeForm,
     ConfirmSubmitForm,
+    ParentHandoffForm,
     ParentInfoForm,
     ProgramSelectForm,
     StudentExperienceForm,
@@ -43,6 +44,22 @@ from programs.models import (
 )
 
 _TMP_MEDIA = tempfile.mkdtemp(prefix="application-tenant-tests-")
+
+
+def _parent_info_payload(email):
+    return {
+        "legal_first_name": "Pat",
+        "last_name": "Parent",
+        "relationship_to_student": "parent",
+        "email": email,
+        "address": "123 Main St",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "zip_code": "15213",
+        "phone_number": "555-444-1212",
+        "phone_type": "cell",
+        "email_updates": "on",
+    }
 
 
 @override_settings(MEDIA_ROOT=_TMP_MEDIA)
@@ -243,6 +260,103 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         self.assertEqual(
             application.data["step6-experience"]["prior_robotics_experience"],
             "Earlier",
+        )
+
+    def test_primary_parent_write_rechecks_secondary_email_under_lock(self):
+        application = self.make_application(
+            email="primary-email-race@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=7,
+            data={"step8-secondaryparent": {"email": "other@example.test"}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def claim_primary_email_for_secondary():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step8-secondaryparent"]["email"] = "shared@example.test"
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ParentInfoForm, claim_primary_email_for_secondary
+        ):
+            response = self.tenant_post(
+                reverse("apply_step7", kwargs={"app_id": application.application_id}),
+                _parent_info_payload("shared@example.test"),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.context["form"].errors)
+        application.refresh_from_db()
+        self.assertNotIn("step7-primaryparent", application.data)
+        self.assertEqual(
+            application.data["step8-secondaryparent"]["email"], "shared@example.test"
+        )
+
+    def test_parent_handoff_rechecks_secondary_email_under_lock(self):
+        application = self.make_application(
+            email="student-handoff-race@example.test",
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=7,
+            data={"step8-secondaryparent": {"email": "other@example.test"}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def claim_handoff_email_for_secondary():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step8-secondaryparent"]["email"] = "shared@example.test"
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ParentHandoffForm, claim_handoff_email_for_secondary
+        ):
+            response = self.tenant_post(
+                reverse("apply_step7", kwargs={"app_id": application.application_id}),
+                {"parent_email": "shared@example.test"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("parent_email", response.context["handoff_form"].errors)
+        application.refresh_from_db()
+        self.assertEqual(application.status, Application.Status.EMAIL_VERIFIED)
+        self.assertNotIn("step7_handoff", application.data)
+
+    def test_secondary_parent_write_rechecks_primary_email_under_lock(self):
+        application = self.make_application(
+            email="secondary-email-race@example.test",
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={
+                "step7-primaryparent": {
+                    "email": "other@example.test",
+                    "email_updates": True,
+                }
+            },
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        def claim_secondary_email_for_primary():
+            latest = Application.objects.get(pk=application.pk)
+            latest.data["step7-primaryparent"]["email"] = "shared@example.test"
+            latest.save(update_fields=["data", "updated_at"])
+
+        with self.patch_validation_after_intervening_write(
+            ParentInfoForm, claim_secondary_email_for_primary
+        ):
+            response = self.tenant_post(
+                reverse("apply_step8", kwargs={"app_id": application.application_id}),
+                _parent_info_payload("shared@example.test"),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.context["form"].errors)
+        application.refresh_from_db()
+        self.assertNotIn("step8-secondaryparent", application.data)
+        self.assertEqual(
+            application.data["step7-primaryparent"]["email"], "shared@example.test"
         )
 
     def test_step_write_rejects_program_change_during_request(self):
