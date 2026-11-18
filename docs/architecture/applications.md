@@ -228,6 +228,17 @@ Stale cleanup only considers applications belonging to the current organization.
 
 Public wizard routes require a resolved organization and load application IDs only within that organization. New applications are assigned to the request organization; program choices, duplicate-draft actions, and returning student/adult prefill are likewise organization-scoped. A missing tenant context fails closed. Lead notifications go only to active users with an active `LeadMentor` membership in the application organization; if there are no eligible email addresses, no lead notification is sent.
 
+Step 5 student self-prefill and the guardian's existing-student picker require a
+unique email match across both Student and Adult records in the application
+organization, checking personal and organization email fields. If the address
+matches multiple records, or matches both a Student and an Adult, the wizard
+withholds the profile prefill or picker rather than selecting one. The student
+match is rechecked against the locked application before saving Step 5. This is
+limited to these wizard lookup paths: it does not enforce global email
+uniqueness, change conversion matching, link profiles, or authorize profile
+edits. The application-row lock does not serialize concurrent changes to the
+matched profiles, so this is not a portal-wide identity guarantee.
+
 Step 10 displays and accepts documents for submitted student/parent applications before approval, as well as approved legacy applications, only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. After submission, a separate required-document notice and protected link are sent only to that same parent/guardian; the student is never used as a fallback recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping; staff uploads recheck the application and program under a row lock. Completing uploads while the application is still submitted does not auto-accept it. Previously approved applications with missing required documents retain their approval and can complete uploads; completion preserves the existing `APPROVED_SIGNED` transition.
 
 Approved and later application states are read-only through earlier public wizard steps. An application ID alone is not proof of applicant identity. Other in-progress wizard routes continue to follow the existing email-verification and parent-handoff workflow; this Step 10 challenge is an additional control for signed-document access.

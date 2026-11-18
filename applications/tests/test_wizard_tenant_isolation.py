@@ -1352,6 +1352,40 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         self.assertNotContains(response, "BetaPrivateStudent")
         self.assertNotContains(response, "88 Beta Confidential Road")
 
+    def test_foreign_email_match_does_not_make_local_student_identity_ambiguous(self):
+        Student.objects.create(
+            organization=self.alpha,
+            legal_first_name="AlphaReturningStudent",
+            last_name="Applicant",
+            personal_email="shared-tenant-email@example.test",
+            address="Alpha Student Address",
+        )
+        Adult.objects.create(
+            organization=self.beta,
+            legal_first_name="BetaPrivateAdult",
+            last_name="Applicant",
+            personal_email="shared-tenant-email@example.test",
+            address="Beta Private Adult Address",
+        )
+        application = self.make_application(
+            email="shared-tenant-email@example.test",
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=5,
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        response = self.tenant_get(
+            reverse("apply_step5", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "AlphaReturningStudent")
+        self.assertContains(response, "Alpha Student Address")
+        self.assertNotContains(response, "BetaPrivateAdult")
+        self.assertNotContains(response, "Beta Private Adult Address")
+
     def test_foreign_adult_is_not_used_for_parent_prefill(self):
         Adult.objects.create(
             organization=self.beta,

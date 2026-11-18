@@ -14,6 +14,7 @@ from django.utils import timezone
 from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application, ProgramApplicationQuestion
 from applications.tests.access_helpers import verify_application_browser
+from applications.views import steps_student
 from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Program, School, Student
 
@@ -110,6 +111,190 @@ class Step5StudentInfoTests(TestCase):
         self.assertContains(response, 'value="123 Science Way"')
         self.assertContains(response, 'value="London"')
         self.assertContains(response, 'value="SW1"')
+
+    def test_step5_matches_unique_student_organization_email_case_insensitively(self):
+        Student.objects.create(
+            legal_first_name="OrgEmailStudent",
+            last_name="Applicant",
+            org_email="ORG-STUDENT@example.com",
+            address="Organization Email Address",
+        )
+        app = _verified(
+            applicant_type=Application.Type.STUDENT,
+            email="org-student@EXAMPLE.com",
+        )
+        verify_application_browser(
+            self.client, app, expected_recipient="org-student@example.com"
+        )
+
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "OrgEmailStudent")
+        self.assertContains(response, "Organization Email Address")
+
+    def test_step5_does_not_prefill_student_when_email_matches_an_adult(self):
+        Student.objects.create(
+            legal_first_name="AmbiguousStudent",
+            last_name="Applicant",
+            personal_email="shared@example.com",
+            address="Private Student Address",
+        )
+        Adult.objects.create(
+            legal_first_name="DifferentPerson",
+            last_name="Applicant",
+            personal_email="shared@example.com",
+            address="Private Adult Address",
+        )
+        app = _verified(
+            applicant_type=Application.Type.STUDENT, email="shared@example.com"
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "AmbiguousStudent")
+        self.assertNotContains(response, "Private Student Address")
+        self.assertNotContains(response, "Private Adult Address")
+
+    def test_step5_does_not_prefill_when_multiple_students_share_email(self):
+        for first_name, address in (
+            ("FirstAmbiguousStudent", "First Private Address"),
+            ("SecondAmbiguousStudent", "Second Private Address"),
+        ):
+            Student.objects.create(
+                legal_first_name=first_name,
+                last_name="Applicant",
+                personal_email="shared-students@example.com",
+                address=address,
+            )
+        app = _verified(
+            applicant_type=Application.Type.STUDENT,
+            email="shared-students@example.com",
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "FirstAmbiguousStudent")
+        self.assertNotContains(response, "SecondAmbiguousStudent")
+        self.assertNotContains(response, "First Private Address")
+        self.assertNotContains(response, "Second Private Address")
+
+    def test_step5_withholds_guardian_student_picker_for_ambiguous_email(self):
+        adult = Adult.objects.create(
+            legal_first_name="Guardian",
+            last_name="Applicant",
+            personal_email="shared-family@example.com",
+            is_parent=True,
+        )
+        Student.objects.create(
+            legal_first_name="PrivateLinkedChild",
+            last_name="Applicant",
+            personal_email="shared-family@example.com",
+            primary_contact=adult,
+        )
+        app = _verified(
+            applicant_type=Application.Type.PARENT,
+            email="shared-family@example.com",
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "PrivateLinkedChild")
+
+    def test_step5_matches_unique_guardian_organization_email_case_insensitively(self):
+        adult = Adult.objects.create(
+            legal_first_name="OrgEmailGuardian",
+            last_name="Applicant",
+            org_email="ORG-GUARDIAN@example.com",
+            is_parent=True,
+        )
+        Student.objects.create(
+            legal_first_name="OrgEmailGuardianChild",
+            last_name="Applicant",
+            primary_contact=adult,
+        )
+        app = _verified(
+            applicant_type=Application.Type.PARENT,
+            email="org-guardian@EXAMPLE.com",
+        )
+        verify_application_browser(
+            self.client, app, expected_recipient="org-guardian@example.com"
+        )
+
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "OrgEmailGuardianChild")
+
+    def test_step5_rejects_student_profile_link_if_email_becomes_ambiguous(self):
+        Student.objects.create(
+            legal_first_name="ReturningStudent",
+            last_name="Applicant",
+            personal_email="returning@example.com",
+        )
+        app = _verified(
+            applicant_type=Application.Type.STUDENT, email="returning@example.com"
+        )
+        verify_application_browser(self.client, app)
+        payload = {
+            "legal_first_name": "Updated",
+            "preferred_first_name": "",
+            "last_name": "Applicant",
+            "pronouns": "",
+            "personal_email": "returning@example.com",
+            "address": "123 Main St",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15213",
+            "phone_number": "",
+            "school_name": "Pittsburgh High",
+            "grade": "9",
+            "graduation_year": "",
+            "tshirt_size": "M",
+            "allergies": "",
+            "dietary_restrictions": "",
+            "medical_notes": "",
+            "date_of_birth": _FIFTEEN_YEAR_OLD_DOB,
+        }
+        original_save_step_data = steps_student._save_step_data
+
+        def add_ambiguous_identity_then_save(*args, **kwargs):
+            Adult.objects.create(
+                legal_first_name="ConcurrentDifferentPerson",
+                last_name="Applicant",
+                personal_email="returning@example.com",
+            )
+            return original_save_step_data(*args, **kwargs)
+
+        with patch.object(
+            steps_student,
+            "_save_step_data",
+            side_effect=add_ambiguous_identity_then_save,
+        ):
+            response = self.client.post(
+                reverse("apply_step5", kwargs={"app_id": app.application_id}),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        app.refresh_from_db()
+        self.assertNotIn("step5-student", app.data)
 
     def test_step5_post_saves_data_and_advances_to_step6(self):
         app = _verified()

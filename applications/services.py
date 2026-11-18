@@ -332,6 +332,40 @@ def find_adult_by_email(email: str, organization=None):
     return qs.first()
 
 
+def _find_unique_application_person_by_email(email: str, organization=None):
+    """Return a sole tenant-owned Student or Adult match, otherwise ``None``."""
+    email = normalize_email(email)
+    if not email or organization is None:
+        return None
+
+    email_filter = Q(personal_email__iexact=email) | Q(org_email__iexact=email)
+    students = list(
+        Student.objects.for_organization(organization)
+        .filter(email_filter)
+        .order_by("pk")[:2]
+    )
+    adults = list(
+        Adult.objects.for_organization(organization)
+        .filter(email_filter)
+        .order_by("pk")[:2]
+    )
+    if len(students) + len(adults) != 1:
+        return None
+    return students[0] if students else adults[0]
+
+
+def find_unique_student_by_email(email: str, organization=None):
+    """Return a Student only when the email identifies one person in the tenant."""
+    match = _find_unique_application_person_by_email(email, organization)
+    return match if isinstance(match, Student) else None
+
+
+def find_unique_adult_by_email(email: str, organization=None):
+    """Return an Adult only when the email identifies one person in the tenant."""
+    match = _find_unique_application_person_by_email(email, organization)
+    return match if isinstance(match, Adult) else None
+
+
 def find_existing_mentor_by_email(email: str, organization=None):
     """Return an existing Adult flagged as a mentor matching this email,
     or ``None``. Used to block re-applications by people we already know.

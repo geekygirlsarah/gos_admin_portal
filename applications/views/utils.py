@@ -14,7 +14,7 @@ from programs.utils import calculate_grade
 from ..models import Application, normalize_step_keys
 from ..services import (
     find_existing_mentor_by_email,
-    find_student_by_email,
+    find_unique_student_by_email,
     send_otp_email,
     student_to_prefill,
 )
@@ -320,7 +320,7 @@ def _student_initial_for(application: Application) -> dict:
         return saved
     # Try to prefill from an existing Student record.
     if application.applicant_type == Application.Type.STUDENT:
-        existing = find_student_by_email(
+        existing = find_unique_student_by_email(
             application.email, organization=application.organization
         )
         if existing:

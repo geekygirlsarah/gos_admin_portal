@@ -51,7 +51,8 @@ from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import (
     adult_to_prefill,
     find_adult_by_email,
-    find_student_by_email,
+    find_unique_adult_by_email,
+    find_unique_student_by_email,
     get_program_buckets,
     get_student_emails,
     send_application_documents_required_email,
@@ -858,14 +859,18 @@ class Step5StudentInfoView(View):
 
         if chosen_student is not None:
             payload["_existing_student_id"] = chosen_student.pk
-        elif application.applicant_type == Application.Type.STUDENT:
+        matched_student = None
+        if (
+            chosen_student is None
+            and application.applicant_type == Application.Type.STUDENT
+        ):
             # Returning student: remember which Student record matched so
             # Step 6 can prefill the primary parent/guardian automatically.
-            matched = find_student_by_email(
+            matched_student = find_unique_student_by_email(
                 application.email, organization=application.organization
             )
-            if matched is not None:
-                payload["_existing_student_id"] = matched.pk
+            if matched_student is not None:
+                payload["_existing_student_id"] = matched_student.pk
 
         def validate_current(current):
             guard = _step_write_guard(request, current, application)
@@ -908,6 +913,29 @@ class Step5StudentInfoView(View):
                         current.program.start_date if current.program else None
                     ),
                 )
+            if current.applicant_type == Application.Type.STUDENT:
+                current_matched_student = find_unique_student_by_email(
+                    current.email, organization=current.organization
+                )
+                if getattr(current_matched_student, "pk", None) != getattr(
+                    matched_student, "pk", None
+                ):
+                    form.add_error(
+                        None,
+                        "The existing student match changed while this form was "
+                        "being saved. Please review the information and submit it "
+                        "again.",
+                    )
+                    return self._render(
+                        request,
+                        current,
+                        form,
+                        current_picker,
+                        current_chosen_student,
+                        program_start_date=(
+                            current.program.start_date if current.program else None
+                        ),
+                    )
             return None
 
         response = _save_step_data(
@@ -926,7 +954,7 @@ class Step5StudentInfoView(View):
         """Return (chosen_student, picker_form_or_None)."""
         if application.applicant_type != Application.Type.PARENT:
             return None, None
-        adult = find_adult_by_email(
+        adult = find_unique_adult_by_email(
             application.email, organization=application.organization
         )
         students = students_for_adult(adult, organization=application.organization)
@@ -990,7 +1018,7 @@ class Step5StudentInfoView(View):
             and application.applicant_type == Application.Type.STUDENT
             and not (application.data or {}).get("step5-student")
         ):
-            prefill_student = find_student_by_email(
+            prefill_student = find_unique_student_by_email(
                 application.email, organization=application.organization
             )
         welcome_back = None
