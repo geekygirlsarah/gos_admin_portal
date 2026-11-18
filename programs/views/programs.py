@@ -7,7 +7,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -483,6 +483,8 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["role"] = get_user_role(self.request.user, org=org)
 
         role = ctx["role"]
+        if role == "LeadMentor":
+            ctx["student_export_column_sections"] = _student_export_column_sections()
 
         # Prepare annotated queryset for consistent sorting
         base_qs = (
@@ -2174,37 +2176,113 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         )
 
 
-_STUDENT_EXPORT_BASE_HEADERS = ["First Name", "Last Name", "Grade"]
-_STUDENT_EXPORT_CONTACT_HEADERS = [
-    "Student Email",
-    "Student Phone",
-    "School",
-    "Graduation Year",
-]
-_STUDENT_EXPORT_PARENT_HEADERS = [
-    "Parent 1 First Name",
-    "Parent 1 Last Name",
-    "Parent 1 Relationship",
-    "Parent 1 Specific Relationship",
-    "Parent 1 Email",
-    "Parent 1 Phone",
-    "Parent 1 Email Updates",
-    "Parent 2 First Name",
-    "Parent 2 Last Name",
-    "Parent 2 Relationship",
-    "Parent 2 Specific Relationship",
-    "Parent 2 Email",
-    "Parent 2 Phone",
-    "Parent 2 Email Updates",
-]
-_STUDENT_EXPORT_BALANCE_HEADERS = [
-    "Total Fees",
-    "Discount",
-    "Payments",
-    "Balance Due",
-]
-# Optional column groups a Lead Mentor can request via ?groups=...
-_STUDENT_EXPORT_GROUPS = ("contact", "parents", "balance")
+_STUDENT_EXPORT_BASE_COLUMNS = ("first_name", "last_name", "grade")
+_STUDENT_EXPORT_GROUP_COLUMNS = {
+    "contact": (
+        "student_email",
+        "student_phone",
+        "school",
+        "graduation_year",
+    ),
+    "parents": (
+        "parent1_first_name",
+        "parent1_last_name",
+        "parent1_relationship",
+        "parent1_specific_relationship",
+        "parent1_email",
+        "parent1_phone",
+        "parent1_email_updates",
+        "parent2_first_name",
+        "parent2_last_name",
+        "parent2_relationship",
+        "parent2_specific_relationship",
+        "parent2_email",
+        "parent2_phone",
+        "parent2_email_updates",
+    ),
+    "balance": ("total_fees", "discount", "payments", "balance_due"),
+    "names": ("legal_first_name", "preferred_first_name"),
+    "tshirt": ("tshirt_size",),
+    "address": ("street_address", "city", "state", "zip_code"),
+    "preferences": ("can_receive_texts", "directory_consent"),
+}
+_STUDENT_EXPORT_COLUMN_HEADERS = {
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "grade": "Grade",
+    "active": "Active",
+    "student_email": "Student Email",
+    "student_phone": "Student Phone",
+    "school": "School",
+    "graduation_year": "Graduation Year",
+    "parent1_first_name": "Parent 1 First Name",
+    "parent1_last_name": "Parent 1 Last Name",
+    "parent1_relationship": "Parent 1 Relationship",
+    "parent1_specific_relationship": "Parent 1 Specific Relationship",
+    "parent1_email": "Parent 1 Email",
+    "parent1_phone": "Parent 1 Phone",
+    "parent1_email_updates": "Parent 1 Email Updates",
+    "parent2_first_name": "Parent 2 First Name",
+    "parent2_last_name": "Parent 2 Last Name",
+    "parent2_relationship": "Parent 2 Relationship",
+    "parent2_specific_relationship": "Parent 2 Specific Relationship",
+    "parent2_email": "Parent 2 Email",
+    "parent2_phone": "Parent 2 Phone",
+    "parent2_email_updates": "Parent 2 Email Updates",
+    "total_fees": "Total Fees",
+    "discount": "Discount",
+    "payments": "Payments",
+    "balance_due": "Balance Due",
+    "legal_first_name": "Legal First Name",
+    "preferred_first_name": "Preferred First Name",
+    "tshirt_size": "T-shirt Size",
+    "street_address": "Street Address",
+    "city": "City",
+    "state": "State",
+    "zip_code": "ZIP Code",
+    "can_receive_texts": "Can Receive Texts",
+    "directory_consent": "Directory Consent",
+}
+_STUDENT_EXPORT_GROUPS = tuple(_STUDENT_EXPORT_GROUP_COLUMNS)
+_STUDENT_EXPORT_COLUMN_SECTIONS = (
+    (
+        "Student name and enrollment",
+        _STUDENT_EXPORT_BASE_COLUMNS + ("active",),
+    ),
+    ("Student contact", _STUDENT_EXPORT_GROUP_COLUMNS["contact"]),
+    (
+        "Parent/guardian 1",
+        _STUDENT_EXPORT_GROUP_COLUMNS["parents"][:7],
+    ),
+    (
+        "Parent/guardian 2",
+        _STUDENT_EXPORT_GROUP_COLUMNS["parents"][7:],
+    ),
+    ("Balance", _STUDENT_EXPORT_GROUP_COLUMNS["balance"]),
+    ("Legal and preferred names", _STUDENT_EXPORT_GROUP_COLUMNS["names"]),
+    ("T-shirt", _STUDENT_EXPORT_GROUP_COLUMNS["tshirt"]),
+    ("Mailing address", _STUDENT_EXPORT_GROUP_COLUMNS["address"]),
+    ("Contact preferences", _STUDENT_EXPORT_GROUP_COLUMNS["preferences"]),
+)
+_STUDENT_EXPORT_MODAL_DEFAULT_COLUMNS = set(
+    _STUDENT_EXPORT_BASE_COLUMNS
+    + ("active",)
+    + tuple(
+        column
+        for group in ("contact", "parents", "balance")
+        for column in _STUDENT_EXPORT_GROUP_COLUMNS[group]
+    )
+)
+
+
+def _safe_student_export_text(value):
+    """Keep newly added user-entered text columns from being read as formulas."""
+    text = value or ""
+    if not isinstance(text, str):
+        return text
+    if text.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+        return f"'{text}"
+    return text
 
 
 def _adult_contact_values(relationship):
@@ -2230,56 +2308,137 @@ def _adult_contact_values(relationship):
     ]
 
 
-def _student_export_headers(groups, is_lead=False):
-    """Return the header row for the requested optional column groups."""
-    headers = list(_STUDENT_EXPORT_BASE_HEADERS)
+def _student_export_columns(groups, is_lead=False):
+    """Expand legacy group selections into their individual column keys."""
+    columns = set(_STUDENT_EXPORT_BASE_COLUMNS)
     if is_lead:
-        headers.append("Active")
-    if "contact" in groups:
-        headers += _STUDENT_EXPORT_CONTACT_HEADERS
-    if "parents" in groups:
-        headers += _STUDENT_EXPORT_PARENT_HEADERS
-    if "balance" in groups:
-        headers += _STUDENT_EXPORT_BALANCE_HEADERS
-    return headers
+        columns.add("active")
+        for group in groups:
+            columns.update(_STUDENT_EXPORT_GROUP_COLUMNS[group])
+    return columns
 
 
-def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=False):
-    """Return one export row for an enrollment/student, honoring the requested groups."""
-    student = enrollment.student
-    row = [
-        student.preferred_first_name or student.legal_first_name,
-        student.last_name,
-        student.grade_display or "",
+def _student_export_headers(columns, is_lead=False):
+    """Return headers in the established export order for selected columns."""
+    selected = set(columns)
+    if not is_lead:
+        selected.intersection_update(_STUDENT_EXPORT_BASE_COLUMNS)
+    return [
+        header
+        for column, header in _STUDENT_EXPORT_COLUMN_HEADERS.items()
+        if column in selected
     ]
+
+
+def _student_export_column_sections():
+    """Build the individually selectable Lead Mentor modal options."""
+    return [
+        {
+            "title": title,
+            "columns": [
+                {
+                    "key": column,
+                    "header": _STUDENT_EXPORT_COLUMN_HEADERS[column],
+                    "input_id": "exportColumn"
+                    + "".join(part.title() for part in column.split("_")),
+                    "checked": column in _STUDENT_EXPORT_MODAL_DEFAULT_COLUMNS,
+                }
+                for column in columns
+            ],
+        }
+        for title, columns in _STUDENT_EXPORT_COLUMN_SECTIONS
+    ]
+
+
+def _student_export_row(enrollment, program, columns, can_view_sliding, is_lead=False):
+    """Return one export row for an enrollment/student and selected columns."""
+    student = enrollment.student
+    selected = set(columns)
+    values = {}
+    if "first_name" in selected:
+        values["first_name"] = student.preferred_first_name or student.legal_first_name
+    if "last_name" in selected:
+        values["last_name"] = student.last_name
+    if "grade" in selected:
+        values["grade"] = student.grade_display or ""
+
     if is_lead:
-        is_active = bool(enrollment.active and not student.graduated)
-        row.append("Yes" if is_active else "No")
+        if "active" in selected:
+            is_active = bool(enrollment.active and not student.graduated)
+            values["active"] = "Yes" if is_active else "No"
 
-    if "contact" in groups:
-        row += [
-            student.personal_email or student.org_email or "",
-            student.phone_number or "",
-            student.school.name if student.school else "",
-            student.graduation_year or "",
-        ]
+    contact_columns = set(_STUDENT_EXPORT_GROUP_COLUMNS["contact"])
+    if selected & contact_columns:
+        values.update(
+            {
+                "student_email": student.personal_email or student.org_email or "",
+                "student_phone": student.phone_number or "",
+                "school": student.school.name if student.school else "",
+                "graduation_year": student.graduation_year or "",
+            }
+        )
 
-    if "parents" in groups:
-        row += _adult_contact_values(student.primary_contact_relationship)
-        row += _adult_contact_values(student.secondary_contact_relationship)
+    parent_columns = _STUDENT_EXPORT_GROUP_COLUMNS["parents"]
+    if selected & set(parent_columns):
+        values.update(
+            zip(
+                parent_columns[:7],
+                _adult_contact_values(student.primary_contact_relationship),
+            )
+        )
+        values.update(
+            zip(
+                parent_columns[7:],
+                _adult_contact_values(student.secondary_contact_relationship),
+            )
+        )
 
-    if "balance" in groups:
+    balance_columns = _STUDENT_EXPORT_GROUP_COLUMNS["balance"]
+    if selected & set(balance_columns):
         balance_data = get_student_balance_data(
             student, program, can_view_sliding=can_view_sliding
         )
-        row += [
-            float(balance_data["total_fees"]),
-            float(balance_data["total_sliding"]),
-            float(balance_data["total_payments"]),
-            float(balance_data["balance"]),
-        ]
+        values.update(
+            zip(
+                balance_columns,
+                (
+                    float(balance_data["total_fees"]),
+                    float(balance_data["total_sliding"]),
+                    float(balance_data["total_payments"]),
+                    float(balance_data["balance"]),
+                ),
+            )
+        )
 
-    return row
+    if "legal_first_name" in selected:
+        values["legal_first_name"] = _safe_student_export_text(student.legal_first_name)
+    if "preferred_first_name" in selected:
+        values["preferred_first_name"] = _safe_student_export_text(
+            student.preferred_first_name
+        )
+
+    if "tshirt_size" in selected:
+        values["tshirt_size"] = _safe_student_export_text(student.tshirt_size)
+
+    for column, field in (
+        ("street_address", "address"),
+        ("city", "city"),
+        ("state", "state"),
+        ("zip_code", "zip_code"),
+    ):
+        if column in selected:
+            values[column] = _safe_student_export_text(getattr(student, field))
+
+    if "can_receive_texts" in selected:
+        values["can_receive_texts"] = "Yes" if student.can_receive_texts else "No"
+    if "directory_consent" in selected:
+        values["directory_consent"] = "Yes" if student.directory_consent else "No"
+
+    return [
+        values.get(column, "")
+        for column in _STUDENT_EXPORT_COLUMN_HEADERS
+        if column in selected
+    ]
 
 
 def _students_xlsx_response(program, headers, rows):
@@ -2306,10 +2465,10 @@ def _students_csv_response(program, headers, rows):
 class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     """Export active students in a program as an Excel (.xlsx) or CSV file.
 
-    Lead Mentors can request extra columns via repeated/CSV ``?groups=`` values
-    (``contact``, ``parents``, ``balance``) and choose the output format with
-    ``?format=csv``. Extra groups are ignored for non-Lead-Mentor roles, who
-    always get the basic name/grade export.
+    Lead Mentors can request individual columns via repeated ``?columns=``
+    values, or use the legacy grouped ``?groups=`` parameters. Extra columns
+    are ignored for non-Lead-Mentor roles, who always get the basic
+    name/grade export.
     """
 
     section = "programs"
@@ -2321,14 +2480,28 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
         role = get_user_role(user, org=org)
         is_lead = role == "LeadMentor"
 
-        groups = set()
-        if is_lead:
-            requested = []
-            for value in request.GET.getlist("groups"):
-                requested.extend(part.strip() for part in value.split(","))
-            groups = {g for g in requested if g in _STUDENT_EXPORT_GROUPS}
+        if is_lead and "column_selection" in request.GET:
+            columns = {
+                column
+                for column in request.GET.getlist("columns")
+                if column in _STUDENT_EXPORT_COLUMN_HEADERS
+            }
+            if not columns:
+                return HttpResponseBadRequest("Select at least one export column.")
+        else:
+            groups = set()
+            if is_lead:
+                requested = []
+                for value in request.GET.getlist("groups"):
+                    requested.extend(part.strip() for part in value.split(","))
+                groups = {
+                    group for group in requested if group in _STUDENT_EXPORT_GROUPS
+                }
+            columns = _student_export_columns(groups, is_lead=is_lead)
 
-        can_view_sliding = can_user_read(user, "sliding_scale", org=org)
+        can_view_sliding = False
+        if set(_STUDENT_EXPORT_GROUP_COLUMNS["balance"]) & columns:
+            can_view_sliding = can_user_read(user, "sliding_scale", org=org)
 
         enrollments = Enrollment.objects.for_organization(org).filter(program=program)
         if org is not None:
@@ -2374,12 +2547,12 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 .order_by("sort_first", "sort_last")
             )
 
-        headers = _student_export_headers(groups, is_lead=is_lead)
+        headers = _student_export_headers(columns, is_lead=is_lead)
         rows = [
             _student_export_row(
                 enrollment,
                 program,
-                groups,
+                columns,
                 can_view_sliding,
                 is_lead=is_lead,
             )

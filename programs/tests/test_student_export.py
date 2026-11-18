@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from openpyxl import load_workbook
 
-from organizations.models import UserOrganizationMembership
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Enrollment, Fee, Payment, Program, Student
 
 
@@ -188,6 +188,112 @@ class ProgramStudentExportExtendedTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         return load_workbook(BytesIO(resp.content)).active
 
+    def test_individual_columns_export_only_selected_fields_in_order(self):
+        self.student_a.legal_first_name = "Alexandra"
+        self.student_a.preferred_first_name = "Ali"
+        self.student_a.save(update_fields=["legal_first_name", "preferred_first_name"])
+
+        ws = self._sheet(
+            self.client.get(
+                self._url(
+                    "column_selection=1&columns=student_phone"
+                    "&columns=legal_first_name&columns=preferred_first_name"
+                    "&columns=student_email"
+                )
+            )
+        )
+
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(
+            headers,
+            [
+                "Student Email",
+                "Student Phone",
+                "Legal First Name",
+                "Preferred First Name",
+            ],
+        )
+        row = dict(zip(headers, ws[2]))
+        self.assertEqual(row["Student Email"].value, "alice@example.com")
+        self.assertEqual(row["Student Phone"].value, "555-1234")
+        self.assertEqual(row["Legal First Name"].value, "Alexandra")
+        self.assertEqual(row["Preferred First Name"].value, "Ali")
+
+        response = self.client.get(
+            self._url(
+                "format=csv&column_selection=1&columns=student_email"
+                "&columns=legal_first_name"
+            )
+        )
+        csv_rows = list(csv.reader(StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(csv_rows[0], ["Student Email", "Legal First Name"])
+        self.assertEqual(csv_rows[1], ["alice@example.com", "Alexandra"])
+
+    def test_individual_selection_can_omit_base_columns_and_active_status(self):
+        ws = self._sheet(
+            self.client.get(
+                self._url("column_selection=1&columns=first_name&columns=grade")
+            )
+        )
+
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(headers, ["First Name", "Grade"])
+        self.assertEqual(ws.cell(row=2, column=1).value, "Alice")
+        self.assertNotIn("Active", headers)
+
+    def test_empty_individual_selection_is_rejected(self):
+        response = self.client.get(self._url("column_selection=1"))
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_unknown_and_duplicate_individual_columns_are_ignored(self):
+        ws = self._sheet(
+            self.client.get(
+                self._url(
+                    "column_selection=1&columns=student_email"
+                    "&columns=student_email&columns=unknown"
+                )
+            )
+        )
+
+        self.assertEqual(
+            [cell.value for cell in ws[1]],
+            ["Student Email"],
+        )
+
+    def test_export_modal_offers_individual_columns_with_existing_defaults(self):
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Please protect student information and delete exported files when you are done.",
+        )
+        self.assertContains(response, 'type="submit" class="btn btn-primary"')
+        self.assertContains(response, "Export</button>")
+        self.assertNotContains(response, "Basic export")
+        self.assertContains(response, 'name="column_selection" value="1"')
+        for column in (
+            "first_name",
+            "last_name",
+            "grade",
+            "active",
+            "student_email",
+            "parent1_email",
+            "total_fees",
+        ):
+            with self.subTest(column=column):
+                self.assertContains(response, f'name="columns" value="{column}"')
+        self.assertContains(
+            response, 'value="first_name" id="exportColumnFirstName" checked'
+        )
+        self.assertContains(
+            response, 'value="student_email" id="exportColumnStudentEmail" checked'
+        )
+        self.assertNotContains(
+            response, 'value="legal_first_name" id="exportColumnLegalFirstName" checked'
+        )
+
     def test_default_lead_export_has_active_column_and_all_students(self):
         # Create an inactive student in the program
         student_inactive = Student.objects.create(
@@ -292,6 +398,142 @@ class ProgramStudentExportExtendedTests(TestCase):
             ],
         )
 
+    def test_tshirt_group_exports_sizes_and_keeps_missing_values_blank(self):
+        self.student_a.tshirt_size = "M"
+        self.student_a.save(update_fields=["tshirt_size"])
+        blank_student = Student.objects.create(
+            organization=self.program.organization,
+            legal_first_name="Zoe",
+            last_name="Blank",
+        )
+        Enrollment.objects.create(
+            organization=self.program.organization,
+            student=blank_student,
+            program=self.program,
+            active=True,
+        )
+
+        ws = self._sheet(self.client.get(self._url("groups=tshirt")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(headers[-1], "T-shirt Size")
+        rows = {
+            str(row[0].value or ""): row[-1].value for row in ws.iter_rows(min_row=2)
+        }
+        self.assertEqual(rows["Alice"], "M")
+        self.assertIn(rows["Zoe"], (None, ""))
+
+    def test_profile_groups_export_names_address_and_contact_preferences(self):
+        self.student_a.legal_first_name = "Alexandra"
+        self.student_a.preferred_first_name = "Ali"
+        self.student_a.address = "1 Main Street"
+        self.student_a.city = "Pittsburgh"
+        self.student_a.state = "PA"
+        self.student_a.zip_code = "15213"
+        self.student_a.can_receive_texts = True
+        self.student_a.directory_consent = False
+        self.student_a.save()
+
+        ws = self._sheet(
+            self.client.get(self._url("groups=preferences,address,tshirt,names"))
+        )
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(
+            headers[-9:],
+            [
+                "Legal First Name",
+                "Preferred First Name",
+                "T-shirt Size",
+                "Street Address",
+                "City",
+                "State",
+                "ZIP Code",
+                "Can Receive Texts",
+                "Directory Consent",
+            ],
+        )
+        row = {str(header): cell.value for header, cell in zip(headers, ws[2])}
+        self.assertEqual(row["Legal First Name"], "Alexandra")
+        self.assertEqual(row["Preferred First Name"], "Ali")
+        self.assertEqual(row["Street Address"], "1 Main Street")
+        self.assertEqual(row["City"], "Pittsburgh")
+        self.assertEqual(row["State"], "PA")
+        self.assertEqual(row["ZIP Code"], "15213")
+        self.assertEqual(row["Can Receive Texts"], "Yes")
+        self.assertEqual(row["Directory Consent"], "No")
+
+    def test_new_export_text_fields_are_safe_in_xlsx_and_csv(self):
+        self.student_a.address = "=SUM(1,1)"
+        self.student_a.save(update_fields=["address"])
+
+        xlsx = self._sheet(self.client.get(self._url("groups=address")))
+        xlsx_headers = [cell.value for cell in xlsx[1]]
+        address_cell = xlsx.cell(row=2, column=xlsx_headers.index("Street Address") + 1)
+        self.assertEqual(address_cell.value, "'=SUM(1,1)")
+        self.assertNotEqual(address_cell.data_type, "f")
+
+        response = self.client.get(self._url("format=csv&groups=address"))
+        csv_rows = list(csv.reader(StringIO(response.content.decode("utf-8"))))
+        address_index = csv_rows[0].index("Street Address")
+        self.assertEqual(csv_rows[1][address_index], "'=SUM(1,1)")
+
+    def test_export_modal_shows_new_columns_unchecked(self):
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+        self.assertEqual(response.status_code, 200)
+        for column in (
+            "legal_first_name",
+            "preferred_first_name",
+            "tshirt_size",
+            "street_address",
+            "city",
+            "state",
+            "zip_code",
+            "can_receive_texts",
+            "directory_consent",
+        ):
+            with self.subTest(column=column):
+                self.assertContains(response, f'name="columns" value="{column}"')
+        self.assertNotContains(
+            response,
+            'value="legal_first_name" id="exportColumnLegalFirstName" checked',
+        )
+
+    def test_export_excludes_students_owned_by_another_organization(self):
+        other_org = Organization.objects.create(
+            name="Other Organization",
+            slug="other-organization",
+            subdomain="other-organization",
+        )
+        foreign_student = Student.objects.create(
+            organization=other_org,
+            legal_first_name="Private",
+            last_name="Student",
+            tshirt_size="XL",
+            address="99 Secret Street",
+        )
+        Enrollment.objects.create(
+            organization=self.program.organization,
+            student=foreign_student,
+            program=self.program,
+            active=True,
+        )
+
+        ws = self._sheet(self.client.get(self._url("groups=tshirt,address,names")))
+        exported = [row[0].value for row in ws.iter_rows(min_row=2)]
+        self.assertIn("Alice", exported)
+        self.assertNotIn("Private", exported)
+
+        selected_ws = self._sheet(
+            self.client.get(
+                self._url(
+                    "column_selection=1&columns=first_name&columns=tshirt_size"
+                    "&columns=street_address"
+                )
+            )
+        )
+        selected_rows = [row[0].value for row in selected_ws.iter_rows(min_row=2)]
+        self.assertIn("Alice", selected_rows)
+        self.assertNotIn("Private", selected_rows)
+
     def test_csv_format_returns_csv(self):
         resp = self.client.get(self._url("format=csv&groups=contact"))
         self.assertEqual(resp.status_code, 200)
@@ -317,6 +559,20 @@ class ProgramStudentExportExtendedTests(TestCase):
         )
         self.client.login(username="mentor", password="pass12345")  # nosec B106
 
-        ws = self._sheet(self.client.get(self._url("groups=contact,parents,balance")))
+        ws = self._sheet(
+            self.client.get(
+                self._url(
+                    "groups=contact,parents,balance,names,tshirt,address,preferences"
+                )
+            )
+        )
         headers = [cell.value for cell in ws[1]]
         self.assertEqual(headers, ["First Name", "Last Name", "Grade"])
+
+        selected_ws = self._sheet(
+            self.client.get(self._url("column_selection=1&columns=student_email"))
+        )
+        self.assertEqual(
+            [cell.value for cell in selected_ws[1]],
+            ["First Name", "Last Name", "Grade"],
+        )

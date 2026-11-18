@@ -2,9 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-18
+
+### Changed
+- Removed the redundant Basic export link from the student export modal; the configurable Export action remains available.
+- Added a reminder to protect student information and delete exported files when finished.
+
 ## 2026-11-17
 
 ### Changed
+- Lead Mentors can select individual student export columns; existing export defaults and grouped export links are preserved.
 - Switching an application to a different program preserves its program-bound custom-question answers and restores them if the applicant switches back.
 - Staff application edits now require a signed current-state version and reject stale, missing, or forged form submissions without overwriting newer answers.
 - Program-specific questions now appear on the applicant experience step, retain their wording per application, and required answers are checked again before submission.
