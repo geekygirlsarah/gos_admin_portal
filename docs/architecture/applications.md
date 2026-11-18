@@ -190,7 +190,35 @@ exception or interrupted pending claim is treated as uncertain and must not be
 automatically resent. Operators should investigate the delivery history and
 provider before resolving an uncertain outcome. This is not an exactly-once
 delivery guarantee, and reminder links continue to rely on existing browser and
-guardian document verification. Automatic 30-day expiration remains deferred.
+guardian document verification.
+
+### Application expiration
+
+`expire_applications --organization <slug> [--limit <count>]` checks a bounded
+batch for one active organization. It is read-only by default; only the explicit
+`--execute` option permanently deletes eligible applications and their owned
+uploaded files. The default batch size is 200 and the maximum is 500. No
+automatic scheduler is configured.
+
+The 30-day clock starts at the last recorded applicant progress. Existing
+applications without `applicant_progress_at` use `updated_at` as an
+approximation, which may include OTP or staff activity. Eligible phases are
+unfinished drafts, student applications awaiting parent handoff, and submitted
+student/parent applications that still have at least one active required form
+missing. Applications with complete forms that are waiting for staff review,
+mentor submissions, and finalized/declined applications are excluded. The
+policy applies to applications already in progress as well as new applications;
+expired applicants must start over and cannot resume the deleted application.
+
+Execution rechecks the tenant, progress, status, program, and required-document
+state under an application-row lock. It removes only files under that exact
+organization/application storage prefix, preserving the deletion audit event; an
+inconsistent submission, unsafe path, unsupported storage listing, or failed
+audit prevents deletion. Database and storage deletion are not atomic: a storage
+failure can leave some files already removed while the application remains, so
+operators should review failures before retrying. The existing reviewer stale
+cleanup is a separate manual path with its own selection behavior and is not the
+30-day timeout.
 
 ### Tenant isolation
 

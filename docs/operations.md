@@ -223,11 +223,26 @@ use `--dry-run` first when the command supports it.
 | Monthly Balances   | `python manage.py send_monthly_balances --all-balances`   | Supports `--days-back`, `--student-id`, and `--dry-run` |
 | Calendar Reminders | `python manage.py send_calendar_reminders --days-ahead 3` | Supports `--dry-run`                                    |
 | Application Reminders | `python manage.py send_application_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000) |
+| Application Expiration | `python manage.py expire_applications --organization <slug>` | Read-only by default; destructive `--execute`; supports `--limit` (maximum 500) |
 | Audit Digest       | `python manage.py audit_digest --days 7`                  | Generates a summary of critical audit events            |
 
 Scheduled commands must be safe against accidental duplicate execution where
 practicable. Changes to recipient selection, message templates, scheduling, or
 delivery behavior require regression tests.
+
+Application expiration is not scheduled automatically. First run
+`python manage.py expire_applications --organization <slug>` and review the
+count-only summary. The command includes existing eligible applications and
+uses the recorded applicant-progress timestamp, with `updated_at` as a legacy
+fallback. It permanently deletes eligible application rows and files under the
+matching organization/application storage prefix only when `--execute` is
+provided. Completed applications and submissions awaiting staff review are
+excluded. The command writes a deletion audit event and fails closed on
+inconsistent ownership or unsafe paths. Because storage and database operations
+are not atomic, inspect any reported failures before retrying; partial file
+removal may have occurred. Do not execute this command against shared, staging,
+or production data without separate operational approval. No scheduler or
+deployment configuration is changed by this feature.
 
 Application reminders are not scheduled automatically. The `--dry-run` mode is
 read-only and reports a count without creating ledger claims, displaying

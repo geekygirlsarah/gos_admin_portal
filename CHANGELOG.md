@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Removed the redundant Basic export link from the student export modal; the configurable Export action remains available.
 - Added a reminder to protect student information and delete exported files when finished.
 - Added tenant-scoped application inactivity and deadline reminders with a read-only dry-run, protected resume/document links, and reviewable delivery outcomes; no scheduler is enabled.
+- Added a dry-run-by-default, tenant-scoped 30-day application expiration command for unfinished drafts, parent handoffs, and submitted applications missing required forms; explicit `--execute` deletes eligible applications and their owned uploaded files, with no scheduler enabled.
 
 ## 2026-11-17
 
