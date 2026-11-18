@@ -156,6 +156,42 @@ the database changes are rolled back; the reviewer must resolve the document
 before retrying. Storage writes are not transactional, so files copied before a
 later conversion error may remain in storage.
 
+### Application reminders
+
+`send_application_reminders --organization <slug>` processes a bounded batch for
+one active organization. Its `--dry-run` reports only an eligible-message count;
+it does not create claims, update application timestamps, or send email. No
+automatic scheduler is configured by this feature.
+
+New applications start with `applicant_progress_at`. Successful applicant wizard
+writes, handoff, submission, and applicant document uploads advance that clock;
+OTP activity, staff edits, and reminder delivery do not. Older applications
+without the field use `updated_at` as the approximate inactivity clock, which
+may reflect OTP or staff activity. Inactivity reminders become due after 48
+hours. A deadline reminder is due from two date-days before `applications_close`
+through the inclusive closing date, using `timezone.now().date()`; programs with
+no close date have no deadline reminder, and applications for closed windows are
+not reminded.
+
+Draft student, guardian, and mentor applications are eligible only for a
+verified applicant address or an authorized student-to-guardian handoff. A
+handoff reminder uses the recorded guardian address and tokenized resume route;
+it does not grant browser verification. Submitted student/guardian applications
+are eligible only while required forms remain missing, and notices use
+`document_recipient` and the protected documents route. Applications merely
+awaiting staff review with complete forms and finalized applications are not
+reminded. Simultaneous inactivity and deadline triggers are combined into one
+message for that application phase. Separate tenant-scoped ledger rows dedupe
+each trigger within the draft or missing-documents phase.
+
+Delivery uses synchronous email history and organization tracking. A confirmed
+pre-send failure may be retried; accepted delivery is recorded, while a transport
+exception or interrupted pending claim is treated as uncertain and must not be
+automatically resent. Operators should investigate the delivery history and
+provider before resolving an uncertain outcome. This is not an exactly-once
+delivery guarantee, and reminder links continue to rely on existing browser and
+guardian document verification. Automatic 30-day expiration remains deferred.
+
 ### Tenant isolation
 
 Reviewer lists, filters, details, decisions, edits, conversions, uploads, and deletes require the resolved organization and only load applications owned by it. Review authorization requires a Lead Mentor in that organization or a platform superuser; a global Django reviewer permission does not override tenant roles. Applications linked to a program owned by another organization are treated as inconsistent and are not available in review. Program choices and application KPIs are tenant-scoped.

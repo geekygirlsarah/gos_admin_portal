@@ -222,11 +222,28 @@ use `--dry-run` first when the command supports it.
 | Outreach Reminders | `python manage.py send_outreach_reminders --days-ahead 1` | Supports `--date` and `--dry-run`                       |
 | Monthly Balances   | `python manage.py send_monthly_balances --all-balances`   | Supports `--days-back`, `--student-id`, and `--dry-run` |
 | Calendar Reminders | `python manage.py send_calendar_reminders --days-ahead 3` | Supports `--dry-run`                                    |
+| Application Reminders | `python manage.py send_application_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000) |
 | Audit Digest       | `python manage.py audit_digest --days 7`                  | Generates a summary of critical audit events            |
 
 Scheduled commands must be safe against accidental duplicate execution where
 practicable. Changes to recipient selection, message templates, scheduling, or
 delivery behavior require regression tests.
+
+Application reminders are not scheduled automatically. The `--dry-run` mode is
+read-only and reports a count without creating ledger claims, displaying
+recipients, or sending mail. Before scheduling delivery for an organization,
+verify its email configuration and tenant URL, review dry-run counts, and
+choose an operational cadence that keeps each run within a bounded `--limit`.
+Schedule only the non-dry-run command after those checks; no scheduler or
+deployment configuration is changed by the feature.
+
+Each trigger is claimed before transport and recorded in the tenant-scoped
+reminder ledger. A confirmed pre-send `failed` outcome may be retried on a later
+run. A transport `unknown` outcome or a `pending` claim left by an interrupted
+process is not automatically retried: review the application’s email history
+and provider records before taking an operator-approved recovery action. Do not
+clear or reset uncertain claims based only on the command summary; the system
+does not guarantee exactly-once delivery.
 
 ## Email History Retention
 

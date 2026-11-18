@@ -197,6 +197,13 @@ class Application(models.Model):
     # the wizard at the right point on resume.
     current_step = models.PositiveSmallIntegerField(default=1)
 
+    applicant_progress_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Most recent successful applicant-driven progress update.",
+    )
+
     # Free-form bag of partial form data captured per step. Each step writes
     # its own sub-key (e.g. {"step5": {...}, "step6": {...}}). Keeping this
     # loose lets us iterate on individual steps without schema churn.
@@ -268,6 +275,8 @@ class Application(models.Model):
     # -- Application ID -----------------------------------------------------
 
     def save(self, *args, **kwargs):
+        if self._state.adding and self.applicant_progress_at is None:
+            self.applicant_progress_at = timezone.now()
         if not self.application_id:
             self.application_id = self._generate_unique_application_id()
         super().save(*args, **kwargs)
@@ -458,6 +467,83 @@ class Application(models.Model):
         if self.status == self.Status.CONVERTED and self.is_mentor:
             return "Converted to Mentor"
         return self.get_status_display()
+
+
+class ApplicationReminderDelivery(models.Model):
+    """Claim and outcome metadata for one application reminder trigger."""
+
+    class Phase(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        MISSING_DOCUMENTS = "missing_documents", "Missing documents"
+
+    class ReminderType(models.TextChoices):
+        INACTIVITY = "inactivity", "Inactivity"
+        DEADLINE = "deadline", "Deadline"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        ACCEPTED = "accepted", "Accepted by transport"
+        FAILED = "failed", "Confirmed pre-send failure"
+        UNKNOWN = "unknown", "Unknown delivery outcome"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_reminder_deliveries",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="reminder_deliveries",
+    )
+    phase = models.CharField(max_length=32, choices=Phase.choices)
+    reminder_type = models.CharField(max_length=16, choices=ReminderType.choices)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "phase", "reminder_type"),
+                name="unique_application_reminder_phase_type",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("organization", "status", "claimed_at"),
+                name="app_reminder_org_status_idx",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.application_id
+            and self.organization_id
+            and self.application.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                {
+                    "organization": "The reminder and application must share an organization."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"Reminder for {self.application.application_id} "
+            f"({self.phase}/{self.reminder_type})"
+        )
 
 
 # --- Step 9: post-approval signed-document uploads --------------------------

@@ -287,6 +287,48 @@ class PrivateApplicationDocumentAccessTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_successful_applicant_document_upload_advances_progress_clock(self):
+        previous_progress = timezone.now() - timezone.timedelta(days=3)
+        Application.objects.filter(pk=self.application.pk).update(
+            applicant_progress_at=previous_progress
+        )
+        access_url = reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": self.application.application_id},
+        )
+        codes = []
+        with patch(
+            "applications.views.documents.send_otp_email",
+            side_effect=lambda application, code, request=None, recipient=None: codes.append(
+                code
+            ),
+        ):
+            sent = self.client.post(access_url, {"action": "send"}, HTTP_HOST=self.host)
+        self.assertEqual(sent.status_code, 302)
+        verified = self.client.post(
+            access_url,
+            {"action": "verify", "code": codes[0]},
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(verified.status_code, 302)
+
+        upload = self.client.post(
+            reverse("apply_step10", kwargs={"app_id": self.application.application_id}),
+            {
+                "document_id": self.document.pk,
+                "file": SimpleUploadedFile("replacement.pdf", b"signed content"),
+            },
+            HTTP_HOST=self.host,
+        )
+
+        self.assertRedirects(
+            upload,
+            reverse("apply_step10", kwargs={"app_id": self.application.application_id}),
+            fetch_redirect_response=False,
+        )
+        self.application.refresh_from_db()
+        self.assertGreater(self.application.applicant_progress_at, previous_progress)
+
     def test_document_challenge_invalidated_when_parent_email_changes(self):
         self.application.applicant_type = Application.Type.STUDENT
         self.application.data = {

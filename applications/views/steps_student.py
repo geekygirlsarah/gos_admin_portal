@@ -193,6 +193,7 @@ class Step2ApplicantTypeView(View):
                         current.otp_attempts = 0
                     current.email = new_email
                     current.current_step = max(current.current_step, 3)
+                    current.applicant_progress_at = timezone.now()
                     current.save(
                         update_fields=[
                             "applicant_type",
@@ -202,6 +203,7 @@ class Step2ApplicantTypeView(View):
                             "otp_expires_at",
                             "otp_attempts",
                             "current_step",
+                            "applicant_progress_at",
                             "updated_at",
                         ]
                     )
@@ -371,11 +373,13 @@ class Step4ProgramView(View):
                         current_application.current_step = max(
                             current_application.current_step, 5
                         )
+                        current_application.applicant_progress_at = timezone.now()
                         current_application.save(
                             update_fields=[
                                 "data",
                                 "program",
                                 "current_step",
+                                "applicant_progress_at",
                                 "updated_at",
                             ]
                         )
@@ -1246,11 +1250,13 @@ class Step7PrimaryParentView(View):
                         current.status = Application.Status.AWAITING_PARENT
                         current.current_step = max(current.current_step, 7)
                         current.issue_handoff_token()
+                        current.applicant_progress_at = timezone.now()
                         current.save(
                             update_fields=[
                                 "data",
                                 "status",
                                 "current_step",
+                                "applicant_progress_at",
                                 "updated_at",
                             ]
                         )
@@ -1716,7 +1722,10 @@ class SwapParentsView(View):
                         step7,
                     )
                     current.data = data
-                    current.save(update_fields=["data", "updated_at"])
+                    current.applicant_progress_at = timezone.now()
+                    current.save(
+                        update_fields=["data", "applicant_progress_at", "updated_at"]
+                    )
                     application.data = current.data
                     messages.success(
                         request,
@@ -2034,8 +2043,15 @@ class Step9ConfirmView(View):
             current.status = Application.Status.SUBMITTED
             current.submitted_at = timezone.now()
             current.current_step = 10
+            current.applicant_progress_at = timezone.now()
             current.save(
-                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+                update_fields=[
+                    "status",
+                    "submitted_at",
+                    "current_step",
+                    "applicant_progress_at",
+                    "updated_at",
+                ]
             )
             application = current
 

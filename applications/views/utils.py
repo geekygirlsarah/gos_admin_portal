@@ -7,6 +7,7 @@ import logging
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 
 from programs.utils import calculate_grade
 
@@ -265,9 +266,18 @@ def _save_step_data(
         data.update(data_updates or {})
         current.data = data
         current.current_step = max(current.current_step, next_step)
-        current.save(update_fields=["data", "current_step", "updated_at"])
+        current.applicant_progress_at = timezone.now()
+        current.save(
+            update_fields=[
+                "data",
+                "current_step",
+                "applicant_progress_at",
+                "updated_at",
+            ]
+        )
         application.data = current.data
         application.current_step = current.current_step
+        application.applicant_progress_at = current.applicant_progress_at
     return None
 
 

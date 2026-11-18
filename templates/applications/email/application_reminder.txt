@@ -1,0 +1,11 @@
+{% if missing_documents %}You still need to complete required permission forms for your {{ organization_name }} application.{% else %}This is a reminder to continue your {{ organization_name }} application.{% endif %}
+{% if program_name %}Program: {{ program_name }}{% endif %}
+
+{% if inactivity_due %}It has been about 48 hours since the last recorded application progress.{% endif %}
+{% if deadline_due %}The application window{% if program_name %} for {{ program_name }}{% endif %} closes on {{ deadline|date:"F j, Y" }}. Please complete the application before it closes.{% endif %}
+
+{% if missing_documents %}Use the protected documents page below to review or upload the required forms. A parent or guardian must complete the existing email verification step before accessing documents.{% else %}Use the link below to resume your application. If a parent handoff is in progress, this link preserves the existing handoff verification gate.{% endif %}
+
+Continue your application: {{ application_url }}
+
+If you have already completed this step, you can ignore this reminder.

@@ -13,6 +13,7 @@ from django.core.exceptions import SuspiciousFileOperation
 from django.db import transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.http import content_disposition_header
 from django.views import View
@@ -171,6 +172,8 @@ class Step10DocumentsView(View):
                 submission.file = form.cleaned_data["file"]
                 submission.save()
 
+                current.applicant_progress_at = timezone.now()
+                update_fields = ["applicant_progress_at", "updated_at"]
                 if (
                     current.status == Application.Status.APPROVED
                     and has_required_application_documents(current)
@@ -179,7 +182,8 @@ class Step10DocumentsView(View):
                     # Preserve the legacy post-approval upload transition for
                     # applications approved before the required-document gate.
                     current.status = Application.Status.APPROVED_SIGNED
-                    current.save(update_fields=["status", "updated_at"])
+                    update_fields.append("status")
+                current.save(update_fields=update_fields)
                 application = current
         except SuspiciousFileOperation:
             messages.error(

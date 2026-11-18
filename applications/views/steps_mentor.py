@@ -361,8 +361,15 @@ class MentorConfirmView(View):
             current.status = Application.Status.SUBMITTED
             current.submitted_at = timezone.now()
             current.current_step = max(current.current_step, 9)
+            current.applicant_progress_at = timezone.now()
             current.save(
-                update_fields=["status", "submitted_at", "current_step", "updated_at"]
+                update_fields=[
+                    "status",
+                    "submitted_at",
+                    "current_step",
+                    "applicant_progress_at",
+                    "updated_at",
+                ]
             )
             application = current
         from .utils import logger

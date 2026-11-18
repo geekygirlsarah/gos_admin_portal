@@ -36,6 +36,7 @@ class HandoffSecurityReproductionTests(BrowserVerifiedApplicationTestCase):
             email_verified_at=timezone.now(),
             current_step=6,
         )
+        previous_progress = app.applicant_progress_at
         self.verify_browser_access(app)
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
@@ -49,6 +50,7 @@ class HandoffSecurityReproductionTests(BrowserVerifiedApplicationTestCase):
         )
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.AWAITING_PARENT)
+        self.assertGreater(app.applicant_progress_at, previous_progress)
         self.assertTrue("step7_handoff" in app.data)
         self.assertRedirects(response, reverse("apply_start"))
         response = self.client.post(

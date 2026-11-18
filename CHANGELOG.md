@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Removed the redundant Basic export link from the student export modal; the configurable Export action remains available.
 - Added a reminder to protect student information and delete exported files when finished.
+- Added tenant-scoped application inactivity and deadline reminders with a read-only dry-run, protected resume/document links, and reviewable delivery outcomes; no scheduler is enabled.
 
 ## 2026-11-17
 
