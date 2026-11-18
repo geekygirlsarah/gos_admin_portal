@@ -1,12 +1,14 @@
-"""Tests for the application wizard Step 9 (post-approval signed docs)."""
+"""Tests for required documents before approval and legacy approved records."""
 
 from __future__ import annotations
 
 import datetime
 import logging
+import secrets
 import shutil
 import tempfile
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -22,7 +24,7 @@ from applications.tests.access_helpers import (
     grant_applicant_document_access,
     verify_application_browser,
 )
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program, ProgramDocument
 
 # Use an isolated MEDIA_ROOT so file uploads from tests don't pollute the
@@ -299,11 +301,38 @@ class Step9DocumentsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertIsNone(app.reviewed_at)
         self.assertTrue(
             ApplicationDocumentSubmission.objects.filter(
                 application=app, document=self.doc_required
             ).exists()
         )
+        self.assertEqual(mail.outbox, [])
+
+        reviewer = get_user_model().objects.create_superuser(
+            username="document-reviewer",
+            email="reviewer@example.test",
+            password=secrets.token_urlsafe(32),
+        )
+        UserOrganizationMembership.objects.create(
+            user=reviewer,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(reviewer)
+        approval_response = self.client.post(
+            reverse(
+                "application_review_approve",
+                kwargs={"app_id": app.application_id},
+            )
+        )
+        self.assertEqual(approval_response.status_code, 302)
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.APPROVED_SIGNED)
+        self.assertIsNotNone(app.reviewed_at)
+        self.assertEqual(app.reviewed_by, reviewer)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_reupload_replaces_existing_submission(self):
         app = _approved_application(self.program)
