@@ -21,6 +21,30 @@ This document details models and workflows for Students, Adults, parent-student 
 - Shares the same name fields (`legal_first_name`, `preferred_first_name`, `last_name`) and `display_name` property.
 - Roles are designated by boolean flags (`is_parent`, `is_mentor`, `is_alumni`, `is_volunteer`).
 
+### Incomplete application profiles
+
+`Student` and `Adult` have an `is_incomplete_application_profile` lifecycle
+flag. It defaults to `False`, so existing profiles retain current behavior.
+Their ordinary `objects` managers exclude incomplete profiles; use the
+organization-scoped `all_objects` manager only for internal lifecycle checks
+that explicitly need drafts. Enrollment and adult-student relationship managers
+also exclude rows with an incomplete endpoint, and the primary/secondary
+contact properties return no contact for an incomplete student or guardian.
+
+Incomplete profiles cannot be linked to user accounts, enrolled in programs, or
+given live guardian relationships through model save paths; account-link
+constraints enforce the same rule in the database. The application wizard does
+not create or update these profiles yet. Do not treat this foundation as an
+active profile-writing workflow or create application drafts through ordinary
+profile forms.
+
+Each Student and Adult also has a `profile_revision` counter initialized to 1;
+existing-row saves lock the profile row and increment it, including partial
+updates. Existing relationship-row saves similarly increment their own
+`revision`. Application identity and relationship proposals snapshot these
+values to detect intervening edits; the counters do not grant edit permission or
+apply proposal changes.
+
 ---
 
 ## Student ↔ Adult Relationships & Contact Properties

@@ -10,6 +10,8 @@ from programs.models import Program
 
 from .models import (
     Application,
+    ApplicationFixedAnswer,
+    ApplicationQuestionSet,
     ProgramApplicationQuestion,
     StudentApplicationAnswer,
 )
@@ -341,5 +343,61 @@ def save_experience_answers(application, student, answers):
                 "student": student,
                 "question_text": labels[application.applicant_type == "parent"],
                 "answer": answer,
+            },
+        )
+
+
+def save_structured_experience_answers(application, student):
+    """Copy typed fixed and frozen-question answers to the accepted student."""
+    if student.organization_id != application.organization_id:
+        raise ValueError("Application answers and student must share an organization.")
+
+    fixed_answers = ApplicationFixedAnswer.objects.for_organization(
+        application.organization
+    ).filter(
+        application_id=application.pk,
+        organization_id=application.organization_id,
+    )
+    for item in fixed_answers:
+        labels = EXPERIENCE_QUESTIONS.get(item.question_key)
+        if not labels or not item.answer or not item.answer.strip():
+            continue
+        StudentApplicationAnswer.objects.get_or_create(
+            organization_id=application.organization_id,
+            application=application,
+            student=student,
+            source_step=item.source_step,
+            question_key=item.question_key,
+            defaults={
+                "question_text": labels[application.applicant_type == "parent"],
+                "answer": item.answer,
+            },
+        )
+
+    if not application.program_id:
+        return
+    question_set = (
+        ApplicationQuestionSet.objects.for_organization(application.organization)
+        .filter(
+            application_id=application.pk,
+            organization_id=application.organization_id,
+            program_id=application.program_id,
+        )
+        .first()
+    )
+    if question_set is None:
+        return
+    for item in question_set.answers.all():
+        if not item.answer or not item.answer.strip():
+            continue
+        StudentApplicationAnswer.objects.get_or_create(
+            organization_id=application.organization_id,
+            application=application,
+            student=student,
+            source_step="step6-custom",
+            question_key=str(item.question_id),
+            defaults={
+                "question_text": item.question_text,
+                "answer": item.answer,
             },
         )

@@ -16,7 +16,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.core.exceptions import SuspiciousFileOperation
+from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import models, transaction
 from django.http import Http404
@@ -35,16 +35,33 @@ from programs.constants import (
     STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
 )
-from programs.models import Program, RaceEthnicity
+from programs.models import Adult, Program, ProgramDocument, RaceEthnicity, Student
 from programs.permission_views import user_is_lead_mentor
 from programs.utils import GroupedProgramChoiceField
 from programs.utils.email_async import send_messages_in_background
 from programs.utils.email_html import build_email_parts
 from programs.utils.notifications import get_sender_connection
 
-from ..answers import extract_experience_answers
+from ..answers import EXPERIENCE_QUESTIONS, extract_experience_answers
 from ..forms import StaffDocumentUploadForm
-from ..models import Application, ApplicationDocumentSubmission, normalize_step_keys
+from ..models import (
+    Application,
+    ApplicationDocumentSubmission,
+    ApplicationFixedAnswer,
+    ApplicationGuardianDraft,
+    ApplicationIdentityProposal,
+    ApplicationQuestionSet,
+    ApplicationRelationshipProposal,
+    ApplicationStudentDraft,
+    normalize_step_keys,
+)
+from ..proposals import (
+    ApplicationFinalizationError,
+    finalize_profile_workflow_application,
+    identity_candidate_options,
+    lock_application_proposal_context,
+    proposal_review_state,
+)
 from ..services import (
     ApplicationConversionError,
     _collect_applicant_recipients,
@@ -637,6 +654,209 @@ class _ReviewerRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
         return super().handle_no_permission()
 
 
+def _lock_review_application(request, app_id, using):
+    return get_object_or_404(
+        Application.objects.using(using)
+        .for_organization(request.organization)
+        .select_for_update()
+        .filter(superseded_at__isnull=True),
+        application_id=(app_id or "").upper(),
+    )
+
+
+def _proposal_review_redirect(application):
+    return redirect("application_review_detail", app_id=application.application_id)
+
+
+class ApplicationIdentityProposalDecisionView(_ReviewerRequiredMixin, View):
+    """Record a lead-reviewed identity decision without changing live profiles."""
+
+    def post(self, request, app_id: str, proposal_id: int):
+        application = _get_tenant_application(request, app_id)
+        using = application._state.db
+        try:
+            with transaction.atomic(using=using):
+                current = _lock_review_application(request, app_id, using)
+                if current.profile_workflow_version != 1:
+                    messages.error(
+                        request, "Identity review is not enabled for this application."
+                    )
+                    return _proposal_review_redirect(current)
+                context = lock_application_proposal_context(current, using=using)
+                proposal = next(
+                    (
+                        item
+                        for item in context.identity_proposals
+                        if item.pk == proposal_id
+                    ),
+                    None,
+                )
+                if proposal is None:
+                    raise Http404
+                if not proposal.is_baseline_current():
+                    messages.error(
+                        request,
+                        "This identity proposal is stale; reload it before deciding.",
+                    )
+                    return _proposal_review_redirect(current)
+
+                decision = request.POST.get("decision", "")
+                if decision == ApplicationIdentityProposal.Decision.CONFIRMED:
+                    target_reference = request.POST.get("target_profile", "")
+                    try:
+                        target_type, target_id = target_reference.split(":", 1)
+                        target_id = int(target_id)
+                    except (TypeError, ValueError):
+                        raise ValidationError("Select a valid profile type.")
+                    available = {
+                        (candidate["profile_type"], candidate["profile"].pk)
+                        for candidate in identity_candidate_options(current, proposal)
+                    }
+                    if (target_type, target_id) not in available:
+                        raise Http404
+                    if target_type == "student":
+                        target = get_object_or_404(
+                            Student.all_objects.using(using)
+                            .for_organization(request.organization)
+                            .select_for_update()
+                            .filter(is_incomplete_application_profile=False),
+                            pk=target_id,
+                        )
+                    elif target_type == "adult":
+                        target = get_object_or_404(
+                            Adult.all_objects.using(using)
+                            .for_organization(request.organization)
+                            .select_for_update()
+                            .filter(is_incomplete_application_profile=False),
+                            pk=target_id,
+                        )
+                    else:
+                        raise Http404
+                    refreshed_candidates = {
+                        (candidate["profile_type"], candidate["profile"].pk)
+                        for candidate in identity_candidate_options(current, proposal)
+                    }
+                    if (target_type, target_id) not in refreshed_candidates:
+                        raise ValidationError(
+                            "The selected profile no longer matches the application identity."
+                        )
+                    proposal.set_target_profile(target)
+                elif decision in (
+                    ApplicationIdentityProposal.Decision.NO_MATCH,
+                    ApplicationIdentityProposal.Decision.REJECTED,
+                ):
+                    proposal.target_student = None
+                    proposal.target_adult = None
+                    proposal.target_baseline_revision = None
+                else:
+                    raise ValidationError("Select a valid identity decision.")
+
+                old_decision = proposal.decision
+                proposal.decision = decision
+                proposal.reviewed_by = request.user
+                proposal.reviewed_at = timezone.now()
+                proposal.save(
+                    update_fields=[
+                        "target_student",
+                        "target_adult",
+                        "target_baseline_revision",
+                        "decision",
+                        "reviewed_by",
+                        "reviewed_at",
+                        "updated_at",
+                    ]
+                )
+                log_event(
+                    request=request,
+                    event=AuditEvent.ADMISSION_DECISION,
+                    resource=current,
+                    before={
+                        "identity_proposal_id": proposal.pk,
+                        "decision": old_decision,
+                    },
+                    after={"identity_proposal_id": proposal.pk, "decision": decision},
+                    notes="Application identity proposal reviewed.",
+                )
+                messages.success(request, "Identity proposal decision saved.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return _proposal_review_redirect(application)
+
+
+class ApplicationRelationshipProposalDecisionView(_ReviewerRequiredMixin, View):
+    """Record a lead-reviewed relationship decision without changing family access."""
+
+    def post(self, request, app_id: str, proposal_id: int):
+        application = _get_tenant_application(request, app_id)
+        using = application._state.db
+        try:
+            with transaction.atomic(using=using):
+                current = _lock_review_application(request, app_id, using)
+                if current.profile_workflow_version != 1:
+                    messages.error(
+                        request,
+                        "Relationship review is not enabled for this application.",
+                    )
+                    return _proposal_review_redirect(current)
+                context = lock_application_proposal_context(current, using=using)
+                proposal = next(
+                    (
+                        item
+                        for item in context.relationship_proposals
+                        if item.pk == proposal_id
+                    ),
+                    None,
+                )
+                if proposal is None:
+                    raise Http404
+                if not proposal.is_baseline_current():
+                    messages.error(
+                        request,
+                        "This relationship proposal is stale; reload it before deciding.",
+                    )
+                    return _proposal_review_redirect(current)
+
+                decision = request.POST.get("decision", "")
+                if decision not in (
+                    ApplicationRelationshipProposal.Decision.APPROVED,
+                    ApplicationRelationshipProposal.Decision.REJECTED,
+                ):
+                    raise ValidationError("Select a valid relationship decision.")
+                old_decision = proposal.decision
+                proposal.decision = decision
+                proposal.reviewed_by = request.user
+                proposal.reviewed_at = timezone.now()
+                proposal.save(
+                    update_fields=[
+                        "decision",
+                        "reviewed_by",
+                        "reviewed_at",
+                        "updated_at",
+                    ]
+                )
+                log_event(
+                    request=request,
+                    event=AuditEvent.ADMISSION_DECISION,
+                    resource=current,
+                    before={
+                        "relationship_proposal_id": proposal.pk,
+                        "decision": old_decision,
+                    },
+                    after={
+                        "relationship_proposal_id": proposal.pk,
+                        "decision": decision,
+                    },
+                    notes="Application relationship proposal reviewed.",
+                )
+                messages.success(
+                    request,
+                    "Relationship proposal decision saved; access is unchanged until acceptance.",
+                )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return _proposal_review_redirect(application)
+
+
 @method_decorator(login_required, name="dispatch")
 class ApplicationReviewListView(_ReviewerRequiredMixin, View):
     """List page with status + applicant-type + program filters."""
@@ -878,15 +1098,121 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         # convertible — the auto-upgrade to APPROVED_SIGNED only fires
         # via the applicant's upload flow, so an applicant whose program
         # has no required documents would otherwise be stuck.
-        can_convert = application.status == Application.Status.APPROVED_SIGNED or (
-            application.status == Application.Status.APPROVED and all_required_uploaded
+        can_convert = application.profile_workflow_version == 0 and (
+            application.status == Application.Status.APPROVED_SIGNED
+            or (
+                application.status == Application.Status.APPROVED
+                and all_required_uploaded
+            )
         )
-        can_approve = application.status not in (
-            Application.Status.APPROVED,
-            Application.Status.APPROVED_SIGNED,
-            Application.Status.CONVERTED,
-            Application.Status.DECLINED,
-        ) and (application.is_mentor or all_required_uploaded)
+        proposals_ready, proposal_review_issue = proposal_review_state(application)
+        can_approve = (
+            application.status
+            not in (
+                Application.Status.APPROVED,
+                Application.Status.APPROVED_SIGNED,
+                Application.Status.CONVERTED,
+                Application.Status.DECLINED,
+            )
+            and (application.is_mentor or all_required_uploaded)
+            and proposals_ready
+            and (
+                application.profile_workflow_version == 0
+                or application.status == Application.Status.SUBMITTED
+            )
+        )
+        identity_proposals = list(
+            ApplicationIdentityProposal.objects.for_organization(
+                application.organization
+            )
+            .filter(application_id=application.pk)
+            .select_related(
+                "candidate_student",
+                "candidate_adult",
+                "target_student",
+                "target_adult",
+                "reviewed_by",
+            )
+            .order_by("subject_slot")
+        )
+        for proposal in identity_proposals:
+            proposal.review_baseline_current = proposal.is_baseline_current()
+            proposal.available_candidates = identity_candidate_options(
+                application, proposal
+            )
+        relationship_proposals = list(
+            ApplicationRelationshipProposal.objects.for_organization(
+                application.organization
+            )
+            .filter(application_id=application.pk)
+            .select_related(
+                "student_profile",
+                "student_draft",
+                "guardian_profile",
+                "guardian_draft",
+                "reviewed_by",
+            )
+            .order_by("pk")
+        )
+        for proposal in relationship_proposals:
+            proposal.review_baseline_current = proposal.is_baseline_current()
+        workflow_student = None
+        workflow_primary_guardian = None
+        workflow_secondary_guardian = None
+        workflow_student_draft = None
+        workflow_guardian_drafts = []
+        workflow_fixed_answers = []
+        workflow_question_sets = []
+        if application.profile_workflow_version == 1:
+            workflow_student = (
+                Student.all_objects.for_organization(application.organization)
+                .filter(pk=application.student_profile_id)
+                .first()
+            )
+            workflow_primary_guardian = (
+                Adult.all_objects.for_organization(application.organization)
+                .filter(pk=application.primary_guardian_profile_id)
+                .first()
+            )
+            workflow_secondary_guardian = (
+                Adult.all_objects.for_organization(application.organization)
+                .filter(pk=application.secondary_guardian_profile_id)
+                .first()
+            )
+            workflow_student_draft = (
+                ApplicationStudentDraft.objects.for_organization(
+                    application.organization
+                )
+                .filter(application_id=application.pk)
+                .first()
+            )
+            workflow_guardian_drafts = list(
+                ApplicationGuardianDraft.objects.for_organization(
+                    application.organization
+                )
+                .filter(application_id=application.pk)
+                .order_by("slot")
+            )
+            workflow_fixed_answers = list(
+                ApplicationFixedAnswer.objects.for_organization(
+                    application.organization
+                ).filter(application_id=application.pk)
+            )
+            for item in workflow_fixed_answers:
+                wording = EXPERIENCE_QUESTIONS.get(item.question_key)
+                item.display_question = (
+                    wording[application.applicant_type == Application.Type.PARENT]
+                    if wording
+                    else item.question_key
+                )
+            workflow_question_sets = list(
+                ApplicationQuestionSet.objects.for_organization(
+                    application.organization
+                )
+                .filter(application_id=application.pk)
+                .prefetch_related("answers")
+                .order_by("program_id")
+            )
         custom_question_error = False
         data = application.data or {}
         if "step6-custom" in data:
@@ -910,6 +1236,17 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
                 "any_documents": any_documents,
                 "can_convert": can_convert,
                 "can_approve": can_approve,
+                "identity_proposals": identity_proposals,
+                "relationship_proposals": relationship_proposals,
+                "proposal_review_issue": proposal_review_issue,
+                "can_resolve_proposals": application.profile_workflow_version == 1,
+                "workflow_student": workflow_student,
+                "workflow_primary_guardian": workflow_primary_guardian,
+                "workflow_secondary_guardian": workflow_secondary_guardian,
+                "workflow_student_draft": workflow_student_draft,
+                "workflow_guardian_drafts": workflow_guardian_drafts,
+                "workflow_fixed_answers": workflow_fixed_answers,
+                "workflow_question_sets": workflow_question_sets,
             },
         )
 
@@ -934,9 +1271,7 @@ class ApplicationReviewDocumentDownloadView(_ReviewerRequiredMixin, View):
 class ApplicationApproveView(_ReviewerRequiredMixin, View):
     """POST: approve an application after required forms are received."""
 
-    def post(self, request, app_id: str):
-        application = _get_tenant_application(request, app_id)
-        using = application._state.db
+    def _approve_transaction(self, request, application, app_id, using):
         with transaction.atomic(using=using):
             current = get_object_or_404(
                 Application.objects.using(using)
@@ -945,13 +1280,13 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
                 .filter(superseded_at__isnull=True),
                 pk=application.pk,
             )
-            if (
-                current.program_id
-                and not Program.objects.filter(
-                    pk=current.program_id, organization=request.organization
-                ).exists()
-            ):
-                raise Http404
+            if current.program_id:
+                get_object_or_404(
+                    Program.objects.using(using)
+                    .for_organization(request.organization)
+                    .select_for_update(),
+                    pk=current.program_id,
+                )
             if current.status in (
                 Application.Status.APPROVED,
                 Application.Status.APPROVED_SIGNED,
@@ -962,18 +1297,51 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
                     messages.info(request, "Cannot approve a declined application.")
                 else:
                     messages.info(request, "Application is already approved.")
-                return redirect(
+                return None, redirect(
                     "application_review_detail", app_id=current.application_id
                 )
 
+            if current.program_id:
+                list(
+                    ProgramDocument.objects.using(using)
+                    .filter(
+                        program_id=current.program_id,
+                        program__organization_id=request.organization.pk,
+                        is_active=True,
+                        is_required=True,
+                    )
+                    .select_for_update()
+                    .order_by("pk")
+                    .values_list("pk", flat=True)
+                )
+            list(
+                ApplicationDocumentSubmission.objects.using(using)
+                .filter(
+                    application_id=current.pk,
+                    organization_id=request.organization.pk,
+                )
+                .select_for_update()
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
             if not required_application_documents_complete(current):
                 messages.error(
                     request,
                     "Required permission forms must be uploaded before this application can be approved.",
                 )
-                return redirect(
+                return None, redirect(
                     "application_review_detail", app_id=current.application_id
                 )
+
+            if current.profile_workflow_version:
+                finalized, _, finalization_error = (
+                    finalize_profile_workflow_application(current, request, using=using)
+                )
+                if not finalized:
+                    messages.error(request, finalization_error)
+                    return None, redirect(
+                        "application_review_detail", app_id=current.application_id
+                    )
 
             old_status = current.status
             current.status = (
@@ -1005,6 +1373,22 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
                 notes=f"Application approved by {request.user}.",
             )
             application = current
+        return application, None
+
+    def post(self, request, app_id: str):
+        application = _get_tenant_application(request, app_id)
+        using = application._state.db
+        try:
+            application, response = self._approve_transaction(
+                request, application, app_id, using
+            )
+        except ApplicationFinalizationError as exc:
+            messages.error(request, str(exc))
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
+        if response is not None:
+            return response
 
         try:
             send_application_approved_email(application, request=request)
@@ -1259,6 +1643,11 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
 
     def get(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
+        if application.profile_workflow_version != 0:
+            messages.error(
+                request, "Editing structured application details is not available yet."
+            )
+            return _proposal_review_redirect(application)
         # Persist any legacy step-key migration up front so the form (and any
         # subsequent save) always operate on the current key names.
         application.normalize_step_data(save=True)
@@ -1276,6 +1665,11 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
             .select_for_update()
             .get(pk=application.pk, superseded_at__isnull=True)
         )
+        if application.profile_workflow_version != 0:
+            messages.error(
+                request, "Editing structured application details is not available yet."
+            )
+            return _proposal_review_redirect(application)
         if (
             application.program_id
             and application.program.organization_id != application.organization_id
@@ -1515,6 +1909,14 @@ class ApplicationConvertView(_ReviewerRequiredMixin, View):
 
     def post(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
+        if application.profile_workflow_version != 0:
+            messages.error(
+                request,
+                "Profile-workflow applications are finalized during approval and cannot use legacy conversion.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
         if application.status == Application.Status.CONVERTED:
             messages.info(
                 request,

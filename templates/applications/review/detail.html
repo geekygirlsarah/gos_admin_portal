@@ -241,6 +241,167 @@
         </div>
       {% endif %}
 
+      {% if can_resolve_proposals %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-light py-3 border-0">
+            <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide">
+              <i class="bi bi-person-lines-fill me-2 text-primary"></i>Typed applicant profiles and answers
+            </h3>
+          </div>
+          <div class="card-body">
+            {% if workflow_student %}
+              <div class="mb-3">
+                <strong>Student:</strong> {{ workflow_student.display_name }}
+                {% if workflow_student.is_incomplete_application_profile %}<span class="badge bg-secondary ms-1">Incomplete profile</span>{% endif %}
+                <div class="small text-muted">{{ workflow_student.personal_email|default:workflow_student.org_email|default:"No email" }}</div>
+              </div>
+            {% elif workflow_student_draft %}
+              <div class="mb-3">
+                <strong>Student:</strong> {{ workflow_student_draft.legal_first_name }} {{ workflow_student_draft.last_name }}
+                <div class="small text-muted">{{ workflow_student_draft.personal_email|default:"No email" }}</div>
+              </div>
+            {% else %}
+              <div class="alert alert-warning py-2">No linked student profile or typed student draft is available.</div>
+            {% endif %}
+
+            {% for guardian_draft in workflow_guardian_drafts %}
+              <div class="mb-2">
+                <strong>{{ guardian_draft.get_slot_display }} guardian:</strong>
+                {% if guardian_draft.presence == 'present' %}
+                  {{ guardian_draft.legal_first_name }} {{ guardian_draft.last_name }}
+                  <div class="small text-muted">{{ guardian_draft.email|default:"No email" }}{% if guardian_draft.relationship_to_student %} · {{ guardian_draft.get_relationship_to_student_display }}{% endif %}</div>
+                {% else %}
+                  {{ guardian_draft.get_presence_display }}
+                {% endif %}
+              </div>
+            {% endfor %}
+            {% if not workflow_guardian_drafts %}
+              {% if workflow_primary_guardian %}
+                <div class="mb-2"><strong>Primary guardian:</strong> {{ workflow_primary_guardian.display_name }} · {{ workflow_primary_guardian.personal_email|default:workflow_primary_guardian.org_email|default:"No email" }}</div>
+              {% else %}
+                <div class="alert alert-warning py-2">No primary guardian profile or typed contact is available.</div>
+              {% endif %}
+            {% endif %}
+
+            {% if workflow_fixed_answers %}
+              <h4 class="h6 fw-bold mt-4">Fixed application questions</h4>
+              {% for item in workflow_fixed_answers %}
+                <div class="border-top py-2">
+                  <div class="small fw-semibold">{{ item.display_question }}</div>
+                  <div class="small">{{ item.answer|default:"No response"|linebreaksbr }}</div>
+                </div>
+              {% endfor %}
+            {% endif %}
+            {% for question_set in workflow_question_sets %}
+              <h4 class="h6 fw-bold mt-4">Program questions · {{ question_set.program.name }}</h4>
+              {% for answer in question_set.answers.all %}
+                <div class="border-top py-2">
+                  <div class="small fw-semibold">{{ answer.question_text }}{% if answer.is_required %} <span class="text-danger">(required)</span>{% endif %}</div>
+                  <div class="small">{{ answer.answer|default:"No response"|linebreaksbr }}</div>
+                </div>
+              {% empty %}
+                <p class="small text-muted">No custom questions were configured for this program.</p>
+              {% endfor %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-light py-3 border-0">
+            <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide">
+              <i class="bi bi-diagram-3 me-2 text-primary"></i>Identity and relationship review
+            </h3>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted">Lead decisions are recorded here but do not change family access. Approved profile and relationship changes take effect only with final application acceptance, after required forms are complete.</p>
+            {% if proposal_review_issue %}
+              <div class="alert alert-warning py-2 mb-3">{{ proposal_review_issue }}</div>
+            {% endif %}
+
+            <h4 class="h6 fw-bold">Identity decisions</h4>
+            {% for proposal in identity_proposals %}
+              <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between gap-2">
+                  <strong>{{ proposal.get_subject_slot_display }}</strong>
+                  <span class="badge {% if proposal.decision == 'pending' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ proposal.get_decision_display }}</span>
+                </div>
+                <div class="small text-muted mt-1">{{ proposal.get_match_state_display }}</div>
+                {% if proposal.review_baseline_current %}
+                  <div class="small text-success mt-1">Profile details are unchanged since this decision was prepared.</div>
+                {% else %}
+                  <div class="small text-danger mt-1">The application or profile changed; reload and review the current information.</div>
+                {% endif %}
+                <form method="post" action="{% url 'application_review_identity_decision' application.application_id proposal.pk %}" class="row g-2 align-items-end mt-2">
+                  {% csrf_token %}
+                  <div class="col-md-4">
+                    <label class="form-label small" for="identity-decision-{{ proposal.pk }}">Decision</label>
+                    <select class="form-select form-select-sm" id="identity-decision-{{ proposal.pk }}" name="decision" required>
+                      <option value="confirmed">Confirm selected person</option>
+                      <option value="no_match">No existing profile</option>
+                      <option value="rejected">Reject this match</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small" for="identity-target-{{ proposal.pk }}">Matching profile</label>
+                    <select class="form-select form-select-sm" id="identity-target-{{ proposal.pk }}" name="target_profile">
+                      <option value="">Select a matching profile</option>
+                      {% for candidate in proposal.available_candidates %}
+                        <option value="{{ candidate.profile_type }}:{{ candidate.profile.pk }}">{{ candidate.profile.display_name }} · {{ candidate.email|default:"No email" }} (ID {{ candidate.profile.pk }})</option>
+                      {% empty %}
+                        <option value="" disabled>No active same-organization profiles match the application email.</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <button class="btn btn-sm btn-outline-primary w-100" type="submit" {% if not proposal.review_baseline_current %}disabled{% endif %}>Save</button>
+                  </div>
+                </form>
+              </div>
+            {% empty %}
+              <p class="small text-muted">No identity decisions are recorded for this application.</p>
+            {% endfor %}
+
+            <h4 class="h6 fw-bold mt-4">Relationship decisions</h4>
+            {% for proposal in relationship_proposals %}
+              <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between gap-2">
+                  <strong>{{ proposal.get_action_display }}</strong>
+                  <span class="badge {% if proposal.decision == 'pending' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ proposal.get_decision_display }}</span>
+                </div>
+                <div class="small mt-1">
+                  Student:
+                  {% if proposal.student_profile %}{{ proposal.student_profile.display_name }}{% elif proposal.student_draft %}{{ proposal.student_draft.legal_first_name }} {{ proposal.student_draft.last_name }}{% else %}Unavailable{% endif %}
+                  <br>
+                  Guardian:
+                  {% if proposal.guardian_profile %}{{ proposal.guardian_profile.display_name }}{% elif proposal.guardian_draft %}{{ proposal.guardian_draft.legal_first_name }} {{ proposal.guardian_draft.last_name }}{% else %}Unavailable{% endif %}
+                  {% if proposal.relationship_to_student %}<br>Relationship: {{ proposal.get_relationship_to_student_display }}{% endif %}
+                </div>
+                {% if proposal.review_baseline_current %}
+                  <div class="small text-success mt-1">Relationship baseline is current.</div>
+                {% else %}
+                  <div class="small text-danger mt-1">The relationship baseline changed; this decision must be reviewed again.</div>
+                {% endif %}
+                <form method="post" action="{% url 'application_review_relationship_decision' application.application_id proposal.pk %}" class="row g-2 align-items-end mt-2">
+                  {% csrf_token %}
+                  <div class="col-md-4">
+                    <label class="form-label small" for="relationship-decision-{{ proposal.pk }}">Decision</label>
+                    <select class="form-select form-select-sm" id="relationship-decision-{{ proposal.pk }}" name="decision" required>
+                      <option value="approved">Approve proposal</option>
+                      <option value="rejected">Reject proposal</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <button class="btn btn-sm btn-outline-primary w-100" type="submit" {% if not proposal.review_baseline_current %}disabled{% endif %}>Save</button>
+                  </div>
+                </form>
+              </div>
+            {% empty %}
+              <p class="small text-muted">No relationship changes are proposed.</p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
       <!-- Captured Data Card -->
       <div class="card shadow-sm border-0 rounded-3 mb-4">
         <div class="card-header bg-light py-3 border-0">
@@ -319,21 +480,28 @@
                 Upload the paper copies here if the parent or guardian submitted them in person.
               </div>
             {% endif %}
-            <form method="post" action="{% url 'application_review_convert' application.application_id %}">
-              {% csrf_token %}
-              <button class="btn btn-primary w-100" type="submit"
-                      {% if not can_convert %}disabled
-                      title="Approve the application first, and make sure any required signed documents have been uploaded."{% endif %}>
-                <i class="bi bi-person-check me-1"></i>
-                {% if application.applicant_type == 'mentor' %}
-                  Convert to Mentor
-                {% else %}
-                  Convert to Student
-                {% endif %}
-              </button>
-            </form>
-            {% if not can_convert and application.status == 'approved' %}
-              <div class="text-muted small text-center">Awaiting required signed documents</div>
+            {% if application.profile_workflow_version == 0 %}
+              <form method="post" action="{% url 'application_review_convert' application.application_id %}">
+                {% csrf_token %}
+                <button class="btn btn-primary w-100" type="submit"
+                        {% if not can_convert %}disabled
+                        title="Approve the application first, and make sure any required signed documents have been uploaded."{% endif %}>
+                  <i class="bi bi-person-check me-1"></i>
+                  {% if application.applicant_type == 'mentor' %}
+                    Convert to Mentor
+                  {% else %}
+                    Convert to Student
+                  {% endif %}
+                </button>
+              </form>
+              {% if not can_convert and application.status == 'approved' %}
+                <div class="text-muted small text-center">Awaiting required signed documents</div>
+              {% endif %}
+            {% else %}
+              <div class="alert alert-info small mb-0">Final approval activates the reviewed profiles and relationships; no separate conversion step is used.</div>
+            {% endif %}
+            {% if proposal_review_issue and application.profile_workflow_version != 0 %}
+              <div class="alert alert-warning small mb-0">{{ proposal_review_issue }}</div>
             {% endif %}
             <a class="btn btn-outline-warning"
                href="{% url 'application_review_decline' application.application_id %}">
@@ -360,10 +528,14 @@
           {% endif %}
 
           <div class="border-top pt-2 mt-2 d-grid gap-2">
-            <a class="btn btn-sm btn-outline-secondary"
-               href="{% url 'application_review_edit' application.application_id %}">
-              <i class="bi bi-pencil-square me-1"></i>Edit captured data
-            </a>
+            {% if application.profile_workflow_version == 0 %}
+              <a class="btn btn-sm btn-outline-secondary"
+                 href="{% url 'application_review_edit' application.application_id %}">
+                <i class="bi bi-pencil-square me-1"></i>Edit captured data
+              </a>
+            {% else %}
+              <div class="text-muted small">Editing structured application details is not available yet.</div>
+            {% endif %}
             <a class="btn btn-sm btn-outline-danger"
                href="{% url 'application_review_delete' application.application_id %}">
               <i class="bi bi-trash3 me-1"></i>Delete application…

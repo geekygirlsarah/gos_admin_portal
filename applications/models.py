@@ -13,6 +13,7 @@ import secrets
 import uuid
 
 import pghistory
+from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -256,6 +257,33 @@ class Application(models.Model):
     )
     converted_at = models.DateTimeField(blank=True, null=True)
 
+    profile_workflow_version = models.PositiveSmallIntegerField(
+        default=0,
+        db_default=0,
+        help_text="0 keeps this application on the legacy JSON workflow.",
+    )
+    student_profile = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_progress_students",
+    )
+    primary_guardian_profile = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_progress_primary_guardians",
+    )
+    secondary_guardian_profile = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_progress_secondary_guardians",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
@@ -286,11 +314,42 @@ class Application(models.Model):
     # -- Application ID -----------------------------------------------------
 
     def save(self, *args, **kwargs):
+        if (
+            self.student_profile_id
+            or self.primary_guardian_profile_id
+            or self.secondary_guardian_profile_id
+        ):
+            self._validate_profile_link_organizations()
         if self._state.adding and self.applicant_progress_at is None:
             self.applicant_progress_at = timezone.now()
         if not self.application_id:
             self.application_id = self._generate_unique_application_id()
         super().save(*args, **kwargs)
+
+    def _validate_profile_link_organizations(self):
+        from programs.models import Adult, Student
+
+        links = (
+            ("student_profile", Student, self.student_profile_id),
+            ("primary_guardian_profile", Adult, self.primary_guardian_profile_id),
+            ("secondary_guardian_profile", Adult, self.secondary_guardian_profile_id),
+        )
+        for field_name, model, profile_id in links:
+            if profile_id is None:
+                continue
+            profile_organization_id = (
+                model.all_objects.filter(pk=profile_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if profile_organization_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        field_name: (
+                            "Application profile links must belong to the same organization."
+                        )
+                    }
+                )
 
     @classmethod
     def _generate_unique_application_id(cls, max_attempts: int = 16) -> str:
@@ -557,6 +616,12 @@ class ApplicationReminderDelivery(models.Model):
         )
 
 
+class ApplicationDraftRevisionQuerySet(OrganizationQuerySet):
+    def update(self, **kwargs):
+        kwargs["revision"] = models.F("revision") + 1
+        return super().update(**kwargs)
+
+
 class ApplicationStudentDraft(models.Model):
     """Typed applicant-owned student details, not a live student profile."""
 
@@ -565,12 +630,13 @@ class ApplicationStudentDraft(models.Model):
         on_delete=models.PROTECT,
         related_name="application_student_drafts",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = OrganizationManager.from_queryset(ApplicationDraftRevisionQuerySet)()
     application = models.OneToOneField(
         Application,
         on_delete=models.CASCADE,
         related_name="student_draft",
     )
+    revision = models.PositiveIntegerField(default=1, db_default=1, editable=False)
 
     legal_first_name = models.CharField(max_length=150, blank=True, null=True)
     preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
@@ -635,7 +701,25 @@ class ApplicationStudentDraft(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
-        super().save(*args, **kwargs)
+        if self.pk is None:
+            super().save(*args, **kwargs)
+            return
+        using = kwargs.get("using") or self._state.db or "default"
+        with transaction.atomic(using=using):
+            current_revision = (
+                type(self)
+                .objects.using(using)
+                .select_for_update()
+                .filter(pk=self.pk)
+                .values_list("revision", flat=True)
+                .first()
+            )
+            if current_revision is not None:
+                self.revision = current_revision + 1
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {"revision"}
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Student draft for {self.application.application_id}"
@@ -724,12 +808,13 @@ class ApplicationGuardianDraft(models.Model):
         on_delete=models.PROTECT,
         related_name="application_guardian_drafts",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = OrganizationManager.from_queryset(ApplicationDraftRevisionQuerySet)()
     application = models.ForeignKey(
         Application,
         on_delete=models.CASCADE,
         related_name="guardian_drafts",
     )
+    revision = models.PositiveIntegerField(default=1, db_default=1, editable=False)
     slot = models.CharField(max_length=16, choices=Slot.choices)
     presence = models.CharField(
         max_length=16,
@@ -787,7 +872,25 @@ class ApplicationGuardianDraft(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
-        super().save(*args, **kwargs)
+        if self.pk is None:
+            super().save(*args, **kwargs)
+            return
+        using = kwargs.get("using") or self._state.db or "default"
+        with transaction.atomic(using=using):
+            current_revision = (
+                type(self)
+                .objects.using(using)
+                .select_for_update()
+                .filter(pk=self.pk)
+                .values_list("revision", flat=True)
+                .first()
+            )
+            if current_revision is not None:
+                self.revision = current_revision + 1
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {"revision"}
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.get_slot_display()} guardian draft for {self.application.application_id}"
@@ -1095,3 +1198,1000 @@ class ProgramApplicationQuestion(models.Model):
 
     def __str__(self):
         return self.text
+
+
+@pghistory.track()
+class ApplicationIdentityProposal(models.Model):
+    """Tenant-owned identity resolution for an application person slot."""
+
+    class SubjectSlot(models.TextChoices):
+        STUDENT = "student", "Student"
+        PRIMARY_GUARDIAN = "primary_guardian", "Primary guardian"
+        SECONDARY_GUARDIAN = "secondary_guardian", "Secondary guardian"
+        MENTOR = "mentor", "Mentor"
+
+    class MatchState(models.TextChoices):
+        NO_MATCH = "no_match", "No matching profile"
+        UNIQUE = "unique", "Unique profile match"
+        AMBIGUOUS = "ambiguous", "Ambiguous profile matches"
+
+    class Decision(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        CONFIRMED = "confirmed", "Identity confirmed"
+        REJECTED = "rejected", "Identity rejected"
+        NO_MATCH = "no_match", "No existing profile"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_identity_proposals",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="identity_proposals",
+    )
+    subject_slot = models.CharField(max_length=24, choices=SubjectSlot.choices)
+    match_state = models.CharField(max_length=16, choices=MatchState.choices)
+    candidate_student = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_identity_candidates",
+    )
+    candidate_adult = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_identity_candidates",
+    )
+    target_student = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_identity_targets",
+    )
+    target_adult = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_identity_targets",
+    )
+    baseline_application_updated_at = models.DateTimeField(blank=True, null=True)
+    application_profile_id = models.PositiveBigIntegerField(blank=True, null=True)
+    application_profile_revision = models.PositiveIntegerField(blank=True, null=True)
+    candidate_baseline_revision = models.PositiveIntegerField(blank=True, null=True)
+    target_baseline_revision = models.PositiveIntegerField(blank=True, null=True)
+    decision = models.CharField(
+        max_length=16, choices=Decision.choices, default=Decision.PENDING
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="reviewed_application_identity_proposals",
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "subject_slot"),
+                name="unique_application_identity_subject",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(candidate_student__isnull=True)
+                | models.Q(candidate_adult__isnull=True),
+                name="app_identity_one_candidate_type",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(target_student__isnull=True)
+                | models.Q(target_adult__isnull=True),
+                name="app_identity_one_target_type",
+            ),
+        ]
+
+    def _capture_baselines(self):
+        from programs.models import Adult, Student
+
+        application = None
+        if self.application_id and self.organization_id:
+            application = (
+                Application.objects.filter(
+                    pk=self.application_id,
+                    organization_id=self.organization_id,
+                )
+                .values(
+                    "updated_at",
+                    "student_profile_id",
+                    "primary_guardian_profile_id",
+                    "secondary_guardian_profile_id",
+                )
+                .first()
+            )
+            if self.baseline_application_updated_at is None and application:
+                self.baseline_application_updated_at = application["updated_at"]
+        if application:
+            profile_field = {
+                self.SubjectSlot.STUDENT: "student_profile_id",
+                self.SubjectSlot.PRIMARY_GUARDIAN: "primary_guardian_profile_id",
+                self.SubjectSlot.SECONDARY_GUARDIAN: "secondary_guardian_profile_id",
+            }.get(self.subject_slot)
+            linked_profile_id = (
+                application.get(profile_field) if profile_field else None
+            )
+            profile_model = (
+                Student if self.subject_slot == self.SubjectSlot.STUDENT else Adult
+            )
+            if linked_profile_id and self.application_profile_id is None:
+                self.application_profile_id = linked_profile_id
+                self.application_profile_revision = (
+                    profile_model.all_objects.filter(
+                        pk=linked_profile_id,
+                        organization_id=self.organization_id,
+                    )
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+        for field_name, model, baseline_name in (
+            ("candidate_student_id", Student, "candidate_baseline_revision"),
+            ("candidate_adult_id", Adult, "candidate_baseline_revision"),
+            ("target_student_id", Student, "target_baseline_revision"),
+            ("target_adult_id", Adult, "target_baseline_revision"),
+        ):
+            profile_id = getattr(self, field_name)
+            if profile_id is None or getattr(self, baseline_name) is not None:
+                continue
+            setattr(
+                self,
+                baseline_name,
+                model.all_objects.filter(
+                    pk=profile_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("profile_revision", flat=True)
+                .first(),
+            )
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": "The proposal and application must share an organization."
+                    }
+                )
+
+        candidate_count = int(self.candidate_student_id is not None) + int(
+            self.candidate_adult_id is not None
+        )
+        target_count = int(self.target_student_id is not None) + int(
+            self.target_adult_id is not None
+        )
+        if (self.match_state == self.MatchState.UNIQUE) != (candidate_count == 1):
+            raise ValidationError(
+                "Only a unique match may store one candidate profile."
+            )
+        if self.match_state != self.MatchState.UNIQUE and candidate_count:
+            raise ValidationError(
+                "Ambiguous and unmatched identities cannot select a candidate."
+            )
+        if candidate_count and self.candidate_baseline_revision is None:
+            raise ValidationError("A candidate profile baseline is required.")
+        if bool(self.application_profile_id) != bool(self.application_profile_revision):
+            raise ValidationError("An application profile baseline is incomplete.")
+        if self.subject_slot not in self.SubjectSlot.values:
+            raise ValidationError(
+                {"subject_slot": "Choose a valid application person slot."}
+            )
+        expected_profile_field = (
+            "student" if self.subject_slot == self.SubjectSlot.STUDENT else "adult"
+        )
+        for field_name in (
+            "candidate_student_id",
+            "candidate_adult_id",
+            "target_student_id",
+            "target_adult_id",
+        ):
+            profile_id = getattr(self, field_name)
+            if profile_id is not None and expected_profile_field not in field_name:
+                raise ValidationError(
+                    {
+                        field_name.removesuffix(
+                            "_id"
+                        ): "Profile type does not match the application person slot."
+                    }
+                )
+        if target_count > 1:
+            raise ValidationError("An identity proposal can target one profile only.")
+        if target_count and self.target_baseline_revision is None:
+            raise ValidationError("A target profile baseline is required.")
+        if self.decision == self.Decision.CONFIRMED and target_count != 1:
+            raise ValidationError("A confirmed identity must have one target profile.")
+        if (
+            self.decision in (self.Decision.NO_MATCH, self.Decision.REJECTED)
+            and target_count
+        ):
+            raise ValidationError(
+                "Unmatched or rejected identities cannot retain a target."
+            )
+        if (
+            self.candidate_student_id
+            and self.target_student_id
+            and self.candidate_student_id != self.target_student_id
+        ) or (
+            self.candidate_adult_id
+            and self.target_adult_id
+            and self.candidate_adult_id != self.target_adult_id
+        ):
+            raise ValidationError(
+                "A unique identity must use its matching candidate profile."
+            )
+        if self.match_state not in self.MatchState.values:
+            raise ValidationError(
+                {"match_state": "Choose a valid identity match state."}
+            )
+        if self.decision not in self.Decision.values:
+            raise ValidationError({"decision": "Choose a valid identity decision."})
+        if self.decision != self.Decision.PENDING and not (
+            self.reviewed_by_id and self.reviewed_at
+        ):
+            raise ValidationError(
+                "A reviewed identity decision needs reviewer metadata."
+            )
+
+        from programs.models import Adult, Student
+
+        profile_links = (
+            ("candidate_student_id", Student),
+            ("candidate_adult_id", Adult),
+            ("target_student_id", Student),
+            ("target_adult_id", Adult),
+        )
+        for field_name, model in profile_links:
+            profile_id = getattr(self, field_name)
+            if profile_id is None:
+                continue
+            profile = model.all_objects.filter(
+                pk=profile_id,
+                organization_id=self.organization_id,
+                is_incomplete_application_profile=False,
+            ).first()
+            if profile is None:
+                raise ValidationError(
+                    {
+                        field_name.removesuffix(
+                            "_id"
+                        ): "Profile must be active and in this organization."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self._capture_baselines()
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def set_target_profile(self, profile):
+        from programs.models import Adult, Student
+
+        if profile.organization_id != self.organization_id:
+            raise ValidationError(
+                "The target profile must belong to this organization."
+            )
+        if profile.is_incomplete_application_profile:
+            raise ValidationError("An incomplete profile cannot be an identity target.")
+        if isinstance(profile, Student):
+            self.target_student = profile
+            self.target_adult = None
+        elif isinstance(profile, Adult):
+            self.target_adult = profile
+            self.target_student = None
+        else:
+            raise ValidationError(
+                "Identity targets must be student or guardian profiles."
+            )
+        self.target_baseline_revision = profile.profile_revision
+
+    def is_baseline_current(self):
+        application = (
+            Application.objects.filter(
+                pk=self.application_id,
+                organization_id=self.organization_id,
+            )
+            .values("updated_at", "superseded_at", "status")
+            .first()
+        )
+        if (
+            application is None
+            or application["updated_at"] != self.baseline_application_updated_at
+            or application["superseded_at"] is not None
+            or application["status"]
+            not in (
+                Application.Status.DRAFT,
+                Application.Status.EMAIL_VERIFIED,
+                Application.Status.AWAITING_PARENT,
+                Application.Status.SUBMITTED,
+            )
+        ):
+            return False
+        linked_profile_field = {
+            self.SubjectSlot.STUDENT: "student_profile_id",
+            self.SubjectSlot.PRIMARY_GUARDIAN: "primary_guardian_profile_id",
+            self.SubjectSlot.SECONDARY_GUARDIAN: "secondary_guardian_profile_id",
+        }.get(self.subject_slot)
+        if linked_profile_field:
+            application_profile_id = (
+                Application.objects.filter(
+                    pk=self.application_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list(linked_profile_field, flat=True)
+                .first()
+            )
+            if application_profile_id != self.application_profile_id:
+                return False
+        if self.application_profile_id:
+            from programs.models import Adult, Student
+
+            profile_model = (
+                Student if self.subject_slot == self.SubjectSlot.STUDENT else Adult
+            )
+            linked_revision = (
+                profile_model.all_objects.filter(
+                    pk=self.application_profile_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("profile_revision", flat=True)
+                .first()
+            )
+            if linked_revision != self.application_profile_revision:
+                return False
+        candidate_count = int(self.candidate_student_id is not None) + int(
+            self.candidate_adult_id is not None
+        )
+        target_count = int(self.target_student_id is not None) + int(
+            self.target_adult_id is not None
+        )
+        if self.match_state == self.MatchState.UNIQUE and candidate_count != 1:
+            return False
+        if candidate_count and self.candidate_baseline_revision is None:
+            return False
+        if not candidate_count and self.candidate_baseline_revision is not None:
+            return False
+        if target_count and self.target_baseline_revision is None:
+            return False
+        if not target_count and self.target_baseline_revision is not None:
+            return False
+        from programs.models import Adult, Student
+
+        for field_name, model, baseline_name in (
+            ("candidate_student_id", Student, "candidate_baseline_revision"),
+            ("candidate_adult_id", Adult, "candidate_baseline_revision"),
+            ("target_student_id", Student, "target_baseline_revision"),
+            ("target_adult_id", Adult, "target_baseline_revision"),
+        ):
+            profile_id = getattr(self, field_name)
+            if profile_id is None:
+                continue
+            current = (
+                model.all_objects.filter(
+                    pk=profile_id,
+                    organization_id=self.organization_id,
+                    is_incomplete_application_profile=False,
+                )
+                .values_list("profile_revision", flat=True)
+                .first()
+            )
+            if current is None or current != getattr(self, baseline_name):
+                return False
+        return True
+
+    def __str__(self):
+        return f"Identity proposal for {self.application.application_id} ({self.subject_slot})"
+
+
+@pghistory.track()
+class ApplicationRelationshipProposal(models.Model):
+    """Tenant-owned proposed relationship change; never changes live access."""
+
+    class Action(models.TextChoices):
+        ADD = "add", "Add relationship"
+        REMOVE = "remove", "Remove relationship"
+        REPLACE = "replace", "Replace relationship"
+        SET_PRIMARY = "set_primary", "Set primary contact"
+
+    class Decision(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_relationship_proposals",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="relationship_proposals",
+    )
+    action = models.CharField(max_length=16, choices=Action.choices)
+    student_profile = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_relationship_proposals",
+    )
+    student_draft = models.ForeignKey(
+        ApplicationStudentDraft,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="relationship_proposals",
+    )
+    guardian_profile = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="application_relationship_proposals",
+    )
+    guardian_draft = models.ForeignKey(
+        ApplicationGuardianDraft,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="relationship_proposals",
+    )
+    relationship_to_student = models.CharField(
+        max_length=20, choices=RELATIONSHIP_CHOICES, blank=True
+    )
+    baseline_application_updated_at = models.DateTimeField(blank=True, null=True)
+    baseline_student_draft_revision = models.PositiveIntegerField(blank=True, null=True)
+    baseline_guardian_draft_revision = models.PositiveIntegerField(
+        blank=True, null=True
+    )
+    baseline_student_revision = models.PositiveIntegerField(blank=True, null=True)
+    baseline_guardian_revision = models.PositiveIntegerField(blank=True, null=True)
+    baseline_application_student_revision = models.PositiveIntegerField(
+        blank=True, null=True
+    )
+    baseline_application_guardian_revision = models.PositiveIntegerField(
+        blank=True, null=True
+    )
+    baseline_application_student_profile_id = models.PositiveBigIntegerField(
+        blank=True, null=True
+    )
+    baseline_application_guardian_profile_id = models.PositiveBigIntegerField(
+        blank=True, null=True
+    )
+    baseline_relationship_id = models.PositiveBigIntegerField(blank=True, null=True)
+    baseline_relationship_revision = models.PositiveIntegerField(blank=True, null=True)
+    baseline_primary_relationship_id = models.PositiveBigIntegerField(
+        blank=True, null=True
+    )
+    baseline_primary_relationship_revision = models.PositiveIntegerField(
+        blank=True, null=True
+    )
+    decision = models.CharField(
+        max_length=16, choices=Decision.choices, default=Decision.PENDING
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="reviewed_application_relationship_proposals",
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(student_profile__isnull=True, student_draft__isnull=False)
+                    | models.Q(
+                        student_profile__isnull=False, student_draft__isnull=True
+                    )
+                ),
+                name="app_relationship_one_student_source",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        guardian_profile__isnull=True, guardian_draft__isnull=False
+                    )
+                    | models.Q(
+                        guardian_profile__isnull=False, guardian_draft__isnull=True
+                    )
+                ),
+                name="app_relationship_one_guardian_source",
+            ),
+        ]
+
+    def _capture_baselines(self):
+        from programs.models import Adult, AdultStudentRelationship, Student
+
+        application = None
+        if self.application_id and self.organization_id:
+            application = (
+                Application.objects.filter(
+                    pk=self.application_id,
+                    organization_id=self.organization_id,
+                )
+                .values(
+                    "updated_at",
+                    "student_profile_id",
+                    "primary_guardian_profile_id",
+                    "secondary_guardian_profile_id",
+                )
+                .first()
+            )
+            if self.baseline_application_updated_at is None and application:
+                self.baseline_application_updated_at = application["updated_at"]
+        if application and self.student_draft_id:
+            student_id = application["student_profile_id"]
+            self.baseline_application_student_profile_id = student_id
+            if student_id:
+                self.baseline_application_student_revision = (
+                    Student.all_objects.filter(
+                        pk=student_id,
+                        organization_id=self.organization_id,
+                    )
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+        if application and self.guardian_draft_id:
+            guardian_slot = (
+                ApplicationGuardianDraft.objects.filter(
+                    pk=self.guardian_draft_id,
+                    organization_id=self.organization_id,
+                    application_id=self.application_id,
+                )
+                .values_list("slot", flat=True)
+                .first()
+            )
+            guardian_field = {
+                ApplicationGuardianDraft.Slot.PRIMARY: "primary_guardian_profile_id",
+                ApplicationGuardianDraft.Slot.SECONDARY: "secondary_guardian_profile_id",
+            }.get(guardian_slot)
+            guardian_id = application.get(guardian_field) if guardian_field else None
+            self.baseline_application_guardian_profile_id = guardian_id
+            if guardian_id:
+                self.baseline_application_guardian_revision = (
+                    Adult.all_objects.filter(
+                        pk=guardian_id,
+                        organization_id=self.organization_id,
+                    )
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+        for field_name, model, baseline_name in (
+            (
+                "student_draft_id",
+                ApplicationStudentDraft,
+                "baseline_student_draft_revision",
+            ),
+            (
+                "guardian_draft_id",
+                ApplicationGuardianDraft,
+                "baseline_guardian_draft_revision",
+            ),
+            ("student_profile_id", Student, "baseline_student_revision"),
+            ("guardian_profile_id", Adult, "baseline_guardian_revision"),
+        ):
+            profile_id = getattr(self, field_name)
+            if profile_id is None or getattr(self, baseline_name) is not None:
+                continue
+            manager = (
+                model.objects if field_name.endswith("draft_id") else model.all_objects
+            )
+            setattr(
+                self,
+                baseline_name,
+                manager.filter(
+                    pk=profile_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list(
+                    (
+                        "revision"
+                        if field_name.endswith("draft_id")
+                        else "profile_revision"
+                    ),
+                    flat=True,
+                )
+                .first(),
+            )
+        if (
+            self.baseline_relationship_id
+            and self.baseline_relationship_revision is None
+        ):
+            self.baseline_relationship_revision = (
+                AdultStudentRelationship.all_objects.filter(
+                    pk=self.baseline_relationship_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("revision", flat=True)
+                .first()
+            )
+        if (
+            self.action == self.Action.SET_PRIMARY
+            and self.baseline_primary_relationship_id is None
+            and self.student_profile_id
+        ):
+            self.baseline_primary_relationship_id = (
+                Student.all_objects.filter(
+                    pk=self.student_profile_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("primary_contact_relationship_id", flat=True)
+                .first()
+            )
+        if (
+            self.baseline_primary_relationship_id
+            and self.baseline_primary_relationship_revision is None
+        ):
+            self.baseline_primary_relationship_revision = (
+                AdultStudentRelationship.all_objects.filter(
+                    pk=self.baseline_primary_relationship_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("revision", flat=True)
+                .first()
+            )
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": "The proposal and application must share an organization."
+                    }
+                )
+
+        if bool(self.student_profile_id) == bool(self.student_draft_id):
+            raise ValidationError(
+                "Select exactly one student profile or application draft."
+            )
+        if bool(self.guardian_profile_id) == bool(self.guardian_draft_id):
+            raise ValidationError(
+                "Select exactly one guardian profile or application draft."
+            )
+        if self.action not in self.Action.values:
+            raise ValidationError({"action": "Choose a valid relationship action."})
+        if self.decision not in self.Decision.values:
+            raise ValidationError({"decision": "Choose a valid relationship decision."})
+        if self.relationship_to_student and self.relationship_to_student not in dict(
+            RELATIONSHIP_CHOICES
+        ):
+            raise ValidationError(
+                {"relationship_to_student": "Choose a valid relationship type."}
+            )
+
+        from programs.models import Adult, AdultStudentRelationship, Student
+
+        for field_name, model in (
+            ("student_profile_id", Student),
+            ("guardian_profile_id", Adult),
+        ):
+            profile_id = getattr(self, field_name)
+            if (
+                profile_id is not None
+                and not model.all_objects.filter(
+                    pk=profile_id,
+                    organization_id=self.organization_id,
+                    is_incomplete_application_profile=False,
+                ).exists()
+            ):
+                raise ValidationError(
+                    {
+                        field_name.removesuffix(
+                            "_id"
+                        ): "Profile must be active and in this organization."
+                    }
+                )
+        for field_name, model in (
+            ("student_draft_id", ApplicationStudentDraft),
+            ("guardian_draft_id", ApplicationGuardianDraft),
+        ):
+            draft_id = getattr(self, field_name)
+            if (
+                draft_id is not None
+                and not model.objects.filter(
+                    pk=draft_id,
+                    application_id=self.application_id,
+                    organization_id=self.organization_id,
+                ).exists()
+            ):
+                raise ValidationError(
+                    {
+                        field_name.removesuffix(
+                            "_id"
+                        ): "Draft must belong to this application and organization."
+                    }
+                )
+
+        if self.action in (self.Action.ADD, self.Action.REPLACE) and not (
+            self.relationship_to_student
+        ):
+            raise ValidationError("A proposed relationship type is required.")
+        if self.action in (self.Action.REMOVE, self.Action.REPLACE):
+            if (
+                not self.baseline_relationship_id
+                or not self.baseline_relationship_revision
+            ):
+                raise ValidationError(
+                    "Removing or replacing a relationship needs a baseline."
+                )
+            baseline = AdultStudentRelationship.all_objects.filter(
+                pk=self.baseline_relationship_id,
+                organization_id=self.organization_id,
+            ).first()
+            if baseline is None:
+                raise ValidationError(
+                    "The baseline relationship must belong to this organization."
+                )
+            if (
+                self.student_profile_id
+                and baseline.student_id != self.student_profile_id
+            ):
+                raise ValidationError(
+                    "The baseline relationship must use the proposed student."
+                )
+            if self.action == self.Action.REMOVE and not (
+                self.student_profile_id and self.guardian_profile_id
+            ):
+                raise ValidationError(
+                    "Removing a relationship requires existing profiles."
+                )
+            if self.action == self.Action.REPLACE and not self.student_profile_id:
+                raise ValidationError(
+                    "Replacing a relationship requires an existing student."
+                )
+            if (
+                self.action == self.Action.REMOVE
+                and self.guardian_profile_id
+                and baseline.adult_id != self.guardian_profile_id
+            ):
+                raise ValidationError(
+                    "The baseline relationship must use the proposed guardian."
+                )
+        if self.action == self.Action.SET_PRIMARY and self.student_profile_id:
+            if self.baseline_primary_relationship_id:
+                baseline_primary = AdultStudentRelationship.all_objects.filter(
+                    pk=self.baseline_primary_relationship_id,
+                    organization_id=self.organization_id,
+                    student_id=self.student_profile_id,
+                )
+                if not baseline_primary.exists():
+                    raise ValidationError(
+                        "The primary-contact baseline must belong to this student."
+                    )
+        if self.decision != self.Decision.PENDING and not (
+            self.reviewed_by_id and self.reviewed_at
+        ):
+            raise ValidationError(
+                "A reviewed relationship decision needs reviewer metadata."
+            )
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self._capture_baselines()
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def is_baseline_current(self):
+        application = (
+            Application.objects.filter(
+                pk=self.application_id,
+                organization_id=self.organization_id,
+            )
+            .values(
+                "updated_at",
+                "superseded_at",
+                "status",
+                "student_profile_id",
+                "primary_guardian_profile_id",
+                "secondary_guardian_profile_id",
+            )
+            .first()
+        )
+        if (
+            application is None
+            or application["updated_at"] != self.baseline_application_updated_at
+            or application["superseded_at"] is not None
+            or application["status"]
+            not in (
+                Application.Status.DRAFT,
+                Application.Status.EMAIL_VERIFIED,
+                Application.Status.AWAITING_PARENT,
+                Application.Status.SUBMITTED,
+            )
+        ):
+            return False
+        if bool(self.student_profile_id) == bool(self.student_draft_id):
+            return False
+        if bool(self.guardian_profile_id) == bool(self.guardian_draft_id):
+            return False
+        if (
+            self.action not in self.Action.values
+            or self.decision not in self.Decision.values
+        ):
+            return False
+        for field_name, baseline_name in (
+            ("student_profile_id", "baseline_student_revision"),
+            ("student_draft_id", "baseline_student_draft_revision"),
+            ("guardian_profile_id", "baseline_guardian_revision"),
+            ("guardian_draft_id", "baseline_guardian_draft_revision"),
+        ):
+            if bool(getattr(self, field_name)) != bool(getattr(self, baseline_name)):
+                return False
+
+        from programs.models import Adult, AdultStudentRelationship, Student
+
+        for field_name, model, baseline_name in (
+            (
+                "student_draft_id",
+                ApplicationStudentDraft,
+                "baseline_student_draft_revision",
+            ),
+            (
+                "guardian_draft_id",
+                ApplicationGuardianDraft,
+                "baseline_guardian_draft_revision",
+            ),
+            ("student_profile_id", Student, "baseline_student_revision"),
+            ("guardian_profile_id", Adult, "baseline_guardian_revision"),
+        ):
+            profile_id = getattr(self, field_name)
+            if profile_id is None:
+                continue
+            manager = (
+                model.objects if field_name.endswith("draft_id") else model.all_objects
+            )
+            profile_updated_at = (
+                manager.filter(
+                    pk=profile_id,
+                    organization_id=self.organization_id,
+                    **(
+                        {}
+                        if field_name.endswith("draft_id")
+                        else {"is_incomplete_application_profile": False}
+                    ),
+                )
+                .values_list(
+                    (
+                        "revision"
+                        if field_name.endswith("draft_id")
+                        else "profile_revision"
+                    ),
+                    flat=True,
+                )
+                .first()
+            )
+            if profile_updated_at is None or profile_updated_at != getattr(
+                self, baseline_name
+            ):
+                return False
+        linked_profile_checks = []
+        if self.student_draft_id:
+            student_id = application["student_profile_id"]
+            if student_id != self.baseline_application_student_profile_id:
+                return False
+            linked_profile_checks.append(
+                (student_id, Student, self.baseline_application_student_revision)
+            )
+        if self.guardian_draft_id:
+            guardian_slot = (
+                ApplicationGuardianDraft.objects.filter(
+                    pk=self.guardian_draft_id,
+                    organization_id=self.organization_id,
+                    application_id=self.application_id,
+                )
+                .values_list("slot", flat=True)
+                .first()
+            )
+            guardian_field = {
+                ApplicationGuardianDraft.Slot.PRIMARY: "primary_guardian_profile_id",
+                ApplicationGuardianDraft.Slot.SECONDARY: "secondary_guardian_profile_id",
+            }.get(guardian_slot)
+            guardian_id = application.get(guardian_field) if guardian_field else None
+            if guardian_id != self.baseline_application_guardian_profile_id:
+                return False
+            linked_profile_checks.append(
+                (guardian_id, Adult, self.baseline_application_guardian_revision)
+            )
+        for profile_id, model, baseline_revision in linked_profile_checks:
+            if bool(profile_id) != bool(baseline_revision):
+                return False
+            if profile_id:
+                current_revision = (
+                    model.all_objects.filter(
+                        pk=profile_id,
+                        organization_id=self.organization_id,
+                    )
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+                if current_revision != baseline_revision:
+                    return False
+
+        if self.baseline_relationship_id:
+            relationship_revision = (
+                AdultStudentRelationship.all_objects.filter(
+                    pk=self.baseline_relationship_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("revision", flat=True)
+                .first()
+            )
+            if relationship_revision != self.baseline_relationship_revision:
+                return False
+        elif (
+            self.action == self.Action.ADD
+            and self.student_profile_id
+            and self.guardian_profile_id
+            and AdultStudentRelationship.all_objects.filter(
+                organization_id=self.organization_id,
+                student_id=self.student_profile_id,
+                adult_id=self.guardian_profile_id,
+            ).exists()
+        ):
+            return False
+
+        if self.action == self.Action.SET_PRIMARY and self.student_profile_id:
+            current_primary_id = (
+                Student.all_objects.filter(
+                    pk=self.student_profile_id,
+                    organization_id=self.organization_id,
+                )
+                .values_list("primary_contact_relationship_id", flat=True)
+                .first()
+            )
+            if current_primary_id != self.baseline_primary_relationship_id:
+                return False
+            if self.baseline_primary_relationship_id:
+                current_primary_revision = (
+                    AdultStudentRelationship.all_objects.filter(
+                        pk=self.baseline_primary_relationship_id,
+                        organization_id=self.organization_id,
+                        student_id=self.student_profile_id,
+                    )
+                    .values_list("revision", flat=True)
+                    .first()
+                )
+                if (
+                    current_primary_revision
+                    != self.baseline_primary_relationship_revision
+                ):
+                    return False
+        return True
+
+    def __str__(self):
+        return f"Relationship proposal for {self.application.application_id} ({self.action})"

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import close_old_connections, transaction
 from django.db.models import Q
+from django.db.models.functions import Trim
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -32,6 +34,12 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ApplicationIdentityResolution:
+    status: str
+    profile: Optional[Student | Adult] = None
 
 
 def normalize_email(email: str) -> str:
@@ -334,24 +342,75 @@ def find_adult_by_email(email: str, organization=None):
 
 def _find_unique_application_person_by_email(email: str, organization=None):
     """Return a sole tenant-owned Student or Adult match, otherwise ``None``."""
+    return resolve_application_person_identity(email, organization).profile
+
+
+def resolve_application_person_identity(
+    email: str, organization=None
+) -> ApplicationIdentityResolution:
+    """Classify an email without choosing between multiple tenant profiles."""
     email = normalize_email(email)
     if not email or organization is None:
-        return None
+        return ApplicationIdentityResolution("no_match")
 
-    email_filter = Q(personal_email__iexact=email) | Q(org_email__iexact=email)
+    email_filter = Q(normalized_personal_email__iexact=email) | Q(
+        normalized_org_email__iexact=email
+    )
     students = list(
         Student.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
         .filter(email_filter)
         .order_by("pk")[:2]
     )
     adults = list(
         Adult.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
         .filter(email_filter)
         .order_by("pk")[:2]
     )
     if len(students) + len(adults) != 1:
-        return None
-    return students[0] if students else adults[0]
+        status = "ambiguous" if students or adults else "no_match"
+        return ApplicationIdentityResolution(status)
+    return ApplicationIdentityResolution(
+        "unique", students[0] if students else adults[0]
+    )
+
+
+def find_application_person_candidates(email: str, organization=None):
+    """Return same-organization active people matching an identity-review email."""
+    email = normalize_email(email)
+    if not email or organization is None:
+        return []
+    email_filter = Q(normalized_personal_email__iexact=email) | Q(
+        normalized_org_email__iexact=email
+    )
+    candidates = [
+        ("student", profile)
+        for profile in Student.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("last_name", "legal_first_name", "pk")
+    ]
+    candidates.extend(
+        ("adult", profile)
+        for profile in Adult.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("last_name", "legal_first_name", "pk")
+    )
+    return candidates
 
 
 def find_unique_student_by_email(email: str, organization=None):
@@ -629,6 +688,9 @@ def get_primary_parent_email(application: Application) -> Optional[str]:
     """Return the primary parent's email address from Step 7 data.
     Falls back to handoff email, then application email if applicant is a parent.
     """
+    if application.profile_workflow_version == 1:
+        return _linked_primary_guardian_email(application)
+
     data = application.data or {}
     step7 = data.get("step7-primaryparent") or {}
     parent_email = (step7.get("email") or "").strip()
@@ -647,6 +709,8 @@ def get_primary_parent_email(application: Application) -> Optional[str]:
 
 def document_recipient(application: Application) -> str:
     """Find the parent address eligible for a document challenge."""
+    if application.profile_workflow_version == 1:
+        return _linked_primary_guardian_email(application) or ""
     if application.applicant_type == Application.Type.PARENT:
         return (application.email or "").strip().lower()
     if application.applicant_type != Application.Type.STUDENT:
@@ -662,6 +726,18 @@ def document_recipient(application: Application) -> str:
             if isinstance(email, str) and email.strip():
                 return email.strip().lower()
     return ""
+
+
+def _linked_primary_guardian_email(application: Application) -> Optional[str]:
+    if not application.primary_guardian_profile_id or not application.organization_id:
+        return None
+    guardian = Adult.all_objects.filter(
+        pk=application.primary_guardian_profile_id,
+        organization_id=application.organization_id,
+    ).first()
+    if guardian is None:
+        return None
+    return normalize_email(guardian.personal_email or guardian.org_email) or None
 
 
 def required_application_documents(application: Application):

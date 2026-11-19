@@ -114,7 +114,7 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
 @receiver(post_save, sender="programs.Adult")
 def ensure_user_in_adult_group(sender, instance, created, **kwargs):
     try:
-        if instance.user_id:
+        if instance.user_id and not instance.is_incomplete_application_profile:
             if instance.is_mentor:
                 group = ensure_group("Mentor")
                 instance.user.groups.add(group)
@@ -138,7 +138,7 @@ def sync_adult_memberships(adult):
     explicit platform-admin action. Returns the number of memberships
     created.
     """
-    if not adult.user_id:
+    if not adult.user_id or adult.is_incomplete_application_profile:
         return 0
 
     org_id = adult.organization_id
@@ -178,7 +178,7 @@ def sync_student_memberships(student):
     rows are deactivated (never re-activated) when the flag changes. Returns
     the number of memberships created.
     """
-    if not student.user_id:
+    if not student.user_id or student.is_incomplete_application_profile:
         return 0
 
     org_id = student.organization_id
@@ -245,7 +245,11 @@ def audit_guardian_removed(sender, instance, **kwargs):
 def mark_adult_as_parent_on_relationship(sender, instance, created, **kwargs):
     """Auto-flag an Adult as a parent whenever a student relationship is made."""
     try:
-        if instance.adult_id:
+        if (
+            instance.adult_id
+            and not instance.adult.is_incomplete_application_profile
+            and not instance.student.is_incomplete_application_profile
+        ):
             adult = instance.adult
             if not adult.is_parent:
                 adult.__class__.objects.filter(pk=instance.adult_id).update(
@@ -263,7 +267,7 @@ def mark_adult_as_parent_on_relationship(sender, instance, created, **kwargs):
 @receiver(post_save, sender="programs.Student")
 def ensure_user_in_student_group(sender, instance, created, **kwargs):
     try:
-        if instance.user_id:
+        if instance.user_id and not instance.is_incomplete_application_profile:
             group = ensure_group("Student")
             instance.user.groups.add(group)
     except Exception:

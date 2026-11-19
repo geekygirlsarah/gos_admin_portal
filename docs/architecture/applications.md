@@ -195,6 +195,61 @@ explicitly skipped contacts. Race/ethnicity selections are stored through a
 tenant-owned join model. These records do not create or link live student/adult
 profiles, relationships, enrollments, user accounts, or portal access.
 
+Schema-only migrations `applications.0026` and `programs.0143` add optional
+tenant-validated profile links to `Application` and an explicit incomplete
+lifecycle flag to `Student` and `Adult`. Existing profiles retain the default
+active state; the links remain unset for existing applications. Incomplete
+profiles are excluded by the ordinary Student, Adult, Enrollment, and
+AdultStudentRelationship managers, active-student helpers, and the dashboard's
+relationship-derived access paths.
+Primary/secondary contact properties suppress incomplete endpoints, and model
+save paths reject account links, enrollments, and live guardian relationships
+for incomplete profiles. Database constraints also prohibit incomplete
+profiles from carrying linked user accounts. The unrestricted `all_objects`
+managers are for scoped internal lifecycle and invariant checks, not ordinary
+views or forms.
+
+This isolation foundation is not connected to the public wizard: new applicant
+profile creation and direct updates remain disabled. The legacy application
+workflow continues to use `Application.data`; `profile_workflow_version` stays
+at its legacy default until the complete identity, review, conversion, and
+compatibility flow is ready. Authorized application reviewers retain access to
+their tenant-scoped application review pages; ordinary profile detail routes do
+not expose incomplete profiles.
+
+Schema-only migrations `applications.0027`–`0034` add tenant-owned identity and
+relationship proposal records, while `programs.0144`–`0146` add revision
+counters and database defaults for the profile lifecycle fields. Identity
+resolution distinguishes no match, one active same-organization match, and
+ambiguity across both Student and Adult personal
+and organization email addresses; an ambiguous result carries no candidate.
+Proposals store typed candidate/target references, action, baseline and reviewer
+decision metadata. Live profile, application-draft and relationship revisions
+detect partial saves as well as ordinary updates, and application progress is
+checked again before a proposal baseline is considered current. `pghistory`
+records proposal decision history without copying applicant contact or profile
+values into proposal events.
+
+The relationship action model supports additions, removals, replacements, and
+primary-contact changes. Authorized reviewers can record identity and
+relationship decisions for `profile_workflow_version=1`; those decisions do not
+change live access until final approval. That approval rechecks required forms,
+proposal decisions, current baselines, profile ownership, email conflicts, and
+relationship endpoints under tenant-bound locks, then activates linked
+incomplete profiles, applies only approved relationship changes, enrolls the
+student, and preserves structured answers in one transaction. Profile-workflow
+applications cannot use the legacy conversion endpoint.
+
+The read-only `evaluate_application_profile_edit` helper encodes the approved
+exact-linked-account, unique verified-email, and existing linked-guardian rules;
+edits to another guardian, ambiguous identities, or an unrelated student
+require lead review. It is not connected to applicant profile writes. The public
+wizard still creates legacy version-0 applications, and conversion for those
+applications continues through its existing email-matching path. This remains a
+foundation, not a user-visible rollout. The legacy staff editor is unavailable
+for profile-workflow applications because it writes JSON rather than structured
+records; a safe typed editor is required before enabling the new workflow.
+
 A question-set row is keyed by application and program; the row itself means
 the set was frozen, including when it has zero answer rows. Its ordered answers
 copy the stable question UUID, displayed wording, required flag, and nullable
