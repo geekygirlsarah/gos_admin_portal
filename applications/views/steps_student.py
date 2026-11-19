@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 
 from audit.events import AuditEvent
 from audit.service import log_event
-from programs.models import Student
+from programs.models import Program, Student
 from programs.utils import (
     calculate_grade,
     calculate_graduation_year,
@@ -50,7 +50,6 @@ from ..models import (
 from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import (
     adult_to_prefill,
-    find_adult_by_email,
     find_unique_adult_by_email,
     find_unique_student_by_email,
     get_program_buckets,
@@ -64,8 +63,12 @@ from ..services import (
 )
 from .browser import (
     _grant_browser_access,
+    _has_browser_access,
+    _identity,
     _require_browser_access,
     _start_bootstrap,
+    begin_pending_resume,
+    complete_pending_resume,
 )
 from .utils import (
     TOTAL_STEPS,
@@ -88,7 +91,11 @@ def _locked_application_queryset(using, pk, organization_id):
     return (
         Application.objects.using(using)
         .select_for_update()
-        .filter(pk=pk, organization_id=organization_id)
+        .filter(
+            pk=pk,
+            organization_id=organization_id,
+            superseded_at__isnull=True,
+        )
     )
 
 
@@ -164,6 +171,7 @@ class Step2ApplicantTypeView(View):
                 Application.objects.using(using).select_for_update(),
                 pk=application.pk,
                 organization_id=application.organization_id,
+                superseded_at__isnull=True,
             )
             locked_redirect = _locked_application_redirect(current)
             if locked_redirect is not None:
@@ -493,18 +501,7 @@ class Step3VerifyEmailView(View):
 
         # Check for existing draft applications with the same email.
         # If found, redirect to a page that lets them resume the old one or start over.
-        existing_exists = (
-            Application.objects.filter(
-                email__iexact=application.email,
-                status__in=[
-                    Application.Status.DRAFT,
-                    Application.Status.EMAIL_VERIFIED,
-                    Application.Status.AWAITING_PARENT,
-                ],
-            )
-            .exclude(pk=application.pk)
-            .exists()
-        )
+        existing_exists = Step3DuplicateFoundView._existing_query(application).exists()
 
         if existing_exists:
             return redirect("apply_duplicate_found", app_id=application.application_id)
@@ -533,16 +530,13 @@ class Step3VerifyEmailView(View):
 class Step3DuplicateFoundView(View):
     template_name = "applications/step3_duplicate_found.html"
 
-    def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id, request.organization)
-        guard = _require_verified_email(request, application)
-        if guard is not None:
-            return guard
-        # Find other applications with the same email that are in progress
-        existing = (
+    @staticmethod
+    def _existing_query(application):
+        return (
             Application.objects.for_organization(application.organization)
             .filter(
                 email__iexact=application.email,
+                superseded_at__isnull=True,
                 status__in=[
                     Application.Status.DRAFT,
                     Application.Status.EMAIL_VERIFIED,
@@ -557,6 +551,24 @@ class Step3DuplicateFoundView(View):
             .order_by("-updated_at")
         )
 
+    @staticmethod
+    def _requires_guardian_authorization(application):
+        return _identity(application)["role"] == "handoff_parent"
+
+    @classmethod
+    def _can_supersede(cls, request, application):
+        if not cls._requires_guardian_authorization(application):
+            return True
+        return _has_browser_access(request, application) and _is_handoff_authorized(
+            request, application
+        )
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(request, application)
+        if guard is not None:
+            return guard
+        existing = self._existing_query(application)
         if not existing.exists():
             return _redirect_after_email_verified(application)
 
@@ -565,7 +577,6 @@ class Step3DuplicateFoundView(View):
             self.template_name,
             {
                 "application": application,
-                "existing": existing.first(),
                 "count": existing.count(),
                 "current_step": 3,
                 "total_steps": TOTAL_STEPS,
@@ -577,94 +588,121 @@ class Step3DuplicateFoundView(View):
         guard = _require_verified_email(request, application)
         if guard is not None:
             return guard
+        guard = _require_browser_access(request, application)
+        if guard is not None:
+            return guard
         action = request.POST.get("action")
-
-        existing_query = (
-            Application.objects.for_organization(application.organization)
-            .filter(
-                email__iexact=application.email,
-                status__in=[
-                    Application.Status.DRAFT,
-                    Application.Status.EMAIL_VERIFIED,
-                    Application.Status.AWAITING_PARENT,
-                ],
-            )
-            .exclude(pk=application.pk)
-            .filter(
-                Q(program__isnull=True)
-                | Q(program__organization=application.organization)
-            )
-        )
+        existing = list(self._existing_query(application))
 
         if action == "resume":
-            # Resume existing: delete current, redirect to the most recent old one
-            oldest_existing = existing_query.order_by("-updated_at").first()
-            if oldest_existing:
-                if application.document_submissions.exclude(
-                    organization_id=application.organization_id,
-                    document__program__organization=application.organization,
-                ).exists():
-                    messages.error(
-                        request,
-                        "This application has an inconsistent document record and cannot be replaced.",
-                    )
-                    return redirect(
-                        "apply_duplicate_found", app_id=application.application_id
-                    )
-                log_event(
-                    event=AuditEvent.RECORD_DELETED,
-                    resource=application,
-                    request=request,
-                    before={
-                        "application_id": application.application_id,
-                        "status": application.status,
-                        "email": application.email,
-                    },
-                    notes=(
-                        "Duplicate draft discarded to resume previous application "
-                        f"{oldest_existing.application_id}."
-                    ),
-                )
-                application.delete()
+            target = existing[0] if existing else None
+            if target is not None:
+                begin_pending_resume(request, application, target)
+                response = complete_pending_resume(request, target)
+                if response is not None:
+                    return response
                 messages.info(
                     request,
-                    f"Resuming your previous application ({oldest_existing.application_id}).",
+                    "For your protection, verify access to the existing application "
+                    "before it can be resumed. It will remain active until verification succeeds.",
                 )
-                return _redirect_to_current_step(oldest_existing)
+                return redirect(
+                    "apply_browser_verification", app_id=target.application_id
+                )
             return _redirect_after_email_verified(application)
 
         elif action == "start_over":
-            # Start over: delete all old ones, continue with current
-            stale_ids = list(existing_query.values_list("application_id", flat=True))
-            if stale_ids:
-                inconsistent_submissions = ApplicationDocumentSubmission.objects.filter(
-                    application__in=existing_query
-                ).exclude(
-                    organization_id=F("application__organization_id"),
-                    document__program__organization_id=F(
-                        "application__organization_id"
-                    ),
-                )
-                if inconsistent_submissions.exists():
-                    messages.error(
-                        request,
-                        "A previous application has an inconsistent document record and cannot be replaced.",
+            using = application._state.db
+            eligible_statuses = [
+                Application.Status.DRAFT,
+                Application.Status.EMAIL_VERIFIED,
+                Application.Status.AWAITING_PARENT,
+            ]
+            locked_applications = []
+            skipped_handoff = False
+            stale_current = False
+            with transaction.atomic(using=using):
+                locked_applications = list(
+                    Application.objects.using(using)
+                    .for_organization(application.organization)
+                    .filter(
+                        Q(pk=application.pk)
+                        | Q(
+                            email__iexact=application.email,
+                            superseded_at__isnull=True,
+                            status__in=eligible_statuses,
+                        )
                     )
-                    return redirect(
-                        "apply_duplicate_found", app_id=application.application_id
-                    )
-                log_event(
-                    event=AuditEvent.RECORD_DELETED,
-                    resource=application,
-                    request=request,
-                    before={"discarded_application_ids": stale_ids},
-                    notes=(
-                        "Previous application(s) cleared by applicant to start over: "
-                        + ", ".join(stale_ids)
-                    ),
+                    .order_by("pk")
+                    .select_for_update()
                 )
-            existing_query.delete()
-            messages.info(request, "Previous application(s) cleared. Starting fresh.")
+                current = next(
+                    (item for item in locked_applications if item.pk == application.pk),
+                    None,
+                )
+                if (
+                    current is None
+                    or current.superseded_at is not None
+                    or current.email != application.email
+                    or current.email_verified_at is None
+                    or current.status not in eligible_statuses
+                    or not _has_browser_access(request, current)
+                ):
+                    stale_current = True
+                else:
+                    candidates = [
+                        item
+                        for item in locked_applications
+                        if item.pk != current.pk
+                        and item.superseded_at is None
+                        and item.status in eligible_statuses
+                        and (item.email or "").strip().casefold()
+                        == (current.email or "").strip().casefold()
+                    ]
+                    program_ids = {
+                        item.program_id
+                        for item in candidates
+                        if item.program_id is not None
+                    }
+                    valid_program_ids = set(
+                        Program.objects.using(using)
+                        .for_organization(current.organization)
+                        .filter(pk__in=program_ids)
+                        .values_list("pk", flat=True)
+                    )
+                    now = timezone.now()
+                    for candidate in candidates:
+                        if (
+                            candidate.program_id is not None
+                            and candidate.program_id not in valid_program_ids
+                        ):
+                            skipped_handoff = True
+                            continue
+                        if not self._can_supersede(request, candidate):
+                            skipped_handoff = True
+                            continue
+                        candidate.superseded_at = now
+                        candidate.save(update_fields=["superseded_at"])
+
+            if stale_current:
+                messages.error(
+                    request,
+                    "This application changed before the restart could be completed. "
+                    "No earlier applications were changed. Please start again.",
+                )
+                return redirect("apply_start")
+            if skipped_handoff:
+                messages.warning(
+                    request,
+                    "Some earlier applications remain active because additional "
+                    "verification is required. No application details were changed.",
+                )
+            else:
+                messages.info(
+                    request,
+                    "Eligible earlier applications were kept as superseded records "
+                    "with their uploaded documents. Starting fresh.",
+                )
             return _redirect_after_email_verified(application)
 
         return self.get(request, app_id)
@@ -1427,7 +1465,7 @@ class Step7PrimaryParentView(View):
                 existing_adult = relationship.adult
         if not saved and existing_adult is None:
             lookup_email = handoff_email or application.email
-            existing_adult = find_adult_by_email(
+            existing_adult = find_unique_adult_by_email(
                 lookup_email, organization=application.organization
             )
 
@@ -1580,7 +1618,7 @@ class Step7PrimaryParentView(View):
         if not has_secondary:
             adult_for_check = existing_adult
             if adult_for_check is None:
-                adult_for_check = find_adult_by_email(
+                adult_for_check = find_unique_adult_by_email(
                     application.email, organization=application.organization
                 )
             if adult_for_check is not None:
@@ -2018,7 +2056,8 @@ class Step9ConfirmView(View):
             current = get_object_or_404(
                 Application.objects.using(using)
                 .for_organization(request.organization)
-                .select_for_update(),
+                .select_for_update()
+                .filter(superseded_at__isnull=True),
                 pk=application.pk,
             )
             locked_redirect = _locked_application_redirect(current)

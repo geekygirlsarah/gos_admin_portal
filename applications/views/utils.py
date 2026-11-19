@@ -54,7 +54,9 @@ def _get_application_or_404(app_id: str, organization) -> Application:
     if organization is None:
         raise Http404
     application = get_object_or_404(
-        Application.objects.for_organization(organization).select_related("program"),
+        Application.objects.for_organization(organization)
+        .filter(superseded_at__isnull=True)
+        .select_related("program"),
         application_id=(app_id or "").upper(),
     )
     if (
@@ -253,7 +255,11 @@ def _save_step_data(
         current = (
             Application.objects.using(using)
             .select_for_update()
-            .get(pk=application.pk, organization_id=application.organization_id)
+            .get(
+                pk=application.pk,
+                organization_id=application.organization_id,
+                superseded_at__isnull=True,
+            )
         )
         if validate_current is not None:
             response = validate_current(current)

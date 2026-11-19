@@ -162,6 +162,7 @@ def _make_plan(application, organization, program, now) -> ReminderPlan | None:
     if (
         not organization.is_active
         or application.organization_id != organization.pk
+        or application.superseded_at is not None
         or application.applicant_type not in _APPLICANT_TYPES
         or not isinstance(application.data, dict)
     ):
@@ -308,6 +309,7 @@ def _candidate_queryset(organization, now):
 
     return (
         _application_query(organization, "default")
+        .filter(superseded_at__isnull=True)
         .annotate(
             _reminder_progress=Coalesce("applicant_progress_at", "updated_at"),
             _has_missing_required_documents=Exists(missing_required_documents),

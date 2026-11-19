@@ -134,7 +134,11 @@ def freeze_custom_question_snapshot(application):
     with transaction.atomic(using=application._state.db):
         current = (
             Application.objects.using(application._state.db)
-            .filter(pk=application.pk, organization_id=application.organization_id)
+            .filter(
+                pk=application.pk,
+                organization_id=application.organization_id,
+                superseded_at__isnull=True,
+            )
             .select_for_update()
             .first()
         )

@@ -69,8 +69,13 @@ REVIEW_PERM = "applications.review_application"
 def _tenant_applications(organization):
     if organization is None:
         raise Http404
-    return Application.objects.for_organization(organization).filter(
-        models.Q(program__isnull=True) | models.Q(program__organization=organization)
+    return (
+        Application.objects.for_organization(organization)
+        .filter(superseded_at__isnull=True)
+        .filter(
+            models.Q(program__isnull=True)
+            | models.Q(program__organization=organization)
+        )
     )
 
 
@@ -936,7 +941,8 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
             current = get_object_or_404(
                 Application.objects.using(using)
                 .for_organization(request.organization)
-                .select_for_update(),
+                .select_for_update()
+                .filter(superseded_at__isnull=True),
                 pk=application.pk,
             )
             if (
@@ -1058,10 +1064,6 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
 
     def post(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
-        if self._check_already_declined(request, application):
-            return redirect(
-                "application_review_detail", app_id=application.application_id
-            )
         form = DeclineForm(request.POST)
         if not form.is_valid():
             return render(
@@ -1070,29 +1072,42 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
                 {"application": application, "form": form},
             )
         reason = form.cleaned_data.get("reason") or ""
-        old_status = application.status
-        application.status = Application.Status.DECLINED
-        application.decline_reason = reason
-        application.reviewed_at = timezone.now()
-        application.reviewed_by = request.user
-        application.save(
-            update_fields=[
-                "status",
-                "decline_reason",
-                "reviewed_at",
-                "reviewed_by",
-                "updated_at",
-            ]
-        )
+        using = application._state.db
+        with transaction.atomic(using=using):
+            application = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(request.organization)
+                .select_for_update()
+                .filter(superseded_at__isnull=True),
+                pk=application.pk,
+            )
+            if self._check_already_declined(request, application):
+                return redirect(
+                    "application_review_detail", app_id=application.application_id
+                )
+            old_status = application.status
+            application.status = Application.Status.DECLINED
+            application.decline_reason = reason
+            application.reviewed_at = timezone.now()
+            application.reviewed_by = request.user
+            application.save(
+                update_fields=[
+                    "status",
+                    "decline_reason",
+                    "reviewed_at",
+                    "reviewed_by",
+                    "updated_at",
+                ]
+            )
 
-        log_event(
-            request=request,
-            event=AuditEvent.ADMISSION_DECISION,
-            resource=application,
-            before={"status": old_status},
-            after={"status": Application.Status.DECLINED},
-            notes=f"Application declined by {request.user}. Reason: {reason}",
-        )
+            log_event(
+                request=request,
+                event=AuditEvent.ADMISSION_DECISION,
+                resource=application,
+                before={"status": old_status},
+                after={"status": Application.Status.DECLINED},
+                notes=f"Application declined by {request.user}. Reason: {reason}",
+            )
 
         try:
             send_application_declined_email(application, reason=reason, request=request)
@@ -1259,7 +1274,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         application = (
             Application.objects.for_organization(application.organization)
             .select_for_update()
-            .get(pk=application.pk)
+            .get(pk=application.pk, superseded_at__isnull=True)
         )
         if (
             application.program_id
@@ -1332,27 +1347,36 @@ class ApplicationDeleteView(_ReviewerRequiredMixin, View):
 
     def post(self, request, app_id: str):
         application = _get_tenant_application(request, app_id)
-        if _has_foreign_document_submissions(application, application.organization):
-            messages.error(
-                request,
-                "This application cannot be deleted while it has records owned by another organization.",
+        using = application._state.db
+        with transaction.atomic(using=using):
+            application = get_object_or_404(
+                Application.objects.using(using)
+                .for_organization(application.organization)
+                .select_for_update()
+                .filter(superseded_at__isnull=True),
+                pk=application.pk,
             )
-            return redirect(
-                "application_review_detail", app_id=application.application_id
+            if _has_foreign_document_submissions(application, application.organization):
+                messages.error(
+                    request,
+                    "This application cannot be deleted while it has records owned by another organization.",
+                )
+                return redirect(
+                    "application_review_detail", app_id=application.application_id
+                )
+            app_str = application.application_id
+            log_event(
+                event=AuditEvent.RECORD_DELETED,
+                resource=application,
+                request=request,
+                before={
+                    "application_id": app_str,
+                    "status": application.status,
+                    "email": application.email,
+                },
+                notes=f"Application {app_str} deleted by reviewer.",
             )
-        app_str = application.application_id
-        log_event(
-            event=AuditEvent.RECORD_DELETED,
-            resource=application,
-            request=request,
-            before={
-                "application_id": app_str,
-                "status": application.status,
-                "email": application.email,
-            },
-            notes=f"Application {app_str} deleted by reviewer.",
-        )
-        application.delete()
+            application.delete()
         messages.success(request, f"Deleted application {app_str}.")
         return redirect("application_review_list")
 
@@ -1650,7 +1674,8 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
                 current = get_object_or_404(
                     Application.objects.using(using)
                     .for_organization(organization)
-                    .select_for_update(),
+                    .select_for_update()
+                    .filter(superseded_at__isnull=True),
                     pk=application.pk,
                 )
                 if (

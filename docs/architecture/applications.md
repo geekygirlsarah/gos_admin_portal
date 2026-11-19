@@ -54,6 +54,38 @@ intervening change cannot introduce a shared guardian address. Blank secondary
 emails remain optional when email updates are not selected, and plus-tagged
 addresses remain distinct. This is an application-form check, not a global
 email uniqueness constraint; historical profile addresses are unchanged.
+Step 7 applies the tenant-scoped unique-person resolver to direct guardian-email
+prefill, welcome-back display, and swap-prompt discovery. If that email matches
+multiple people in the organization, it does not select or reveal one of their
+profiles, and previously saved application fields remain untouched. This narrow
+check does not resolve student-ID or relationship-derived prefills, conversion
+matching, or profile uniqueness races.
+
+### Resume and restart
+
+Starting over from a verified duplicate page locks the current application and
+all eligible matching drafts in the same organization. It marks eligible older
+drafts with `superseded_at` without changing their status, applicant progress
+timestamp, legacy `updated_at` fallback, answers, document submissions, files,
+or history. Superseded applications are omitted from active wizard and resume
+routes, reviewer queues, applicant dashboards, duplicate discovery, and
+reminders. They remain eligible for the existing 30-day expiration policy.
+That command is not scheduled automatically.
+
+A student email verification alone cannot supersede a student-started
+application awaiting guardian handoff. That record remains active unless its
+own guardian-specific browser grant and handoff authorization are present.
+Starting over reports partial completion without identifying protected
+applications. Resume keeps the new draft active until the selected existing
+application is verified in its own browser session. A session-bound intent is
+rechecked with both application rows locked in deterministic order; a guardian
+handoff requires the guardian's OTP and token. Failed or stale verification
+leaves both records and their documents unchanged. No browser grant or handoff
+token is copied between applications. The marker is additive to the legacy
+JSON workflow and does not replace conversion or profile matching.
+The ordered row locks coordinate existing records but cannot prevent another
+request from inserting a new same-email draft at the same time; there is no
+global email uniqueness constraint, so a concurrent new draft may remain active.
 
 Student/parent and mentor confirmation also reload and lock the organization-
 bound application after form validation. They recheck terminal status and the

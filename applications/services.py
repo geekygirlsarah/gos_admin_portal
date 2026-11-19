@@ -428,7 +428,11 @@ def applications_for_user(user, organization=None):
 
     if not match:
         return []
-    applications = Application.objects.filter(match, status__in=PENDING_STATUSES)
+    applications = Application.objects.filter(
+        match,
+        status__in=PENDING_STATUSES,
+        superseded_at__isnull=True,
+    )
     if organization is not None:
         applications = applications.for_organization(organization).filter(
             Q(program__isnull=True) | Q(program__organization=organization)

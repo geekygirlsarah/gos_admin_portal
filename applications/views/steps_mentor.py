@@ -341,7 +341,8 @@ class MentorConfirmView(View):
             current = get_object_or_404(
                 Application.objects.using(using)
                 .for_organization(request.organization)
-                .select_for_update(),
+                .select_for_update()
+                .filter(superseded_at__isnull=True),
                 pk=application.pk,
             )
             locked_redirect = _locked_application_redirect(current)

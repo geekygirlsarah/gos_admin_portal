@@ -95,6 +95,22 @@ class ApplicationExpirationTests(TestCase):
         self.assertTrue(Application.objects.filter(pk=recent.pk).exists())
         self.assertTrue(Application.objects.filter(pk=legacy.pk).exists())
 
+    def test_superseded_draft_remains_eligible_on_its_original_progress_clock(self):
+        now = timezone.now()
+        progress_at = now - timedelta(days=31)
+        application = self.make_application(progress_at=progress_at)
+        Application.objects.filter(pk=application.pk).update(
+            superseded_at=now - timedelta(days=2)
+        )
+
+        result = self.run_batch(now=now)
+
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["processed"], 1)
+        application.refresh_from_db()
+        self.assertEqual(application.applicant_progress_at, progress_at)
+        self.assertIsNotNone(application.superseded_at)
+
     def test_eligible_phases_exclude_completed_forms_and_staff_review(self):
         now = timezone.now()
         old = now - timedelta(days=31)

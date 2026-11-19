@@ -204,6 +204,12 @@ class Application(models.Model):
         help_text="Most recent successful applicant-driven progress update.",
     )
 
+    superseded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When this unfinished application was replaced by a restart.",
+    )
+
     # Free-form bag of partial form data captured per step. Each step writes
     # its own sub-key (e.g. {"step5": {...}, "step6": {...}}). Keeping this
     # loose lets us iterate on individual steps without schema churn.

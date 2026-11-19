@@ -5,17 +5,17 @@
 
 {% block wizard_body %}
 <p>
-    An application for <strong>{{ application.email }}</strong> is already in progress
-    (Application ID: <strong>{{ existing.application_id }}</strong>, 
-    last updated {{ existing.updated_at|timesince }} ago).
+    An unfinished application is associated with this verified email. Its details stay
+    hidden until you verify access to that application.
 </p>
 
-{% if count > 1 %}
 <p class="text-muted small">
-    Note: You actually have {{ count }} applications in progress with this email. 
-    If you choose to start over, all of them will be cleared.
+    Resuming requires a new verification code for the existing application. If you start
+    over, eligible earlier applications and their uploaded documents are kept as
+    superseded records and remain subject to the existing 30-day expiration policy.
+    Applications awaiting a guardian handoff are replaced only after that guardian
+    verifies access.
 </p>
-{% endif %}
 
 <div class="card mb-4 border-primary">
     <div class="card-body">
@@ -25,15 +25,15 @@
             {% csrf_token %}
             
             <div class="d-grid gap-3">
-                <button type="submit" name="action" value="resume" class="btn btn-primary btn-lg js-confirm" data-confirm="Resume your previous application and discard this one?">
-                    Resume my previous application ({{ existing.application_id }})
+                <button type="submit" name="action" value="resume" class="btn btn-primary btn-lg">
+                    Verify access and resume the existing application
                 </button>
                 
                 <div class="text-center text-muted fw-bold small">OR</div>
                 
                 <button type="submit" name="action" value="start_over" class="btn btn-outline-danger js-confirm" 
-                        data-confirm="Are you sure? This will permanently delete your previous application data.">
-                    Start over and delete previous application(s)
+                        data-confirm="Start a new application? Eligible earlier drafts will be kept as superseded records with their uploaded documents.">
+                    Start over with a new application
                 </button>
             </div>
         </form>

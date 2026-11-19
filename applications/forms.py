@@ -68,7 +68,7 @@ class ResumeApplicationForm(forms.Form):
         if (
             self.organization is None
             or not Application.objects.for_organization(self.organization)
-            .filter(application_id=raw)
+            .filter(application_id=raw, superseded_at__isnull=True)
             .exists()
         ):
             raise forms.ValidationError(
