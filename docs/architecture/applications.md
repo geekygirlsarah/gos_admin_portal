@@ -57,9 +57,16 @@ email uniqueness constraint; historical profile addresses are unchanged.
 Step 7 applies the tenant-scoped unique-person resolver to direct guardian-email
 prefill, welcome-back display, and swap-prompt discovery. If that email matches
 multiple people in the organization, it does not select or reveal one of their
-profiles, and previously saved application fields remain untouched. This narrow
-check does not resolve student-ID or relationship-derived prefills, conversion
-matching, or profile uniqueness races.
+profiles, and previously saved application fields remain untouched. Relationship-
+derived guardian details and student-address fallback now require the saved
+student to be identified by the verified student email or by a uniquely matched
+guardian with an existing same-organization relationship. When a parent swap
+needs to hydrate a missing contact, the relationship must belong to that saved
+student and organization. Invalid, ambiguous, or cross-organization references
+fail closed without deleting application answers. This is only a prefill
+safeguard: it does not implement incomplete live profiles, lead-review
+decisions, conversion matching changes, or protection against concurrent
+profile-email claims.
 
 ### Resume and restart
 

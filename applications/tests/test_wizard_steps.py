@@ -16,7 +16,7 @@ from applications.models import Application, ProgramApplicationQuestion
 from applications.tests.access_helpers import verify_application_browser
 from applications.views import steps_student
 from organizations.models import UserOrganizationMembership
-from programs.models import Adult, Program, School, Student
+from programs.models import Adult, AdultStudentRelationship, Program, School, Student
 
 # Step 5 rejects applicants older than 18, so DOBs are anchored to today rather
 # than hardcoded to a fixed year (which would quietly start failing once that
@@ -1621,6 +1621,15 @@ class Step7AddressCopyTests(TestCase):
             city="Pittsburgh",
             state="PA",
             zip_code="15201",
+        )
+        guardian = Adult.objects.create(
+            personal_email="parent@example.com",
+            is_parent=True,
+        )
+        AdultStudentRelationship.objects.create(
+            adult=guardian,
+            student=student,
+            relationship_to_student="parent",
         )
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,

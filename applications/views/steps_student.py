@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 
 from audit.events import AuditEvent
 from audit.service import log_event
-from programs.models import Program, Student
+from programs.models import AdultStudentRelationship, Program, Student
 from programs.utils import (
     calculate_grade,
     calculate_graduation_year,
@@ -118,6 +118,87 @@ def _student_email_context(application):
     return {
         email.strip().casefold() for email in get_student_emails(application) if email
     }
+
+
+def _application_student_for_prefill(application):
+    """Return a saved student only when the verified applicant identifies it."""
+    data = application.data or {}
+    step5_data = data.get("step5-student") or data.get("step5") or {}
+    student_id = step5_data.get("_existing_student_id")
+    if isinstance(student_id, bool):
+        return None
+    if isinstance(student_id, str):
+        if not student_id.isdecimal():
+            return None
+        student_id = int(student_id)
+    if not isinstance(student_id, int) or student_id <= 0:
+        return None
+
+    student = (
+        Student.objects.for_organization(application.organization)
+        .filter(pk=student_id)
+        .first()
+    )
+    if student is None:
+        return None
+
+    if application.applicant_type == Application.Type.STUDENT:
+        if application.status == Application.Status.AWAITING_PARENT:
+            handoff_email = (data.get("step7_handoff") or {}).get("parent_email")
+            adult = find_unique_adult_by_email(
+                handoff_email, organization=application.organization
+            )
+            if adult is None:
+                return None
+        else:
+            matched_student = find_unique_student_by_email(
+                application.email, organization=application.organization
+            )
+            return (
+                student
+                if matched_student and matched_student.pk == student.pk
+                else None
+            )
+    elif application.applicant_type == Application.Type.PARENT:
+        adult = find_unique_adult_by_email(
+            application.email, organization=application.organization
+        )
+        if adult is None:
+            return None
+    else:
+        return None
+
+    related = (
+        AdultStudentRelationship.objects.for_organization(application.organization)
+        .filter(
+            organization_id=application.organization_id,
+            student_id=student.pk,
+            adult_id=adult.pk,
+            student__organization_id=application.organization_id,
+            adult__organization_id=application.organization_id,
+        )
+        .exists()
+    )
+    return student if related else None
+
+
+def _student_contact_relationship(student, slot, organization_id):
+    """Return the contact link only when it belongs to this student and tenant."""
+    relationship_id = getattr(student, f"{slot}_contact_relationship_id", None)
+    if not relationship_id:
+        return None
+    return (
+        AdultStudentRelationship.objects.for_organization(student.organization)
+        .filter(
+            pk=relationship_id,
+            organization_id=organization_id,
+            student_id=student.pk,
+            student__organization_id=organization_id,
+            adult__organization_id=organization_id,
+        )
+        .select_related("adult")
+        .first()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1439,35 +1520,25 @@ class Step7PrimaryParentView(View):
             (application.data or {}).get("step7_handoff", {}).get("parent_email")
         )
         existing_adult = None
-        # If Step 5 linked us to an existing Student record (returning
-        # student, or parent who picked one of their children), prefer that
-        # student's primary_contact Adult for prefill so the applicant
-        # doesn't have to retype it.
-        existing_student_id = (
-            (application.data or {})
-            .get("step5-student", {})
-            .get("_existing_student_id")
-        )
-        student = None
-        if existing_student_id:
-            student = (
-                Student.objects.for_organization(application.organization)
-                .filter(pk=existing_student_id)
-                .first()
+        student = _application_student_for_prefill(application)
+        if not saved and student is not None:
+            relationship = _student_contact_relationship(
+                student, "primary", application.organization_id
             )
-
-        if not saved and student and student.primary_contact_relationship_id:
-            relationship = student.primary_contact_relationship
-            if (
-                relationship.organization_id == application.organization_id
-                and relationship.adult.organization_id == application.organization_id
-            ):
+            if relationship is not None:
                 existing_adult = relationship.adult
         if not saved and existing_adult is None:
-            lookup_email = handoff_email or application.email
-            existing_adult = find_unique_adult_by_email(
-                lookup_email, organization=application.organization
-            )
+            lookup_email = application.email
+            if student_initiated:
+                lookup_email = (
+                    handoff_email
+                    if application.status == Application.Status.AWAITING_PARENT
+                    else None
+                )
+            if lookup_email:
+                existing_adult = find_unique_adult_by_email(
+                    lookup_email, organization=application.organization
+                )
 
         student_emails = get_student_emails(application)
         other_parent_email = (
@@ -1576,80 +1647,29 @@ class Step7PrimaryParentView(View):
             last = step8_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
-            sid = (
-                (application.data or {})
-                .get("step5-student", {})
-                .get("_existing_student_id")
+            student = _application_student_for_prefill(application)
+            relationship = (
+                _student_contact_relationship(
+                    student, "secondary", application.organization_id
+                )
+                if student is not None
+                else None
             )
-            if sid:
-                student = (
-                    Student.objects.for_organization(application.organization)
-                    .filter(pk=sid)
-                    .first()
-                )
-                if (
-                    student
-                    and student.secondary_contact_relationship_id
-                    and student.secondary_contact_relationship.organization_id
-                    == application.organization_id
-                    and student.secondary_contact_relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    has_secondary = True
-                    sc = student.secondary_contact_relationship.adult
-                    secondary_name = (
-                        " ".join(
-                            filter(
-                                None,
-                                [
-                                    sc.preferred_first_name
-                                    or sc.legal_first_name
-                                    or "",
-                                    sc.last_name or "",
-                                ],
-                            )
+            if relationship is not None:
+                has_secondary = True
+                sc = relationship.adult
+                secondary_name = (
+                    " ".join(
+                        filter(
+                            None,
+                            [
+                                sc.preferred_first_name or sc.legal_first_name or "",
+                                sc.last_name or "",
+                            ],
                         )
-                        or None
                     )
-        # Also check via the existing_adult (or a fresh email lookup when
-        # step6 was already saved and existing_adult wasn't populated):
-        # if this adult is the primary contact for any student that has a
-        # secondary_contact, show the swap box.
-        if not has_secondary:
-            adult_for_check = existing_adult
-            if adult_for_check is None:
-                adult_for_check = find_unique_adult_by_email(
-                    application.email, organization=application.organization
+                    or None
                 )
-            if adult_for_check is not None:
-                linked_student = (
-                    Student.objects.for_organization(application.organization)
-                    .filter(
-                        primary_contact_relationship__adult=adult_for_check,
-                        primary_contact_relationship__organization=application.organization,
-                        secondary_contact_relationship__isnull=False,
-                        secondary_contact_relationship__organization=application.organization,
-                        secondary_contact_relationship__adult__organization=application.organization,
-                    )
-                    .first()
-                )
-                if linked_student:
-                    has_secondary = True
-                    sc = linked_student.secondary_contact_relationship.adult
-                    secondary_name = (
-                        " ".join(
-                            filter(
-                                None,
-                                [
-                                    sc.preferred_first_name
-                                    or sc.legal_first_name
-                                    or "",
-                                    sc.last_name or "",
-                                ],
-                            )
-                        )
-                        or None
-                    )
 
         step5_data = (
             (application.data or {}).get("step5-student")
@@ -1662,19 +1682,12 @@ class Step7PrimaryParentView(View):
         student_zip_code = step5_data.get("zip_code")
 
         if not student_address:
-            # Fallback to existing student record if we have one but data is missing
-            sid = step5_data.get("_existing_student_id")
-            if sid:
-                student = (
-                    Student.objects.for_organization(application.organization)
-                    .filter(pk=sid)
-                    .first()
-                )
-                if student:
-                    student_address = student.address
-                    student_city = student.city
-                    student_state = student.state
-                    student_zip_code = student.zip_code
+            student = _application_student_for_prefill(application)
+            if student is not None:
+                student_address = student.address
+                student_city = student.city
+                student_state = student.state
+                student_zip_code = student.zip_code
 
         return render(
             request,
@@ -1745,39 +1758,22 @@ class SwapParentsView(View):
                 step7 = data.get("step7-primaryparent") or {}
                 step8 = data.get("step8-secondaryparent") or {}
 
-                # Returning-student prefills aren't saved until each step is
+                # Returning-family prefills aren't saved until each step is
                 # submitted, so hydrate missing sides before swapping.
-                existing_student_id = (data.get("step5-student") or {}).get(
-                    "_existing_student_id"
-                )
-                if existing_student_id and (not step7 or not step8):
-                    student = (
-                        Student.objects.for_organization(current.organization)
-                        .filter(pk=existing_student_id)
-                        .first()
-                    )
+                if not step7 or not step8:
+                    student = _application_student_for_prefill(current)
                     if student:
-                        primary_relationship = student.primary_contact_relationship
-                        if (
-                            not step7
-                            and primary_relationship is not None
-                            and primary_relationship.organization_id
-                            == current.organization_id
-                            and primary_relationship.adult.organization_id
-                            == current.organization_id
-                        ):
+                        primary_relationship = _student_contact_relationship(
+                            student, "primary", current.organization_id
+                        )
+                        if not step7 and primary_relationship is not None:
                             step7 = adult_to_prefill(
                                 primary_relationship.adult, student=student
                             )
-                        secondary_relationship = student.secondary_contact_relationship
-                        if (
-                            not step8
-                            and secondary_relationship is not None
-                            and secondary_relationship.organization_id
-                            == current.organization_id
-                            and secondary_relationship.adult.organization_id
-                            == current.organization_id
-                        ):
+                        secondary_relationship = _student_contact_relationship(
+                            student, "secondary", current.organization_id
+                        )
+                        if not step8 and secondary_relationship is not None:
                             step8 = adult_to_prefill(
                                 secondary_relationship.adult, student=student
                             )
@@ -1938,26 +1934,15 @@ class Step8SecondaryParentView(View):
         if saved.get("_skipped"):
             return {}
 
-        # Prefill from existing secondary contact if we can identify the student.
-        sid = (
-            (application.data or {})
-            .get("step5-student", {})
-            .get("_existing_student_id")
-        )
-        if sid:
-            student = (
-                Student.objects.for_organization(application.organization)
-                .filter(pk=sid)
-                .first()
+        # Prefill from an existing secondary contact only after identifying
+        # the saved student through the verified applicant.
+        student = _application_student_for_prefill(application)
+        if student is not None:
+            relationship = _student_contact_relationship(
+                student, "secondary", application.organization_id
             )
-            if student and student.secondary_contact_relationship_id:
-                relationship = student.secondary_contact_relationship
-                if (
-                    relationship.organization_id == application.organization_id
-                    and relationship.adult.organization_id
-                    == application.organization_id
-                ):
-                    return adult_to_prefill(relationship.adult, student=student)
+            if relationship is not None:
+                return adult_to_prefill(relationship.adult, student=student)
         return {}
 
     def _render(self, request, application, form):
@@ -1969,19 +1954,12 @@ class Step8SecondaryParentView(View):
         student_zip_code = step5_data.get("zip_code")
 
         if not student_address:
-            # Fallback to existing student record if we have one but data is missing
-            sid = step5_data.get("_existing_student_id")
-            if sid:
-                student = (
-                    Student.objects.for_organization(application.organization)
-                    .filter(pk=sid)
-                    .first()
-                )
-                if student:
-                    student_address = student.address
-                    student_city = student.city
-                    student_state = student.state
-                    student_zip_code = student.zip_code
+            student = _application_student_for_prefill(application)
+            if student is not None:
+                student_address = student.address
+                student_city = student.city
+                student_state = student.state
+                student_zip_code = student.zip_code
 
         return render(
             request,

@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Added tenant-scoped application inactivity and deadline reminders with a read-only dry-run, protected resume/document links, and reviewable delivery outcomes; no scheduler is enabled.
 - Added a dry-run-by-default, tenant-scoped 30-day application expiration command for unfinished drafts, parent handoffs, and submitted applications missing required forms; explicit `--execute` deletes eligible applications and their owned uploaded files, with no scheduler enabled.
 - Restarting a verified duplicate application now retains older drafts and protected documents as superseded records; resume requires verification for the existing application, and guardian handoffs remain active until the guardian verifies access.
-- Step 5 withholds student prefill and the guardian student picker, and Step 7 withholds direct guardian-email prefill and swap discovery, when an email matches multiple people in the same organization. Saved relationship-derived prefill and conversion matching are unchanged.
+- Step 5 withholds student prefill and the guardian student picker, and Step 7 withholds direct guardian-email prefill and swap discovery, when an email matches multiple people in the same organization. Relationship-derived guardian prefill and student-address fallback require a uniquely identified student or linked guardian; conversion matching remains unchanged.
 
 ## 2026-11-17
 

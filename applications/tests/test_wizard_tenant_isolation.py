@@ -131,7 +131,7 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             path, data=data or {}, HTTP_HOST=self.alpha_host, **kwargs
         )
 
-    def verify_application_browser(self, application):
+    def verify_application_browser(self, application, expected_recipient=None):
         access_url = reverse(
             "apply_browser_verification",
             kwargs={"app_id": application.application_id},
@@ -139,10 +139,60 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         with patch(
             "applications.views.browser.generate_otp_code", return_value="123456"
         ):
-            with patch("applications.views.browser.send_otp_email"):
+            with patch("applications.views.browser.send_otp_email") as send_otp_email:
                 self.tenant_post(access_url, {"action": "send"})
+        if expected_recipient is not None:
+            self.assertEqual(
+                send_otp_email.call_args.kwargs["recipient"], expected_recipient
+            )
         response = self.tenant_post(access_url, {"code": "123456"})
         self.assertEqual(response.status_code, 302)
+
+    def make_linked_family(self, student_email, primary_email, secondary_email):
+        student = Student.objects.create(
+            organization=self.alpha,
+            legal_first_name="Existing Student",
+            last_name="Applicant",
+            personal_email=student_email,
+            address="Private Student Street",
+            city="Pittsburgh",
+            state="PA",
+            zip_code="15213",
+        )
+        primary = Adult.objects.create(
+            organization=self.alpha,
+            legal_first_name="Private Primary Guardian",
+            last_name="Applicant",
+            personal_email=primary_email,
+            address="Private Guardian Street",
+            is_parent=True,
+        )
+        secondary = Adult.objects.create(
+            organization=self.alpha,
+            legal_first_name="Private Secondary Guardian",
+            last_name="Applicant",
+            personal_email=secondary_email,
+            is_parent=True,
+        )
+        primary_relationship = AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=primary,
+            student=student,
+        )
+        secondary_relationship = AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=secondary,
+            student=student,
+        )
+        student.primary_contact_relationship = primary_relationship
+        student.secondary_contact_relationship = secondary_relationship
+        student.save(
+            update_fields=[
+                "primary_contact_relationship",
+                "secondary_contact_relationship",
+            ]
+        )
+        return student, primary, secondary
 
     def patch_validation_after_intervening_write(self, form_class, update):
         original_is_valid = form_class.is_valid
@@ -1526,6 +1576,240 @@ class ApplicationWizardTenantIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "LinkedBetaGuardian")
         self.assertNotContains(response, "77 Linked Beta Road")
+
+    def test_unrelated_verified_applicant_cannot_prefill_or_swap_linked_family_data(
+        self,
+    ):
+        student, primary, secondary = self.make_linked_family(
+            "existing-student@example.test",
+            "existing-primary@example.test",
+            "existing-secondary@example.test",
+        )
+        application = self.make_application(
+            email="unrelated-applicant@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step5-student": {"_existing_student_id": student.pk}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        primary_response = self.tenant_get(
+            reverse("apply_step7", kwargs={"app_id": application.application_id})
+        )
+        secondary_response = self.tenant_get(
+            reverse("apply_step8", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertEqual(primary_response.status_code, 200)
+        self.assertEqual(secondary_response.status_code, 200)
+        self.assertNotContains(primary_response, primary.legal_first_name)
+        self.assertNotContains(primary_response, primary.address)
+        self.assertNotContains(secondary_response, secondary.legal_first_name)
+        self.assertNotContains(secondary_response, student.address)
+
+        self.tenant_post(
+            reverse("apply_swap_parents", kwargs={"app_id": application.application_id})
+        )
+        application.refresh_from_db()
+        self.assertNotIn("step7-primaryparent", application.data)
+        self.assertNotIn("step8-secondaryparent", application.data)
+
+    def test_ambiguous_verified_guardian_cannot_prefill_linked_family_data(self):
+        student, primary, secondary = self.make_linked_family(
+            "existing-student@example.test",
+            "shared-guardian@example.test",
+            "existing-secondary@example.test",
+        )
+        Adult.objects.create(
+            organization=self.alpha,
+            legal_first_name="Other Shared Guardian",
+            last_name="Applicant",
+            personal_email=primary.personal_email,
+            is_parent=True,
+        )
+        application = self.make_application(
+            email=primary.personal_email,
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step5-student": {"_existing_student_id": student.pk}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        primary_response = self.tenant_get(
+            reverse("apply_step7", kwargs={"app_id": application.application_id})
+        )
+        secondary_response = self.tenant_get(
+            reverse("apply_step8", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertEqual(primary_response.status_code, 200)
+        self.assertEqual(secondary_response.status_code, 200)
+        self.assertNotContains(primary_response, primary.legal_first_name)
+        self.assertNotContains(secondary_response, secondary.legal_first_name)
+
+    def test_handoff_recipient_must_be_related_guardian_for_student_prefill(self):
+        student, primary, secondary = self.make_linked_family(
+            "verified-student@example.test",
+            "existing-primary@example.test",
+            "existing-secondary@example.test",
+        )
+        handoff_email = "unrelated-handoff@example.test"
+        application = self.make_application(
+            email=student.personal_email,
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.AWAITING_PARENT,
+            current_step=7,
+            data={
+                "step5-student": {"_existing_student_id": student.pk},
+                "step7_handoff": {"parent_email": handoff_email},
+            },
+            email_verified_at=timezone.now(),
+        )
+        application.issue_handoff_token()
+        application.save(update_fields=["handoff_token"])
+        self.verify_application_browser(application, expected_recipient=handoff_email)
+
+        primary_response = self.tenant_get(
+            reverse("apply_step7", kwargs={"app_id": application.application_id})
+        )
+        secondary_response = self.tenant_get(
+            reverse("apply_step8", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertEqual(primary_response.status_code, 200)
+        self.assertEqual(secondary_response.status_code, 200)
+        self.assertNotContains(primary_response, primary.legal_first_name)
+        self.assertNotContains(secondary_response, secondary.legal_first_name)
+        self.assertNotContains(secondary_response, student.address)
+
+    def test_unique_related_guardian_can_prefill_existing_family(self):
+        student, primary, secondary = self.make_linked_family(
+            "existing-student@example.test",
+            "verified-primary@example.test",
+            "existing-secondary@example.test",
+        )
+        application = self.make_application(
+            email=primary.personal_email,
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step5-student": {"_existing_student_id": student.pk}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        primary_response = self.tenant_get(
+            reverse("apply_step7", kwargs={"app_id": application.application_id})
+        )
+        secondary_response = self.tenant_get(
+            reverse("apply_step8", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertContains(primary_response, primary.legal_first_name)
+        self.assertContains(secondary_response, secondary.legal_first_name)
+        self.assertContains(secondary_response, student.address)
+
+    def test_malformed_and_foreign_student_references_do_not_prefill(self):
+        malformed_application = self.make_application(
+            email="unrelated-malformed@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step5-student": {"_existing_student_id": ["not", "an", "id"]}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(malformed_application)
+        malformed_response = self.tenant_get(
+            reverse(
+                "apply_step7",
+                kwargs={"app_id": malformed_application.application_id},
+            )
+        )
+        self.assertEqual(malformed_response.status_code, 200)
+
+        foreign_student = Student.objects.create(
+            organization=self.beta,
+            legal_first_name="Private Foreign Student",
+            last_name="Applicant",
+            address="Private Foreign Address",
+        )
+        foreign_guardian = Adult.objects.create(
+            organization=self.beta,
+            legal_first_name="Private Foreign Guardian",
+            last_name="Applicant",
+            personal_email="foreign-guardian@example.test",
+            is_parent=True,
+        )
+        foreign_relationship = AdultStudentRelationship.objects.create(
+            organization=self.beta,
+            adult=foreign_guardian,
+            student=foreign_student,
+        )
+        foreign_student.primary_contact_relationship = foreign_relationship
+        foreign_student.save(update_fields=["primary_contact_relationship"])
+        foreign_application = self.make_application(
+            email="unrelated-foreign@example.test",
+            applicant_type=Application.Type.PARENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=8,
+            data={"step5-student": {"_existing_student_id": foreign_student.pk}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(foreign_application)
+        foreign_response = self.tenant_get(
+            reverse(
+                "apply_step7", kwargs={"app_id": foreign_application.application_id}
+            )
+        )
+        self.assertEqual(foreign_response.status_code, 200)
+        self.assertNotContains(foreign_response, foreign_guardian.legal_first_name)
+        self.assertNotContains(foreign_response, foreign_student.address)
+
+    def test_mismatched_contact_relationship_is_not_used_for_prefill(self):
+        student, _, _ = self.make_linked_family(
+            "verified-student@example.test",
+            "existing-primary@example.test",
+            "existing-secondary@example.test",
+        )
+        other_student = Student.objects.create(
+            organization=self.alpha,
+            legal_first_name="Other Student",
+            last_name="Applicant",
+        )
+        other_guardian = Adult.objects.create(
+            organization=self.alpha,
+            legal_first_name="Wrong Relationship Guardian",
+            last_name="Applicant",
+            personal_email="other-guardian@example.test",
+            is_parent=True,
+        )
+        mismatched_relationship = AdultStudentRelationship.objects.create(
+            organization=self.alpha,
+            adult=other_guardian,
+            student=other_student,
+        )
+        student.primary_contact_relationship = mismatched_relationship
+        student.save(update_fields=["primary_contact_relationship"])
+        application = self.make_application(
+            email=student.personal_email,
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.EMAIL_VERIFIED,
+            current_step=7,
+            data={"step5-student": {"_existing_student_id": student.pk}},
+            email_verified_at=timezone.now(),
+        )
+        self.verify_application_browser(application)
+
+        response = self.tenant_get(
+            reverse("apply_step7", kwargs={"app_id": application.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, other_guardian.legal_first_name)
 
     def test_foreign_signed_submission_is_hidden_and_not_overwritten(self):
         application = self.make_application(
