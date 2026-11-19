@@ -24,7 +24,12 @@ from programs.constants import (
     APP_ID_LENGTH,
     OTP_LENGTH,
     OTP_TTL_SECONDS,
+    PHONE_TYPE_CHOICES,
+    RELATIONSHIP_CHOICES,
+    STATE_CHOICES,
+    TSHIRT_SIZE_CHOICES,
 )
+from programs.models.fields import EncryptedTextField
 
 
 def generate_application_id() -> str:
@@ -550,6 +555,422 @@ class ApplicationReminderDelivery(models.Model):
             f"Reminder for {self.application.application_id} "
             f"({self.phase}/{self.reminder_type})"
         )
+
+
+class ApplicationStudentDraft(models.Model):
+    """Typed applicant-owned student details, not a live student profile."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_student_drafts",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.OneToOneField(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="student_draft",
+    )
+
+    legal_first_name = models.CharField(max_length=150, blank=True, null=True)
+    preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
+    last_name = models.CharField(max_length=150, blank=True, null=True)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    confirm_age = models.BooleanField(blank=True, null=True)
+
+    address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True
+    )
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    personal_email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+    phone_type = models.CharField(
+        max_length=20, choices=PHONE_TYPE_CHOICES, blank=True, null=True
+    )
+    can_receive_texts = models.BooleanField(blank=True, null=True)
+    directory_consent = models.BooleanField(blank=True, null=True)
+
+    school_name = models.CharField(max_length=150, blank=True, null=True)
+    school_not_listed = models.BooleanField(blank=True, null=True)
+    grade = models.PositiveSmallIntegerField(blank=True, null=True)
+    confirm_grade = models.BooleanField(blank=True, null=True)
+    graduation_year = models.PositiveSmallIntegerField(blank=True, null=True)
+    tshirt_size = models.CharField(
+        max_length=10, choices=TSHIRT_SIZE_CHOICES, blank=True, null=True
+    )
+    race_ethnicities = models.ManyToManyField(
+        "programs.RaceEthnicity",
+        through="ApplicationStudentDraftRaceEthnicity",
+        related_name="application_student_drafts",
+        blank=True,
+    )
+
+    allergies = EncryptedTextField(blank=True, null=True)
+    allergies_answered = models.BooleanField(blank=True, null=True)
+    dietary_restrictions = EncryptedTextField(blank=True, null=True)
+    dietary_restrictions_answered = models.BooleanField(blank=True, null=True)
+    medical_notes = EncryptedTextField(blank=True, null=True)
+    medical_notes_answered = models.BooleanField(blank=True, null=True)
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The student draft and application must share an "
+                            "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Student draft for {self.application.application_id}"
+
+
+class ApplicationStudentDraftRaceEthnicity(models.Model):
+    """Tenant-owned race/ethnicity selection for a student application draft."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_student_draft_race_ethnicities",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    student_draft = models.ForeignKey(
+        ApplicationStudentDraft,
+        on_delete=models.CASCADE,
+        related_name="race_ethnicity_links",
+    )
+    race_ethnicity = models.ForeignKey(
+        "programs.RaceEthnicity",
+        on_delete=models.PROTECT,
+        related_name="application_student_draft_links",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("student_draft", "race_ethnicity"),
+                name="unique_application_student_draft_race",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.student_draft_id and self.organization_id:
+            draft_org_id = (
+                ApplicationStudentDraft.objects.filter(pk=self.student_draft_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if draft_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The race/ethnicity link and student draft must share "
+                            "an organization."
+                        )
+                    }
+                )
+        if self.race_ethnicity_id and self.organization_id:
+            race_org_id = (
+                self.race_ethnicity.__class__.objects.filter(pk=self.race_ethnicity_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if race_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The race/ethnicity option and draft must share an "
+                            "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+
+class ApplicationGuardianDraft(models.Model):
+    """Typed contact details for one guardian slot on an application."""
+
+    class Slot(models.TextChoices):
+        PRIMARY = "primary", "Primary"
+        SECONDARY = "secondary", "Secondary"
+
+    class Presence(models.TextChoices):
+        UNANSWERED = "unanswered", "Not answered"
+        PRESENT = "present", "Present"
+        SKIPPED = "skipped", "Skipped"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_guardian_drafts",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="guardian_drafts",
+    )
+    slot = models.CharField(max_length=16, choices=Slot.choices)
+    presence = models.CharField(
+        max_length=16,
+        choices=Presence.choices,
+        default=Presence.UNANSWERED,
+    )
+
+    legal_first_name = models.CharField(max_length=150, blank=True, null=True)
+    preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
+    last_name = models.CharField(max_length=150, blank=True, null=True)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+    relationship_to_student = models.CharField(
+        max_length=20, choices=RELATIONSHIP_CHOICES, blank=True, null=True
+    )
+    specific_relationship = models.CharField(max_length=100, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True
+    )
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+    phone_type = models.CharField(
+        max_length=20, choices=PHONE_TYPE_CHOICES, blank=True, null=True
+    )
+    can_receive_texts = models.BooleanField(blank=True, null=True)
+    email_updates = models.BooleanField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "slot"),
+                name="unique_application_guardian_slot",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The guardian draft and application must share an "
+                            "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_slot_display()} guardian draft for {self.application.application_id}"
+
+
+class ApplicationQuestionSet(models.Model):
+    """Frozen question set for one application and program."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_question_sets",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="question_sets",
+    )
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.PROTECT,
+        related_name="application_question_sets",
+    )
+    frozen_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "program"),
+                name="unique_application_program_question_set",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The question set and application must share an "
+                            "organization."
+                        )
+                    }
+                )
+        if self.program_id and self.organization_id:
+            program_org_id = (
+                self.program.__class__.objects.filter(pk=self.program_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if program_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The question set and program must share an "
+                            "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Question set for {self.application.application_id} / {self.program}"
+
+
+class ApplicationQuestionAnswer(models.Model):
+    """One ordered, wording-preserving answer in a frozen question set."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_question_answers",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    question_set = models.ForeignKey(
+        ApplicationQuestionSet,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    position = models.PositiveIntegerField()
+    question_id = models.UUIDField()
+    question_text = models.TextField()
+    is_required = models.BooleanField()
+    answer = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("question_set", "question_id"),
+                name="unique_application_question_snapshot_id",
+            ),
+            models.UniqueConstraint(
+                fields=("question_set", "position"),
+                name="unique_application_question_snapshot_position",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.question_set_id and self.organization_id:
+            question_set_org_id = (
+                ApplicationQuestionSet.objects.filter(pk=self.question_set_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if question_set_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The question answer and set must share an " "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.question_text} ({self.question_set_id})"
+
+
+class ApplicationFixedAnswer(models.Model):
+    """A fixed experience answer keyed by the legacy/current source location."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="application_fixed_answers",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="fixed_answers",
+    )
+    source_step = models.CharField(max_length=32)
+    question_key = models.CharField(max_length=100)
+    answer = models.TextField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "source_step", "question_key"),
+                name="unique_application_fixed_answer_source",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.organization_id:
+            application_org_id = (
+                Application.objects.filter(pk=self.application_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+            if application_org_id != self.organization_id:
+                raise ValidationError(
+                    {
+                        "organization": (
+                            "The fixed answer and application must share an "
+                            "organization."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.source_step}/{self.question_key} on {self.application_id}"
 
 
 # --- Step 9: post-approval signed-document uploads --------------------------

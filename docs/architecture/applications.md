@@ -177,6 +177,39 @@ edits use the existing application edit audit event. Staff edits remain
 read-only for in-progress applications and after conversion to avoid diverging
 from applicant answers or the student profile.
 
+### Typed application draft foundation (inactive)
+
+Schema-only migrations `0024` and `0025` add application-owned student drafts,
+guardian contact drafts, frozen question sets, and fixed/custom answer rows.
+`Application` remains the progress tracker. The optional one-to-one student
+draft includes typed Step 5 fields and encrypted medical text; guardian rows are
+keyed by primary/secondary slot and distinguish unanswered, present, and
+explicitly skipped contacts. Race/ethnicity selections are stored through a
+tenant-owned join model. These records do not create or link live student/adult
+profiles, relationships, enrollments, user accounts, or portal access.
+
+A question-set row is keyed by application and program; the row itself means
+the set was frozen, including when it has zero answer rows. Its ordered answers
+copy the stable question UUID, displayed wording, required flag, and nullable
+answer without requiring the live program-question record to remain. Separate
+sets can retain snapshots for earlier programs. Fixed experience answers use
+source-step and question-key identity, so legacy and current responses can
+coexist without overwriting one another. Model save paths validate that related
+application, program, and answer records share an organization; database
+uniqueness constraints enforce row cardinality, not cross-table tenant ownership
+or integrity for bulk operations that bypass model saves.
+
+This foundation is not connected to the wizard, review, conversion, reminders,
+or maintenance commands. `Application.data` remains authoritative; there is no
+dual-write, backfill, historical normalization, live-data migration, profile
+activation, or user-visible rollout. Before typed records can replace JSON,
+each reader and writer must be migrated with application-row locking, stale
+conflict versions, staff/applicant audit coverage, and the approved per-person
+authorization and relationship-review rules. Legacy approved applications,
+protected documents, snapshot wording, fixed-answer conflicts, and historical
+audit snapshots must remain recoverable; any backfill or JSON removal needs a
+separately approved migration and recovery plan.
+
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
 relationships, and enrollments. A selected foreign student, foreign program, or
