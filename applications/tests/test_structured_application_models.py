@@ -1,10 +1,11 @@
 from uuid import uuid4
 
+from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import TextField
 from django.db.models.functions import Cast
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from applications.models import (
     Application,
@@ -18,6 +19,8 @@ from applications.models import (
 )
 from organizations.models import Organization
 from programs.models import Program, RaceEthnicity
+
+_FILE_ENCRYPTION_KEY = Fernet.generate_key().decode()
 
 
 class StructuredApplicationDraftModelTests(TestCase):
@@ -74,6 +77,7 @@ class StructuredApplicationDraftModelTests(TestCase):
         self.assertIsNone(draft.allergies)
         self.assertTrue(draft.allergies_answered)
 
+    @override_settings(FILE_ENCRYPTION_KEY=_FILE_ENCRYPTION_KEY)
     def test_student_draft_medical_text_is_encrypted_in_database(self):
         plaintext = "Sensitive medical detail"
         draft = ApplicationStudentDraft.objects.create(

@@ -12,8 +12,6 @@ from organizations.models import Organization
 
 
 class ApplicationReminderClaimConcurrencyTests(TransactionTestCase):
-    reset_sequences = True
-
     def setUp(self):
         self.organization = Organization.objects.create(
             name="Reminder Concurrency",
