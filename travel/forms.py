@@ -1,6 +1,7 @@
 from django import forms
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from PIL import Image, UnidentifiedImageError
 
 from programs.models import Adult, Student
 from programs.utils import active_students_in_program
@@ -29,6 +30,33 @@ def _apply_bootstrap_classes(form):
         widget.attrs["class"] = " ".join(existing_classes)
 
 
+class TravelSignedPermissionFormUpload(forms.Form):
+    file = forms.FileField()
+    form_version = forms.UUIDField()
+
+    def clean_file(self):
+        uploaded = self.cleaned_data["file"]
+        if uploaded.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("The signed form must be 10 MB or smaller.")
+        extension = uploaded.name.rsplit(".", 1)[-1].lower()
+        try:
+            if extension == "pdf":
+                valid = uploaded.read(5) == b"%PDF-"
+            elif extension in ("jpg", "jpeg", "png"):
+                image = Image.open(uploaded)
+                valid = image.format == ("PNG" if extension == "png" else "JPEG")
+                image.verify()
+            else:
+                valid = False
+        except (OSError, ValueError, UnidentifiedImageError):
+            valid = False
+        finally:
+            uploaded.seek(0)
+        if not valid:
+            raise forms.ValidationError("Upload a PDF, JPEG, or PNG signed form.")
+        return uploaded
+
+
 class TravelEventForm(forms.ModelForm):
     class Meta:
         model = TravelEvent
@@ -36,6 +64,7 @@ class TravelEventForm(forms.ModelForm):
             "name",
             "start_date",
             "end_date",
+            "requires_departure",
             "location_name",
             "location_address",
             "description",
@@ -86,6 +115,25 @@ class TravelCostOptionForm(forms.ModelForm):
         self.fields["sort_order"].required = False
         _apply_bootstrap_classes(self)
 
+    def has_changed(self):
+        if self.instance.pk or not super().has_changed():
+            return super().has_changed()
+
+        name = self.data.get(self.add_prefix("name"), "").strip()
+        amount = self.data.get(self.add_prefix("amount"), "").strip()
+        notes = self.data.get(self.add_prefix("notes"), "").strip()
+        unit_label = self.data.get(self.add_prefix("unit_label"), "").strip()
+        sort_order = self.data.get(self.add_prefix("sort_order"), "").strip()
+        initial_unit_label = str(self.initial.get("unit_label") or "per person")
+        initial_sort_order = str(self.initial.get("sort_order") or 0)
+        return bool(
+            name
+            or amount
+            or notes
+            or (unit_label and unit_label != initial_unit_label)
+            or (sort_order and sort_order != initial_sort_order)
+        )
+
 
 TravelDepartureFormSet = forms.inlineformset_factory(
     TravelEvent,
@@ -101,7 +149,7 @@ TravelCostOptionFormSet = forms.inlineformset_factory(
     TravelEvent,
     TravelCostOption,
     form=TravelCostOptionForm,
-    extra=2,
+    extra=1,
     can_delete=True,
     min_num=0,
     validate_min=False,
@@ -111,8 +159,8 @@ TravelCostOptionFormSet = forms.inlineformset_factory(
 class TravelSignupForm(forms.ModelForm):
     """Student signs up for a trip: optional departure pick + cost check-list.
 
-    The departure field is only shown when the trip has more than one departure
-    (the view hides it otherwise); the queryset is scoped by the view.
+    The view hides optional departure selectors when only one departure exists;
+    required choices remain visible and all choice querysets are scoped.
     """
 
     class Meta:
@@ -125,18 +173,38 @@ class TravelSignupForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         departures = kwargs.pop("departures", None)
         cost_options = kwargs.pop("cost_options", None)
+        requires_departure = kwargs.pop("requires_departure", False)
         super().__init__(*args, **kwargs)
+        self.requires_departure = requires_departure
         self.cost_options = (
             cost_options
             if cost_options is not None
             else TravelCostOption.objects.none()
         )
-        if departures is not None:
-            self.fields["departure"].queryset = departures
-        if cost_options is not None:
-            self.fields["cost_items"].queryset = cost_options
-        self.fields["departure"].required = False
-        self.fields["departure"].empty_label = "No specific departure"
+        available_departures = list(departures) if departures is not None else []
+        available_cost_options = list(self.cost_options)
+        self.fields["departure"].queryset = (
+            departures if departures is not None else TravelDeparture.objects.none()
+        )
+        self.fields["cost_items"].queryset = self.cost_options
+        self.fields["cost_items"].choices = [
+            (option.pk, str(option)) for option in available_cost_options
+        ]
+        if self.instance.pk and not self.is_bound:
+            selected_ids = {option.pk for option in self.instance.cost_items.all()}
+            required_ids = {
+                option.pk for option in available_cost_options if option.is_required
+            }
+            self.initial["cost_items"] = selected_ids | required_ids
+        self.fields["departure"].required = requires_departure
+        self.fields["departure"].empty_label = (
+            "Choose a departure" if requires_departure else "No specific departure"
+        )
+        departure_choices = [("", self.fields["departure"].empty_label)]
+        departure_choices.extend(
+            (departure.pk, str(departure)) for departure in available_departures
+        )
+        self.fields["departure"].choices = departure_choices
 
     def clean_cost_items(self):
         selected = self.cleaned_data["cost_items"]
@@ -170,6 +238,24 @@ class TravelStaffSignupForm(TravelSignupForm):
     def clean_departure(self):
         departure = self.cleaned_data.get("departure")
         return departure
+
+
+class TravelSignupDepartureForm(forms.ModelForm):
+    class Meta:
+        model = TravelSignup
+        fields = ["departure"]
+
+    def __init__(self, *args, **kwargs):
+        departures = kwargs.pop("departures", None)
+        requires_departure = kwargs.pop("requires_departure", False)
+        super().__init__(*args, **kwargs)
+        self.fields["departure"].queryset = (
+            departures if departures is not None else TravelDeparture.objects.none()
+        )
+        self.fields["departure"].required = requires_departure
+        self.fields["departure"].empty_label = (
+            "Choose a departure" if requires_departure else "No specific departure"
+        )
 
 
 class TravelParentChaperoneStaffForm(forms.ModelForm):

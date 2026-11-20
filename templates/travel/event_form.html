@@ -41,6 +41,14 @@
                             </div>
                             {% endif %}
                             {% endfor %}
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.requires_departure }}
+                                    <label for="{{ form.requires_departure.id_for_label }}" class="form-check-label">{{ form.requires_departure.label }}</label>
+                                </div>
+                                {% if form.requires_departure.help_text %}<div class="form-text">{{ form.requires_departure.help_text }}</div>{% endif %}
+                                {% if form.requires_departure.errors %}<div class="text-danger small">{{ form.requires_departure.errors }}</div>{% endif %}
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -137,7 +145,7 @@
                 <h2 class="h5 fw-semibold mt-4 mb-2">
                     <i class="bi bi-cash-coin me-1 text-success"></i>Costs
                 </h2>
-                <p class="text-muted small mb-2">Add costs such as hotels, vans, or flights. New costs are required for every traveler by default; mark a cost optional only when families may decline it. Required costs are included automatically. Sort order: lower numbers appear first.</p>
+                <p class="text-muted small mb-2">Add costs such as hotels, vans, or flights. Leave this blank for a free trip. New costs are required for every traveler by default; mark a cost optional only when families may decline it. Required costs are included automatically. Sort order: lower numbers appear first.</p>
                 {{ cost_formset.management_form }}
                 {% if cost_formset.non_form_errors %}
                 <div class="alert alert-danger">{{ cost_formset.non_form_errors }}</div>

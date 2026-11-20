@@ -146,6 +146,114 @@ def notify_signup_decision_undone(signup):
     )
 
 
+def _signup_for_family_notice(signup_id, organization_id):
+    signup = (
+        TravelSignup.objects.for_organization(organization_id)
+        .filter(
+            pk=signup_id,
+            organization_id=organization_id,
+            event__organization_id=organization_id,
+            event__program__organization_id=organization_id,
+            student__organization_id=organization_id,
+            status__in=(TravelSignup.INTERESTED, TravelSignup.APPROVED),
+        )
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization_id=organization_id,
+                departure__event_id=F("event_id"),
+            )
+        )
+        .select_related(
+            "organization", "student__user", "event", "event__program", "departure"
+        )
+        .first()
+    )
+    if signup is None:
+        return None, None
+    organization = signup.organization
+    if _trusted_notification_organization(signup, signup.student) != organization:
+        return None, None
+    return signup, organization
+
+
+def _family_notice_recipients(signup, organization):
+    recipients = student_recipients(signup.student) + parent_recipients(
+        signup.student, organization=organization
+    )
+    unique_recipients = {}
+    for email in recipients:
+        normalized_email = email.strip().casefold()
+        if normalized_email:
+            unique_recipients.setdefault(normalized_email, email.strip())
+    return list(unique_recipients.values())
+
+
+def notify_signup_departure_changed(
+    signup_id, organization_id, previous_departure, current_departure
+):
+    """Notify a student and their local guardians after a staff reassignment."""
+    signup, organization = _signup_for_family_notice(signup_id, organization_id)
+    if signup is None:
+        return
+    recipients = _family_notice_recipients(signup, organization)
+    if not recipients:
+        return
+    context = {
+        "event": signup.event,
+        "program": signup.event.program,
+        "student": signup.student,
+        "previous_departure": previous_departure,
+        "current_departure": current_departure,
+        "trip_link": trip_link(signup.event),
+    }
+    send_templated_notification(
+        f"Travel: Departure changed for {signup.event.name}",
+        "travel/emails/signup_departure_changed.html",
+        context,
+        recipients,
+        organization=organization,
+    )
+
+
+def notify_signup_choices_updated(
+    signup_id,
+    organization_id,
+    previous_departure,
+    current_departure,
+    previous_costs,
+    current_costs,
+    previous_total,
+    current_total,
+):
+    """Notify the family that student-edited choices are awaiting approval."""
+    signup, organization = _signup_for_family_notice(signup_id, organization_id)
+    if signup is None:
+        return
+    recipients = _family_notice_recipients(signup, organization)
+    if not recipients:
+        return
+    context = {
+        "event": signup.event,
+        "program": signup.event.program,
+        "student": signup.student,
+        "previous_departure": previous_departure,
+        "current_departure": current_departure,
+        "previous_costs": previous_costs,
+        "current_costs": current_costs,
+        "previous_total": previous_total,
+        "current_total": current_total,
+        "trip_link": trip_link(signup.event),
+    }
+    send_templated_notification(
+        f"Travel: {signup.student} updated trip choices for {signup.event.name}",
+        "travel/emails/signup_choices_updated.html",
+        context,
+        recipients,
+        organization=organization,
+    )
+
+
 def _adult_email(adult):
     user = adult.user
     if user and user.email:

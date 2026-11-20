@@ -122,9 +122,34 @@
                         <span class="badge {% if signup.status == 'approved' %}bg-success{% elif signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ signup.get_status_display }}</span>
                         {% if signup.departure %}<span class="text-muted small ms-2">{{ signup.departure.display_label }}</span>{% endif %}
                         {% if can_manage and signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
+                        {% if can_manage and signup.can_be_withdrawn %}
+                        {% if signup.status == 'interested' or event.requires_permission_form and not signup.current_signed_permission_form or event.requires_departure and not signup.departure_id %}
+                        <div class="small mt-1"><strong>Outstanding trip requirements</strong>
+                            <ul class="mb-1">
+                                {% if signup.status == 'interested' %}<li>Parent approval</li>{% endif %}
+                                {% if event.requires_permission_form and not signup.current_signed_permission_form %}<li>Signed permission form</li>{% endif %}
+                                {% if event.requires_departure and not signup.departure_id %}<li>Departure selection</li>{% endif %}
+                            </ul>
+                        </div>
+                        {% else %}
+                        <div class="small text-muted">No outstanding tracked trip requirements</div>
+                        {% endif %}
+                        {% if event.requires_permission_form %}
+                        {% with signed_form=signup.current_signed_permission_form %}
+                        {% if signed_form %}<a class="small" href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% endif %}
+                        {% endwith %}
+                        <form action="{% url 'travel:signup_signed_form_upload' program.id signup.id %}" method="post" enctype="multipart/form-data" class="mt-1 mb-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
+                            <label class="small" for="signed_staff_{{ signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
+                            <input class="form-control form-control-sm" type="file" name="file" id="signed_staff_{{ signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <button class="btn btn-sm btn-outline-primary mt-1" type="submit">Upload signed form</button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
                     </div>
-                    <div class="d-flex gap-2 align-items-center">
-                        {% if can_manage and signup.status == 'approved' and signup.permission_acknowledged %}
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if can_manage and signup.status == 'approved' and signup.permission_acknowledged and signup.permission_acknowledged_version == event.permission_form_version %}
                         <span class="small text-muted"><i class="bi bi-check2-circle text-success me-1"></i>Permission form acknowledged</span>
                         {% endif %}
                         {% if can_manage and signup.can_be_withdrawn %}
@@ -132,6 +157,25 @@
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Withdraw {{ signup.student.display_name }} from {{ event.name }}?">Withdraw</button>
                         </form>
+                        {% endif %}
+                        {% if can_manage %}
+                        {% if event.has_multiple_departures or event.requires_departure %}
+                        {% if signup.status == 'approved' or signup.status == 'interested' %}
+                        <form action="{% url 'travel:signup_departure' program.id signup.id %}" method="post" class="d-flex align-items-end gap-1 mb-0">
+                            {% csrf_token %}
+                            <div>
+                                <label class="form-label small mb-0" for="id_signup_departure_{{ signup.id }}">Departure</label>
+                                <select name="departure" id="id_signup_departure_{{ signup.id }}" class="form-select form-select-sm" {% if event.requires_departure %}required{% endif %}>
+                                    <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
+                                    {% for departure in event.ordered_departures %}
+                                    <option value="{{ departure.id }}" {% if departure.id == signup.departure_id %}selected{% endif %}>{{ departure.display_label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -151,11 +195,12 @@
                         <label class="form-label small mb-0" for="id_student_{{ event.id }}">Add a student</label>
                         <div>{{ staff_form.student }}</div>
                     </div>
-                    {% if event.has_multiple_departures %}
+                    {% if event.has_multiple_departures or event.requires_departure %}
                     <div>
                         <label class="form-label small mb-0" for="id_departure_{{ event.id }}">Departure</label>
                         <div>
-                            <select name="departure" id="id_departure_{{ event.id }}" class="form-select form-select-sm">
+                            <select name="departure" id="id_departure_{{ event.id }}" class="form-select form-select-sm" {% if event.requires_departure %}required{% endif %}>
+                                <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
                                 {% for d in event.ordered_departures %}
                                 <option value="{{ d.id }}">{{ d.display_label }}</option>
                                 {% endfor %}
@@ -287,6 +332,29 @@
                             {% endif %}
                         </div>
                     </div>
+                    {% if my_signup.status == 'approved' or my_signup.status == 'interested' %}
+                    {% with signup_edit_form=signup_edit_forms|get_item:my_signup.id %}
+                    {% if signup_edit_form %}
+                    <form action="{% url 'travel:signup_edit' program.id my_signup.id %}" method="post" class="mt-3 pt-3 border-top">
+                        {% csrf_token %}
+                        {% if event.has_multiple_departures or event.requires_departure or my_signup.departure %}
+                        <div class="mb-2">
+                            <label class="form-label small mb-0" for="{{ signup_edit_form.departure.id_for_label }}">Departure</label>
+                            {{ signup_edit_form.departure }}
+                        </div>
+                        {% endif %}
+                        {% if event.ordered_cost_options %}
+                        <div class="mb-2">
+                            <label class="form-label small mb-0" for="{{ signup_edit_form.cost_items.id_for_label }}">Trip costs</label>
+                            <div class="small">{{ signup_edit_form.cost_items }}</div>
+                        </div>
+                        {% endif %}
+                        <p class="small text-muted mb-2">Changing your choices sends the updated trip details to your family and requires parent approval.</p>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Update trip choices</button>
+                    </form>
+                    {% endif %}
+                    {% endwith %}
+                    {% endif %}
                 </div>
                 {% else %}
                 {% with signup_form=signup_forms|get_item:event.id %}
@@ -294,10 +362,11 @@
                 <form action="{% url 'travel:signup' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
                     {% csrf_token %}
                     <div class="d-flex flex-wrap align-items-end gap-2">
-                        {% if event.has_multiple_departures %}
+                        {% if event.has_multiple_departures or event.requires_departure %}
                         <div>
                             <label class="form-label small mb-0" for="id_student_departure_{{ event.id }}">Departure</label>
-                            <select name="departure" id="id_student_departure_{{ event.id }}" class="form-select form-select-sm">
+                            <select name="departure" id="id_student_departure_{{ event.id }}" class="form-select form-select-sm" {% if event.requires_departure %}required{% endif %}>
+                                <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
                                 {% for d in event.ordered_departures %}
                                 <option value="{{ d.id }}">{{ d.display_label }}</option>
                                 {% endfor %}
@@ -344,19 +413,40 @@
                         <strong>{{ parent_row.student.display_name }}</strong>
                         <span class="badge {% if parent_signup.status == 'approved' %}bg-success{% elif parent_signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ parent_signup.get_status_display }}</span>
                         {% if parent_signup.departure %}<span class="small text-muted ms-2">{{ parent_signup.departure.display_label }}</span>{% endif %}
+                        {% if not parent_signup.departure and event.requires_departure %}<span class="small text-warning ms-2">Departure selection outstanding</span>{% endif %}
                         {% if parent_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ parent_signup.approved_total|floatformat:2 }}</span>
                         {% elif parent_signup.status == 'interested' %}<span class="small text-muted ms-2">Current trip cost: ${{ parent_signup.total_cost|floatformat:2 }}</span>{% endif %}
+                        {% if parent_signup.status == 'interested' %}
+                        <div class="small">Included costs:
+                            {% for cost in parent_signup.approval_costs %}<span>{{ cost.name }} (${{ cost.amount|floatformat:2 }}){% if not forloop.last %}, {% endif %}</span>{% empty %}None{% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if viewer_is_parent and event.requires_permission_form and parent_signup.can_be_withdrawn %}
+                        <div class="small">
+                            {% with signed_form=parent_signup.current_signed_permission_form %}
+                            {% if signed_form %}<a href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% else %}Signed permission form not yet uploaded.{% endif %}
+                            {% endwith %}
+                            <form action="{% url 'travel:signup_signed_form_upload' program.id parent_signup.id %}" method="post" enctype="multipart/form-data" class="mt-1 mb-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
+                                <label for="signed_parent_{{ parent_signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
+                                <input class="form-control form-control-sm" type="file" name="file" id="signed_parent_{{ parent_signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <button class="btn btn-sm btn-outline-primary mt-1" type="submit">Upload signed form</button>
+                            </form>
+                        </div>
+                        {% endif %}
                         {% if parent_signup.status == 'interested' %}
-                        {% if event.requires_permission_form %}
+                        {% if parent_signup.needs_permission_acknowledgment %}
                         <div class="small text-muted">
                             <i class="bi bi-file-earmark-check me-1"></i>Please review the <a href="{{ event.permission_form.url }}" target="_blank" rel="noopener">permission form</a> and acknowledge it to approve.
                         </div>
                         {% endif %}
                         <form action="{% url 'travel:signup_approve' program.id parent_signup.id %}" method="post" class="mb-0">
                             {% csrf_token %}
-                            {% if event.requires_permission_form %}
+                            <input type="hidden" name="approval_token" value="{{ parent_signup.approval_token }}">
+                            {% if parent_signup.needs_permission_acknowledgment %}
                             <div class="form-check small mb-1">
                                 <input class="form-check-input" type="checkbox" name="permission_acknowledged" value="1" id="ack_{{ parent_signup.id }}" required>
                                 <label class="form-check-label" for="ack_{{ parent_signup.id }}">I reviewed the permission form</label>
@@ -484,6 +574,81 @@
                 <a href="{% url 'travel:event_delete' program.id event.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
                 {% endif %}
             </div>
+            {% endif %}
+            {% if can_manage %}
+            <div class="w-100 mt-2">
+                {% for signup in event.signups.all %}
+                {% if signup.can_be_withdrawn %}
+                <div class="border-top pt-2 mt-2 small">
+                    <strong>{{ signup.student.display_name }}</strong>
+                    {% if signup.status == 'interested' or event.requires_permission_form and not signup.current_signed_permission_form or event.requires_departure and not signup.departure_id %}
+                    <div><strong>Outstanding trip requirements</strong></div>
+                    <ul>
+                        {% if signup.status == 'interested' %}<li>Parent approval</li>{% endif %}
+                        {% if event.requires_permission_form and not signup.current_signed_permission_form %}<li>Signed permission form</li>{% endif %}
+                        {% if event.requires_departure and not signup.departure_id %}<li>Departure selection</li>{% endif %}
+                    </ul>
+                    {% else %}<div>No outstanding tracked trip requirements</div>{% endif %}
+                    {% if event.requires_permission_form %}
+                    {% with signed_form=signup.current_signed_permission_form %}
+                    {% if signed_form %}<a href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% endif %}
+                    {% endwith %}
+                    <form action="{% url 'travel:signup_signed_form_upload' program.id signup.id %}" method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
+                        <label for="signed_past_staff_{{ signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
+                        <input class="form-control form-control-sm" type="file" name="file" id="signed_past_staff_{{ signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
+                        <button class="btn btn-sm btn-outline-primary mt-1" type="submit">Upload signed form</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if viewer_is_parent %}
+            {% for row in parent_rows %}
+            {% with parent_signup=row.signup_by_event|get_item:event.id %}
+            {% if parent_signup and parent_signup.can_be_withdrawn %}
+            <div class="w-100 border-top pt-2 mt-2 small">
+                <strong>{{ row.student.display_name }}</strong> &mdash; {{ parent_signup.get_status_display }}
+                {% if event.location_address %}<div>{{ event.location_address }}</div>{% endif %}
+                {% if event.description %}<div>{{ event.description|linebreaksbr }}</div>{% endif %}
+                <div>Current trip cost: ${{ parent_signup.total_cost|floatformat:2 }}</div>
+                <div>Included costs: {% for cost in parent_signup.approval_costs %}{{ cost.name }} (${{ cost.amount|floatformat:2 }}){% if not forloop.last %}, {% endif %}{% empty %}None{% endfor %}</div>
+                {% if parent_signup.departure %}<div>Departure: {{ parent_signup.departure.display_label }}</div>{% endif %}
+                {% if not parent_signup.departure and event.requires_departure %}<div>Departure selection outstanding</div>{% endif %}
+                {% if event.requires_permission_form %}
+                <a href="{{ event.permission_form.url }}" target="_blank" rel="noopener">Review permission form</a>
+                {% with signed_form=parent_signup.current_signed_permission_form %}
+                {% if signed_form %}<a href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% else %}<div>Signed permission form not yet uploaded.</div>{% endif %}
+                {% endwith %}
+                <form action="{% url 'travel:signup_signed_form_upload' program.id parent_signup.id %}" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
+                    <label for="signed_past_parent_{{ parent_signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
+                    <input class="form-control form-control-sm" type="file" name="file" id="signed_past_parent_{{ parent_signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <button class="btn btn-sm btn-outline-primary mt-1" type="submit">Upload signed form</button>
+                </form>
+                {% endif %}
+                {% if parent_signup.status == 'interested' %}
+                <form action="{% url 'travel:signup_approve' program.id parent_signup.id %}" method="post" class="mt-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="approval_token" value="{{ parent_signup.approval_token }}">
+                    {% if parent_signup.needs_permission_acknowledgment %}
+                    <label><input type="checkbox" name="permission_acknowledged" value="1" required> I have read and acknowledge the permission form.</label>
+                    {% endif %}
+                    <button type="submit" class="btn btn-sm btn-success">Approve trip</button>
+                </form>
+                <form action="{% url 'travel:signup_decline' program.id parent_signup.id %}" method="post" class="mt-1">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline trip</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endwith %}
+            {% endfor %}
             {% endif %}
         </div>
         {% endfor %}

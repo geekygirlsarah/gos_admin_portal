@@ -1059,14 +1059,28 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
+        from django.db.models.deletion import ProtectedError
+
         from audit.events import AuditEvent
         from audit.service import log_event
+        from travel.models import TravelSignedPermissionForm
 
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
 
         try:
             meta = perform_student_merge(keep, source)
+        except ProtectedError as exc:
+            if not any(
+                isinstance(obj, TravelSignedPermissionForm)
+                for obj in exc.protected_objects
+            ):
+                raise
+            form.add_error(
+                None,
+                "This student cannot be merged while signed travel permission forms exist.",
+            )
+            return self.form_invalid(form)
         except ValidationError:
             form.add_error(
                 None,

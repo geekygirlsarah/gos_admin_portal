@@ -1,5 +1,8 @@
 from decimal import Decimal
+from uuid import uuid4
 
+from django.conf import settings
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Value
@@ -7,6 +10,7 @@ from django.db.models.functions import Coalesce, Lower, NullIf
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.models import Adult, Student
+from programs.models.fields import EncryptedFileField
 
 
 def _permission_form_upload_to(instance, filename):
@@ -48,6 +52,10 @@ class TravelEvent(models.Model):
     end_date = models.DateField()
     location_name = models.CharField(max_length=255, blank=True)
     location_address = models.CharField(max_length=255, blank=True)
+    requires_departure = models.BooleanField(
+        default=False,
+        help_text="Require students to select one of this trip's departures.",
+    )
     description = models.TextField(
         blank=True,
         verbose_name="Plans and details",
@@ -60,6 +68,7 @@ class TravelEvent(models.Model):
         help_text="Optional PDF/permission slip. Parents must acknowledge it "
         "online before they can approve a signup when one is attached.",
     )
+    permission_form_version = models.UUIDField(default=uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -68,6 +77,24 @@ class TravelEvent(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if self.pk and (update_fields is None or "permission_form" in update_fields):
+            previous = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("permission_form", flat=True)
+                .first()
+            )
+            current = self.permission_form
+            if previous != (current.name or "") or (current and not current._committed):
+                self.permission_form_version = uuid4()
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {
+                        "permission_form_version"
+                    }
+        return super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -274,6 +301,7 @@ class TravelSignup(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     permission_acknowledged = models.BooleanField(default=False)
+    permission_acknowledged_version = models.UUIDField(null=True, blank=True)
     permission_acknowledged_by = models.CharField(
         max_length=255, blank=True, verbose_name="Permission form acknowledged by"
     )
@@ -317,6 +345,76 @@ class TravelSignup(models.Model):
         )
 
     @property
+    def approval_costs(self):
+        selected_ids = {
+            option.pk
+            for option in self.cost_items.all()
+            if option.event_id == self.event_id
+            and option.organization_id == self.organization_id
+        }
+        return [
+            option
+            for option in self.event.cost_options.all()
+            if option.organization_id == self.organization_id
+            and (option.is_required or option.pk in selected_ids)
+        ]
+
+    @property
+    def approval_snapshot(self):
+        event = self.event
+        departure = self.departure
+        costs = sorted(
+            (
+                option.pk,
+                option.name,
+                str(option.amount),
+                option.is_required,
+                option.unit_label,
+                option.notes,
+            )
+            for option in event.cost_options.all()
+            if option.organization_id == self.organization_id
+        )
+        selected = sorted(
+            option.pk
+            for option in self.cost_items.all()
+            if option.organization_id == self.organization_id
+            and option.event_id == self.event_id
+        )
+        return {
+            "signup": self.pk,
+            "event": event.pk,
+            "name": event.name,
+            "start": str(event.start_date),
+            "end": str(event.end_date),
+            "location": [event.location_name, event.location_address],
+            "description": event.description,
+            "form_version": str(event.permission_form_version),
+            "form_present": bool(event.permission_form),
+            "requires_departure": event.requires_departure,
+            "departure": (
+                [
+                    departure.pk,
+                    departure.label,
+                    str(departure.leave_date),
+                    str(departure.leave_time) if departure.leave_time else None,
+                    departure.meeting_location,
+                    departure.notes,
+                ]
+                if departure
+                else None
+            ),
+            "costs": [list(cost) for cost in costs],
+            "selected": selected,
+        }
+
+    @property
+    def approval_token(self):
+        return signing.dumps(
+            self.approval_snapshot, salt="travel.approval", compress=True
+        )
+
+    @property
     def can_be_approved(self):
         return self.status == self.INTERESTED
 
@@ -336,13 +434,36 @@ class TravelSignup(models.Model):
     def can_be_signed_up_again(self):
         return self.status == self.WITHDRAWN
 
+    @property
+    def current_signed_permission_form(self):
+        if hasattr(self, "current_signed_permission_forms"):
+            return next(iter(self.current_signed_permission_forms), None)
+        return (
+            self.signed_permission_forms.filter(
+                organization_id=self.organization_id,
+                form_version=self.event.permission_form_version,
+            )
+            .exclude(file="")
+            .order_by("-uploaded_at", "-pk")
+            .first()
+        )
+
+    @property
+    def needs_permission_acknowledgment(self):
+        return self.event.requires_permission_form and not (
+            self.permission_acknowledged
+            and self.permission_acknowledged_version
+            == self.event.permission_form_version
+            and self.current_signed_permission_form
+        )
+
     def approve(self, adult, permission_acknowledged=False, acknowledged_by=""):
         event_requires_form = self.event.requires_permission_form
         if not self.can_be_approved:
             raise ValidationError(
                 "This signup cannot be approved in its current state."
             )
-        if event_requires_form and not permission_acknowledged:
+        if self.needs_permission_acknowledgment and not permission_acknowledged:
             raise ValidationError(
                 "This trip has a permission form that must be acknowledged before "
                 "you can approve."
@@ -357,14 +478,16 @@ class TravelSignup(models.Model):
         # is parent-only in views, so adult is the approving parent.
         self.approved_by = adult
         self.approved_at = timezone.now()
-        if event_requires_form:
+        if event_requires_form and permission_acknowledged:
             self.permission_acknowledged = True
+            self.permission_acknowledged_version = self.event.permission_form_version
             self.permission_acknowledged_by = acknowledged_by or (
                 adult.display_name if adult else ""
             )
             self.permission_acknowledged_at = timezone.now()
-        else:
+        elif not event_requires_form:
             self.permission_acknowledged = False
+            self.permission_acknowledged_version = None
             self.permission_acknowledged_by = ""
             self.permission_acknowledged_at = None
 
@@ -392,6 +515,7 @@ class TravelSignup(models.Model):
         self.balance_amount = None
         self.balance_effective_date = None
         self.permission_acknowledged = False
+        self.permission_acknowledged_version = None
         self.permission_acknowledged_by = ""
         self.permission_acknowledged_at = None
 
@@ -416,6 +540,49 @@ class TravelSignup(models.Model):
         super().clean()
         if self.departure and self.departure.event_id != self.event_id:
             raise ValidationError("The departure must belong to this trip.")
+
+
+def _signed_permission_upload_to(instance, filename):
+    from pathlib import Path
+
+    extension = Path(filename).suffix.lower()
+    return f"private/travel/signed_permissions/{instance.organization_id}/{uuid4().hex}{extension}"
+
+
+class TravelSignedPermissionForm(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.PROTECT
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    signup = models.ForeignKey(
+        TravelSignup, on_delete=models.CASCADE, related_name="signed_permission_forms"
+    )
+    form_version = models.UUIDField()
+    file = EncryptedFileField(upload_to=_signed_permission_upload_to, max_length=255)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+
+class TravelSignedFileDeletion(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.PROTECT
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    file_name = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TravelReapprovalSnapshot(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.PROTECT
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    signup = models.OneToOneField(TravelSignup, on_delete=models.CASCADE)
+    approved_by = models.ForeignKey(Adult, on_delete=models.SET_NULL, null=True)
+    approved_at = models.DateTimeField(null=True)
+    approved_total = models.DecimalField(max_digits=10, decimal_places=2, null=True)
 
 
 class TravelMentorSignup(models.Model):

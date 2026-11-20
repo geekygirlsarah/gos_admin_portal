@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-19
+
+### Added
+- Travel trips can be free, can optionally require students to choose a departure, and let students edit their departure and cost choices with guardian reapproval after actual changes.
+- Lead Mentors can change a student's departure without reopening guardian approval; the student and eligible guardians receive a notice.
+- Travel rosters show pending parent approval, signed forms, and required departures. Linked guardians and Lead Mentors can upload signed forms, with protected downloads and separate parent approval.
+
+### Changed
+- Existing approved travel signups with permission forms, including past trips, return to pending parent reapproval while retaining their current charges. Signed forms remain valid for later reapproval until the blank form is replaced.
+
 ## 2026-11-18
 
 ### Changed

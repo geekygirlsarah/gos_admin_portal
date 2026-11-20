@@ -65,10 +65,11 @@ Mentor travel links, profile commitments, and digest highlights follow the
 trip-details read permission; calendar feeds retain their separate access rules.
 
 ### Travel Models
-- **`TravelEvent`**: Destination, `start_date`, `end_date`, location, and optional `permission_form` file upload.
+- **`TravelEvent`**: Destination, `start_date`, `end_date`, location, optional `permission_form` file upload, and an opt-in `requires_departure` setting. Existing trips remain optional; trips with no cost options are free.
 - **`TravelDeparture`**: Specific bus/flight departures and departure times.
 - **`TravelCostOption`**: Per-traveler fee options. Required options are included for every signup; new options default to required, while existing options are migrated as optional.
 - **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`). Approval posts the approved total to the student's program balance.
+- **`TravelSignedPermissionForm`**: Encrypted signed upload tied to the signup and the version of the blank form. Each upload is retained until the trip is deleted.
 - **`TravelMentorSignup`**: Mentor registrations with `is_driver` flag and departure choice.
 - **`TravelParentChaperoneSignup`**: Parent chaperone roster.
 
@@ -78,6 +79,14 @@ organization. Mentor and parent signup profiles and their adult-student
 eligibility relationships must also belong to that organization. Existing
 mismatched links are hidden from tenant rosters and are not changed or notified;
 signup conflicts are left for separate review.
+
+Students can update the departure and optional cost selections on their own
+active signup. An actual change returns an approved signup to pending guardian
+approval, recalculates a tracked balance charge, and notifies the student and
+eligible local guardians after the update commits. No-op edits preserve approval
+and do not send notices. Lead Mentors can reassign an active student's departure;
+this preserves the approval and charge and sends the student and eligible local
+guardians a notice that no new approval is needed.
 
 Trip deletion is refused before audit logging if a foreign-owned departure,
 cost option, or signup would be deleted or changed. This includes foreign
@@ -91,6 +100,33 @@ records are preserved for review rather than detached or reassigned.
 - When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email.
 - If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending parent approval. An after-commit email with that student's previous and current totals goes only to the student and eligible local guardians; other attendees do not receive the individualized amount. Edits that do not change a student's total preserve the approval. Charge changes are audit logged.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.
+
+Lead Mentors see each active signup's outstanding parent approval, signed form,
+and required departure. Linked local guardians and Lead Mentors may upload signed
+forms; only those guardians and Lead Mentors can download them. Uploading is
+separate from approving the current trip choices. A previously acknowledged form
+does not need acknowledgment again on reapproval if its signed upload is still
+current. Replacing the blank form requires a new signed upload, but does not
+automatically revoke the current approval. Approval submits a signed snapshot of
+the displayed choices, prices, and form version; a stale page must be reloaded
+before it can be approved. Signed files are encrypted and stored
+under the protected `private/` prefix. PDF, JPEG, and PNG uploads are limited to
+10 MB.
+
+The reapproval migration resets approved signups with a permission form, including
+past trips, and preserves their existing balance charges. It records the previous
+approval details for review; inconsistent cross-organization records are not
+changed. It sends no notification. Families can approve past trips from the travel
+page. Reversing this migration is refused when snapshots exist, because a later
+trip change can make the original approval invalid. Plan a backup and manual
+review before deployment; pause trip writes while the migration runs.
+
+Deleting a trip or its program queues signed-file deletion after commit. Failed
+deletions remain in the tenant-owned cleanup queue; operators may retry using
+`python manage.py retry_signed_permission_cleanup --organization-id <id>` after
+reviewing the target environment and receiving any required operational approval.
+Deleting a student or signup is blocked while signed travel forms exist. Storage
+origins and proxies must continue to deny public access to the `private/` prefix.
 
 ### Parent Chaperone System
 - Any parent with at least one active student in the program can self-register as a chaperone (`TravelParentChaperoneSignup.eligible_adults(program)`).
