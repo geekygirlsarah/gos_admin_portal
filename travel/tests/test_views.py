@@ -1415,6 +1415,19 @@ class TravelViewTest(TestCase):
     # ── Student signup lifecycle ──────────────────────────────────────────
 
     def test_student_signs_up_and_parents_are_emailed(self):
+        self.assertEqual(
+            {
+                "program": self.program.organization_id,
+                "event": self.event.organization_id,
+                "student": self.student.organization_id,
+                "parent": self.parent_adult.organization_id,
+                "departure": self.departure.organization_id,
+            },
+            {
+                key: self.organization.pk
+                for key in ("program", "event", "student", "parent", "departure")
+            },
+        )
         self.client.login(username="student", password="password")  # nosec B106
         url = reverse("travel:signup", args=[self.program.id, self.event.id])
         form = TravelSignupForm(
@@ -1424,10 +1437,11 @@ class TravelViewTest(TestCase):
             cost_options=self.event.cost_options.all(),
         )
         self.assertTrue(form.is_valid(), form.errors.as_json())
-        resp = self.client.post(
-            url,
-            {"departure": self.departure.id, "cost_items": [self.hotel.id]},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                url,
+                {"departure": self.departure.id, "cost_items": [self.hotel.id]},
+            )
         self.assertEqual(resp.status_code, 302)
         signup = TravelSignup.objects.get(student=self.student, event=self.event)
         self.assertEqual(signup.status, TravelSignup.INTERESTED)
@@ -1846,14 +1860,15 @@ class TravelViewTest(TestCase):
     def test_lead_can_add_student_still_needs_approval(self):
         self.client.login(username="lead", password="password")  # nosec B106
         url = reverse("travel:signup", args=[self.program.id, self.event.id])
-        resp = self.client.post(
-            url,
-            {
-                "student": self.student.id,
-                "departure": self.departure.id,
-                "cost_items": [self.hotel.id],
-            },
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                url,
+                {
+                    "student": self.student.id,
+                    "departure": self.departure.id,
+                    "cost_items": [self.hotel.id],
+                },
+            )
         self.assertEqual(resp.status_code, 302)
         signup = TravelSignup.objects.get(student=self.student, event=self.event)
         self.assertEqual(signup.status, TravelSignup.INTERESTED)
@@ -1992,6 +2007,179 @@ class TravelViewTest(TestCase):
         self.client.post(rejoin_url)
         signup.refresh_from_db()
         self.assertEqual(signup.status, TravelSignup.INTERESTED)
+
+    def test_signup_is_preserved_when_notification_fails_after_commit(self):
+        url = reverse("travel:signup", args=[self.program.id, self.event.id])
+
+        with patch(
+            "travel.views.notify_signup_created",
+            side_effect=RuntimeError("mail transport failed"),
+        ):
+            with self.assertLogs("travel.views", level="ERROR") as log:
+                with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                    self.client.login(
+                        username="student", password="password"
+                    )  # nosec B106
+                    response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTrue(
+            TravelSignup.objects.filter(student=self.student, event=self.event).exists()
+        )
+        self.assertIn("error_type=RuntimeError", log.output[0])
+        self.assertNotIn("mail transport failed", log.output[0])
+        self.assertTrue(
+            any(
+                "couldn't send its notification" in str(message)
+                for message in response.wsgi_request._messages
+            )
+        )
+
+    def test_rejoin_is_preserved_when_notification_fails_after_commit(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.WITHDRAWN,
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("travel:signup_rejoin", args=[self.program.id, signup.id])
+
+        with patch(
+            "travel.views.notify_signup_created",
+            side_effect=RuntimeError("mail transport failed"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(callbacks), 1)
+        signup.refresh_from_db()
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
+
+    def test_signup_actions_reject_a_local_signup_linked_to_foreign_student(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Action Foreign",
+            slug="travel-action-foreign",
+            subdomain="travel-action-foreign",
+        )
+        foreign_student = Student.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Student",
+        )
+        withdrawn_signup = TravelSignup.objects.create(
+            organization=self.organization,
+            student=foreign_student,
+            event=self.event,
+            status=TravelSignup.WITHDRAWN,
+        )
+        self.assertEqual(
+            (
+                withdrawn_signup.organization_id,
+                withdrawn_signup.event.organization_id,
+                withdrawn_signup.event.program.organization_id,
+                withdrawn_signup.student.organization_id,
+            ),
+            (
+                self.organization.pk,
+                self.organization.pk,
+                self.organization.pk,
+                foreign_organization.pk,
+            ),
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        rejoin_response = self.client.post(
+            reverse("travel:signup_rejoin", args=[self.program.id, withdrawn_signup.id])
+        )
+        withdrawn_signup.refresh_from_db()
+        self.assertEqual(
+            withdrawn_signup.status,
+            TravelSignup.WITHDRAWN,
+            rejoin_response.get("Location"),
+        )
+        withdrawn_signup.status = TravelSignup.INTERESTED
+        withdrawn_signup.save(update_fields=["status"])
+        withdraw_response = self.client.post(
+            reverse(
+                "travel:signup_withdraw", args=[self.program.id, withdrawn_signup.id]
+            )
+        )
+
+        self.assertEqual(rejoin_response.status_code, 302)
+        self.assertEqual(withdraw_response.status_code, 302)
+        withdrawn_signup.refresh_from_db()
+        self.assertEqual(withdrawn_signup.status, TravelSignup.INTERESTED)
+
+        valid_signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.WITHDRAWN,
+        )
+        valid_rejoin_response = self.client.post(
+            reverse("travel:signup_rejoin", args=[self.program.id, valid_signup.id])
+        )
+        self.assertEqual(valid_rejoin_response.status_code, 302)
+        valid_signup.refresh_from_db()
+        self.assertEqual(valid_signup.status, TravelSignup.INTERESTED)
+
+    def test_signup_notifications_fail_closed_for_inconsistent_organization(self):
+        from travel.services import (
+            notify_mentor_signup_cancelled,
+            notify_mentor_signup_created,
+            notify_parent_chaperone_signup_cancelled,
+            notify_parent_chaperone_signup_created,
+            notify_signup_approved,
+            notify_signup_created,
+            notify_signup_decision_undone,
+            notify_signup_declined,
+            notify_signup_withdrawn,
+        )
+
+        foreign_organization = Organization.objects.create(
+            name="Travel Notice Foreign",
+            slug="travel-notice-foreign",
+            subdomain="travel-notice-foreign",
+        )
+        signup = TravelSignup.objects.create(
+            organization=foreign_organization,
+            student=self.student,
+            event=self.event,
+        )
+
+        for notifier in (
+            notify_signup_created,
+            notify_signup_approved,
+            notify_signup_declined,
+            notify_signup_decision_undone,
+            notify_signup_withdrawn,
+        ):
+            with self.subTest(notifier=notifier.__name__):
+                with patch("travel.services.send_templated_notification") as send:
+                    notifier(signup)
+                send.assert_not_called()
+
+        mentor_signup = TravelMentorSignup.objects.create(
+            organization=foreign_organization,
+            adult=self.mentor_adult,
+            event=self.event,
+        )
+        chaperone_signup = TravelParentChaperoneSignup.objects.create(
+            organization=foreign_organization,
+            adult=self.parent_adult,
+            event=self.event,
+        )
+        for notifier, adult_signup in (
+            (notify_mentor_signup_created, mentor_signup),
+            (notify_mentor_signup_cancelled, mentor_signup),
+            (notify_parent_chaperone_signup_created, chaperone_signup),
+            (notify_parent_chaperone_signup_cancelled, chaperone_signup),
+        ):
+            with self.subTest(notifier=notifier.__name__):
+                with patch("travel.services.send_templated_notification") as send:
+                    notifier(adult_signup)
+                send.assert_not_called()
 
     # ── Mentor signups & drivers ──────────────────────────────────────────
 

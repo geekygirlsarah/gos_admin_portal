@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-20
+
+### Changed
+- Travel signup and selected-cost creation now commit atomically; signup notifications run after commit, and delivery failures no longer remove the signup.
+- Travel signup transitions now lock and recheck tenant-scoped records; inconsistent linked student, guardian, or adult records do not receive travel notifications.
+- Travel Django admin is read-only and available only to platform superusers outside tenant context.
+
 ## 2026-11-19
 
 ### Added

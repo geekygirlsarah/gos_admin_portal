@@ -80,6 +80,12 @@ eligibility relationships must also belong to that organization. Existing
 mismatched links are hidden from tenant rosters and are not changed or notified;
 signup conflicts are left for separate review.
 
+Student signup transitions lock the event before locking and reloading the
+tenant-scoped signup. Rejoin, withdrawal, guardian decline, and decision undo
+recheck the current state under those locks. The Django admin exposes travel
+records only as read-only to platform superusers outside tenant context; it is
+not a supported path for creating or changing travel data.
+
 Students can update the departure and optional cost selections on their own
 active signup. An actual change returns an approved signup to pending guardian
 approval, recalculates a tracked balance charge, and notifies the student and
@@ -96,7 +102,8 @@ records are preserved for review rather than detached or reassigned.
 ### Parent Approval Workflow & Notifications
 - Students submit initial sign-ups (`interested`).
 - **Guardian Approval Invariant**: **Only a student's linked parents can approve or decline** (`_ParentSignupActionView` verifies `parent.students.filter(pk=...)`).
-- All state transitions dispatch transactional notification emails via `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`).
+- State-transition notification functions live in `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`). Signup and selected costs commit atomically before the confirmation/approval-request email is sent. A delivery exception leaves the signup intact, produces a user-facing warning and a log entry containing identifiers and the exception type only; delivery is not automatically retried.
+- Direct signup and adult-notice helpers fail closed when signup, event, program, participant, or departure organization ownership is inconsistent; guardian recipients are additionally restricted to the event organization.
 - When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email.
 - If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending parent approval. An after-commit email with that student's previous and current totals goes only to the student and eligible local guardians; other attendees do not receive the individualized amount. Edits that do not change a student's total preserve the approval. Charge changes are audit logged.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.

@@ -56,6 +56,9 @@ def _trusted_notification_organization(signup, profile):
 def notify_signup_created(signup):
     """Student signed up (or a lead mentor added them): confirm to the student,
     ask the parents to review and approve."""
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
     context = _base_context(signup)
 
     student_to = student_recipients(signup.student)
@@ -65,22 +68,27 @@ def notify_signup_created(signup):
             "travel/emails/signup_created.html",
             context,
             student_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+            organization=organization,
         )
 
-    parent_to = parent_recipients(signup.student)
+    parent_to = parent_recipients(signup.student, organization=organization)
     if parent_to:
         send_templated_notification(
             f"Travel: {signup.student} wants to go to {signup.event.name} - please approve",
             "travel/emails/parent_approval_requested.html",
             context,
             parent_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+            organization=organization,
         )
 
 
 def notify_signup_approved(signup):
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
+    recipient = student_recipients(signup.student) or parent_recipients(
+        signup.student, organization=organization
+    )
     if not recipient:
         return
     context = _base_context(signup)
@@ -89,12 +97,17 @@ def notify_signup_approved(signup):
         "travel/emails/signup_approved.html",
         context,
         recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+        organization=organization,
     )
 
 
 def notify_signup_declined(signup):
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
+    recipient = student_recipients(signup.student) or parent_recipients(
+        signup.student, organization=organization
+    )
     if not recipient:
         return
     context = _base_context(signup)
@@ -103,22 +116,25 @@ def notify_signup_declined(signup):
         "travel/emails/signup_declined.html",
         context,
         recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+        organization=organization,
     )
 
 
 def notify_signup_withdrawn(signup):
     """Student (or a lead mentor for them) backed out: let the parents know and
     (when the student has an account) the student."""
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
     context = _base_context(signup)
-    parent_to = parent_recipients(signup.student)
+    parent_to = parent_recipients(signup.student, organization=organization)
     if parent_to:
         send_templated_notification(
             f"Travel: {signup.student} is no longer going to {signup.event.name}",
             "travel/emails/signup_withdrawn.html",
             context,
             parent_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+            organization=organization,
         )
     student_to = student_recipients(signup.student)
     if student_to:
@@ -127,13 +143,18 @@ def notify_signup_withdrawn(signup):
             "travel/emails/signup_withdrawn.html",
             context,
             student_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+            organization=organization,
         )
 
 
 def notify_signup_decision_undone(signup):
     """A parent rescinded an earlier approve/decline; it's back to 'interested'."""
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
+    recipient = student_recipients(signup.student) or parent_recipients(
+        signup.student, organization=organization
+    )
     if not recipient:
         return
     context = _base_context(signup)
@@ -142,7 +163,7 @@ def notify_signup_decision_undone(signup):
         "travel/emails/signup_decision_undone.html",
         context,
         recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+        organization=organization,
     )
 
 
@@ -273,6 +294,9 @@ def _adult_context(adult, signup):
 
 
 def notify_mentor_signup_created(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return
     email = _adult_email(signup.adult)
     if not email:
         return
@@ -281,11 +305,14 @@ def notify_mentor_signup_created(signup):
         "travel/emails/mentor_signup_confirmed.html",
         _adult_context(signup.adult, signup),
         [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        organization=organization,
     )
 
 
 def notify_mentor_signup_cancelled(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return
     email = _adult_email(signup.adult)
     if not email:
         return
@@ -294,11 +321,14 @@ def notify_mentor_signup_cancelled(signup):
         "travel/emails/mentor_signup_cancelled.html",
         _adult_context(signup.adult, signup),
         [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        organization=organization,
     )
 
 
 def notify_parent_chaperone_signup_created(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return
     email = _adult_email(signup.adult)
     if not email:
         return
@@ -307,11 +337,14 @@ def notify_parent_chaperone_signup_created(signup):
         "travel/emails/parent_chaperone_confirmed.html",
         _adult_context(signup.adult, signup),
         [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        organization=organization,
     )
 
 
 def notify_parent_chaperone_signup_cancelled(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return
     email = _adult_email(signup.adult)
     if not email:
         return
@@ -320,7 +353,7 @@ def notify_parent_chaperone_signup_cancelled(signup):
         "travel/emails/parent_chaperone_cancelled.html",
         _adult_context(signup.adult, signup),
         [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        organization=organization,
     )
 
 

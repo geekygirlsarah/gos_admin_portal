@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from pathlib import Path
 
@@ -68,6 +69,26 @@ from travel.services import (
     trip_change_summary,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _notify_signup_created_after_commit(request, signup):
+    try:
+        notify_signup_created(signup)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Travel signup notification delivery failed "
+            "(signup_id=%s, event_id=%s, error_type=%s).",
+            signup.pk,
+            signup.event_id,
+            type(exc).__name__,
+        )
+        messages.warning(
+            request,
+            "The signup was saved, but we couldn't send its notification. "
+            "Please contact a lead mentor.",
+        )
+
 
 class TravelProgramMixin:
     """404 unless the program has the ``travel`` feature enabled, and inject
@@ -114,6 +135,23 @@ def _local_travel_signups(organization, program):
                 departure__event_id=F("event_id"),
             )
         )
+    )
+
+
+def _locked_local_travel_signup(organization, program, pk):
+    signup = get_object_or_404(_local_travel_signups(organization, program), pk=pk)
+    event = get_object_or_404(
+        TravelEvent.objects.for_organization(organization).select_for_update(),
+        pk=signup.event_id,
+        program=program,
+        organization=organization,
+    )
+    return get_object_or_404(
+        _local_travel_signups(organization, program)
+        .select_for_update(of=("self",))
+        .select_related("student", "event", "departure"),
+        pk=pk,
+        event=event,
     )
 
 
@@ -898,17 +936,24 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
             student=student, event=event, departure=departure, organization=org
         )
         try:
-            signup.save()
-            signup.cost_items.set(cost_items)
-            messages.success(
-                request,
-                f"{student} is signed up for {event.name}. The parents have been "
-                "emailed to review and approve.",
-            )
-            notify_signup_created(signup)
+            with transaction.atomic():
+                signup.save()
+                signup.cost_items.set(cost_items)
         except Exception as exc:  # noqa: BLE001
-            signup.delete()
-            messages.error(request, f"Could not complete signup: {exc}")
+            logger.error(
+                "Travel signup could not be saved (event_id=%s, error_type=%s).",
+                event.pk,
+                type(exc).__name__,
+            )
+            messages.error(
+                request,
+                "Could not complete signup. Please try again or contact a lead mentor.",
+            )
+        else:
+            messages.success(request, f"{student} is signed up for {event.name}.")
+            transaction.on_commit(
+                lambda: _notify_signup_created_after_commit(request, signup)
+            )
 
         return redirect("travel:event_list", program_id=self.program.id)
 
@@ -1351,20 +1396,19 @@ class TravelSignupRejoinView(LoginRequiredMixin, TravelProgramMixin, View):
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup, org=org):
+                messages.error(request, "You do not have permission to do that.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_signed_up_again:
+                messages.error(request, "This signup cannot be reactivated.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.rejoin()
+            signup.save()
+        transaction.on_commit(
+            lambda: _notify_signup_created_after_commit(request, signup)
         )
-        if not self._may_act(request.user, signup, org=org):
-            messages.error(request, "You do not have permission to do that.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_signed_up_again:
-            messages.error(request, "This signup cannot be reactivated.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.rejoin()
-        signup.save()
-        notify_signup_created(signup)
         messages.success(
             request, f"Reactivated {signup.student}'s signup for {signup.event.name}."
         )
@@ -1386,23 +1430,20 @@ class TravelSignupWithdrawView(LoginRequiredMixin, TravelProgramMixin, View):
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup, org=org):
-            messages.error(request, "You do not have permission to do that.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_withdrawn:
-            messages.error(
-                request, "This signup can't be withdrawn in its current state."
-            )
-            return redirect("travel:event_list", program_id=self.program.id)
-        name = signup.student
-        event = signup.event
-        signup.withdraw()
-        signup.save()
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup, org=org):
+                messages.error(request, "You do not have permission to do that.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_withdrawn:
+                messages.error(
+                    request, "This signup can't be withdrawn in its current state."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            name = signup.student
+            event = signup.event
+            signup.withdraw()
+            signup.save()
         notify_signup_withdrawn(signup)
         messages.info(
             request, f"{name} is no longer going to {event.name} (status emails sent)."
@@ -1531,19 +1572,18 @@ class TravelSignupApproveView(_ParentSignupActionView):
 class TravelSignupDeclineView(_ParentSignupActionView):
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            _local_travel_signups(org, self.program),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup):
-            messages.error(request, "Only a parent of this student can decline travel.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_declined:
-            messages.error(request, "This signup can't be declined right now.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.decline()
-        signup.save()
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup):
+                messages.error(
+                    request, "Only a parent of this student can decline travel."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_declined:
+                messages.error(request, "This signup can't be declined right now.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.decline()
+            signup.save()
         notify_signup_declined(signup)
         messages.info(request, f"Declined {signup.student} for {signup.event.name}.")
         return redirect("travel:event_list", program_id=self.program.id)
@@ -1554,21 +1594,18 @@ class TravelSignupUndoView(_ParentSignupActionView):
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            _local_travel_signups(org, self.program),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup):
-            messages.error(
-                request, "Only a parent of this student can update this decision."
-            )
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_undone:
-            messages.error(request, "This decision can't be undone right now.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.undo_decision()
-        signup.save()
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup):
+                messages.error(
+                    request, "Only a parent of this student can update this decision."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_undone:
+                messages.error(request, "This decision can't be undone right now.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.undo_decision()
+            signup.save()
         notify_signup_decision_undone(signup)
         messages.info(
             request,
