@@ -65,13 +65,31 @@ Mentor travel links, profile commitments, and digest highlights follow the
 trip-details read permission; calendar feeds retain their separate access rules.
 
 ### Travel Models
-- **`TravelEvent`**: Destination, `start_date`, `end_date`, location, optional `permission_form` file upload, and an opt-in `requires_departure` setting. Existing trips remain optional; trips with no cost options are free.
+- **`TravelEvent`**: Destination, `start_date`, `end_date`, optional organization-local `start_time`/`end_time`, optional signup deadline, location, permission form, and an opt-in `requires_departure` setting. Events marked as competitions collect explicit student attendance responses; legacy events remain untimed unless times are entered.
 - **`TravelDeparture`**: Specific bus/flight departures and departure times.
 - **`TravelCostOption`**: Per-traveler fee options. Required options are included for every signup; new options default to required, while existing options are migrated as optional.
 - **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`). Approval posts the approved total to the student's program balance.
 - **`TravelSignedPermissionForm`**: Encrypted signed upload tied to the signup and the version of the blank form. Each upload is retained until the trip is deleted.
 - **`TravelMentorSignup`**: Mentor registrations with `is_driver` flag and departure choice.
 - **`TravelParentChaperoneSignup`**: Parent chaperone roster.
+- **`TravelCompetitionRSVP`**: Explicit `Attending` / `Not attending` response for competition attendance, independent of guardian approval and parent chaperone status.
+
+Competition responses can be entered by the active student, a linked local
+guardian, or a Lead Mentor. The event roster shows only students with a recorded
+response; Lead Mentors can update those responses or record one for an active
+student in the program. A new `Attending` response creates or reactivates the
+student's travel signup as pending guardian approval, while `Not attending`
+withdraws an active signup and clears any associated charge. Neither response
+approves travel or replaces a required signed form. Chaperone attendance remains
+a separate adult role/signup.
+
+Event start/end times are optional and interpreted in the organization's
+configured time zone; calendar feeds retain all-day entries when no times are
+set. A signup deadline is also optional and displayed in organization-local
+time. After it passes, students, guardians, mentors, and chaperones cannot create
+a new self-signup; Lead Mentors may add attendees, and existing guardian approval
+and withdrawal actions remain available. A closed deadline is a cutoff, not an
+approval deadline.
 
 Departure and cost-option editors and event-list rosters are scoped to the
 resolved organization, and signup POSTs accept only departures owned by that

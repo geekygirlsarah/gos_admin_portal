@@ -7,7 +7,9 @@ to CalendarEvent records when a CalendarFeed with source_type=TRAVEL exists.
 
 import logging
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
@@ -34,9 +36,28 @@ def sync_travel_event(travel_event, feed):
         )
         return None
 
-    # All-day event covering start_date to end_date
-    start_dt = timezone.make_aware(datetime.combine(travel_event.start_date, time.min))
-    end_dt = timezone.make_aware(datetime.combine(travel_event.end_date, time.max))
+    organization_timezone = ZoneInfo(
+        travel_event.organization.get_setting("time_zone") or settings.TIME_ZONE
+    )
+    if travel_event.start_time and travel_event.end_time:
+        start_dt = timezone.make_aware(
+            datetime.combine(travel_event.start_date, travel_event.start_time),
+            organization_timezone,
+        )
+        end_dt = timezone.make_aware(
+            datetime.combine(travel_event.end_date, travel_event.end_time),
+            organization_timezone,
+        )
+        all_day = False
+    else:
+        # Legacy events without times remain all-day calendar entries.
+        start_dt = timezone.make_aware(
+            datetime.combine(travel_event.start_date, time.min), organization_timezone
+        )
+        end_dt = timezone.make_aware(
+            datetime.combine(travel_event.end_date, time.max), organization_timezone
+        )
+        all_day = True
 
     title = travel_event.name
     location_parts = []
@@ -73,7 +94,7 @@ def sync_travel_event(travel_event, feed):
         "description": description,
         "start_datetime": start_dt,
         "end_datetime": end_dt,
-        "all_day": True,
+        "all_day": all_day,
         "location": location,
     }
     source_events = CalendarEvent.objects.filter(feed=feed, source_id=source_id)

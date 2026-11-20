@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-20
 
 ### Added
+- Travel & Competitions events support explicit student attending/not-attending responses, optional organization-local event times, and signup deadlines; linked guardians and Lead Mentors can record responses, which remain separate from guardian approval and chaperone signups.
 - Travel reminder emails for pending approvals and outstanding signed-form/departure actions three days after signup and seven and one days before travel; delivery claims are tenant scoped, reviewable by leads, and not automatically retried when uncertain.
 - Travel families now receive separate notices for signup decisions, signed-form uploads, event updates, departure changes, and cancellations; event cancellations notify active families and signed adult attendees without linking to a deleted event.
 - Travel signup readiness is shown separately for guardian approval, a current signed form, and required departure on family views, dashboards, and lead rosters; lead views summarize outstanding active signups without implying fees are paid.
 
 ### Changed
+- Travel chaperone signup, cancellation, and lead-added buttons use higher-contrast gray outline styling.
 - Travel signup and selected-cost creation now commit atomically; signup notifications run after commit, and delivery failures no longer remove the signup.
 - Travel signup transitions now lock and recheck tenant-scoped records; inconsistent linked student, guardian, or adult records do not receive travel notifications.
 - Travel Django admin is read-only and available only to platform superusers outside tenant context.

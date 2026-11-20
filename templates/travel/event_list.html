@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% load form_tags %}
 
-{% block title %}Travel - {{ program.name }}{% endblock %}
+{% block title %}Travel &amp; Competitions - {{ program.name }}{% endblock %}
 
 {% block content %}
 <div class="container my-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
-            <h1 class="h3 fw-bold mb-1"><i class="bi bi-airplane me-2 text-primary"></i>Travel</h1>
-            <p class="text-muted mb-0">Trips and events for {{ program.name }}</p>
+            <h1 class="h3 fw-bold mb-1"><i class="bi bi-airplane me-2 text-primary"></i>Travel &amp; Competitions</h1>
+            <p class="text-muted mb-0">Trips and competitions for {{ program.name }}</p>
         </div>
         {% if can_add %}
         <a href="{% url 'travel:event_create' program.id %}" class="btn btn-primary">
-            <i class="bi bi-plus-lg me-1"></i>Add Trip
+            <i class="bi bi-plus-lg me-1"></i>Add Event
         </a>
         {% endif %}
     </div>
@@ -26,7 +26,7 @@
 
     {% if upcoming_events %}
     <div class="mb-4">
-        <h2 class="h5 fw-semibold text-uppercase text-muted">Upcoming Trips</h2>
+        <h2 class="h5 fw-semibold text-uppercase text-muted">Upcoming Events</h2>
         {% for event in upcoming_events %}
         <div class="card mb-3 shadow-sm border-0 border-top border-3 border-primary rounded-3">
             <div class="card-body p-4">
@@ -34,11 +34,13 @@
                     <div>
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <h3 class="h5 mb-0 fw-bold">{{ event.name }}</h3>
+                            {% if event.is_competition %}<span class="badge bg-info text-dark rounded-pill">Competition</span>{% endif %}
                             <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill">Upcoming</span>
                         </div>
                         <div class="text-muted small mt-1">
                             <i class="bi bi-calendar3 me-1"></i>{{ event.start_date|date:"N j, Y" }}
                             {% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}
+                            {% if event.start_time %}<span class="ms-2">{{ event.start_time|time:"g:i A" }}{% if event.end_time %} &ndash; {{ event.end_time|time:"g:i A" }}, organization local time{% endif %}</span>{% endif %}
                             {% if event.location_name %}
                             <span class="ms-3"><i class="bi bi-geo-alt me-1"></i>{{ event.location_name }}</span>
                             {% endif %}
@@ -58,6 +60,13 @@
                         {% endif %}
                     </div>
                 </div>
+
+                {% if event.signup_deadline %}
+                <p class="small {% if event.signup_closed %}text-danger{% else %}text-muted{% endif %} mt-2 mb-0">
+                    <i class="bi bi-clock me-1"></i>Signup deadline: {{ event.signup_deadline_local|date:"N j, Y" }} at {{ event.signup_deadline_local|time:"g:i A" }} (organization local time)
+                    {% if event.signup_closed %} — passed; contact a lead mentor to be added.{% endif %}
+                </p>
+                {% endif %}
 
                 {% if event.description %}
                 <p class="mb-3">{{ event.description|linebreaksbr }}</p>
@@ -111,6 +120,44 @@
                     </div>
                     <div class="card-body">
                 {% if can_manage %}
+                {% if event.is_competition %}
+                <div class="border rounded p-2 mb-3">
+                    <strong class="small">Competition attendance responses</strong>
+                    {% for rsvp in event.competition_rsvp_rows %}
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small mt-1">
+                        <span><span class="competition-rsvp-student">{{ rsvp.student.display_name }}</span> — <span class="badge {% if rsvp.response == 'yes' %}bg-success{% else %}bg-secondary{% endif %}">{{ rsvp.get_response_display }}</span></span>
+                        <form action="{% url 'travel:competition_rsvp' program.id event.id %}" method="post" class="d-flex gap-1 align-items-center mb-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="student" value="{{ rsvp.student_id }}">
+                            <select class="form-select form-select-sm" name="response" aria-label="Attendance response for {{ rsvp.student.display_name }}">
+                                <option value="yes" {% if rsvp.response == 'yes' %}selected{% endif %}>Attending</option>
+                                <option value="no" {% if rsvp.response == 'no' %}selected{% endif %}>Not attending</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                        </form>
+                    </div>
+                    {% empty %}
+                    <p class="small text-muted mb-1">No students have responded yet.</p>
+                    {% endfor %}
+                    {% with rsvp_form=competition_rsvp_forms|get_item:event.id %}
+                    {% if rsvp_form %}
+                    <form action="{% url 'travel:competition_rsvp' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-end gap-2 mt-2">
+                        {% csrf_token %}
+                        <div><label class="small" for="{{ rsvp_form.student.id_for_label }}">Student</label>{{ rsvp_form.student }}</div>
+                        <div><label class="small" for="{{ rsvp_form.response.id_for_label }}">Response</label>{{ rsvp_form.response }}</div>
+                        {% if event.has_multiple_departures or event.requires_departure %}
+                        <div><label class="small" for="lead_rsvp_departure_{{ event.id }}">Departure</label><select class="form-select form-select-sm" name="departure" id="lead_rsvp_departure_{{ event.id }}"><option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>{% for departure in event.ordered_departures %}<option value="{{ departure.id }}">{{ departure.display_label }}</option>{% endfor %}</select></div>
+                        {% endif %}
+                        {% for cost in event.ordered_cost_options %}
+                        {% if not cost.is_required %}<div class="form-check"><input class="form-check-input" type="checkbox" name="cost_items" value="{{ cost.id }}" id="lead_rsvp_cost_{{ event.id }}_{{ cost.id }}"><label class="form-check-label small" for="lead_rsvp_cost_{{ event.id }}_{{ cost.id }}">{{ cost.name }} (${{ cost.amount|floatformat:2 }})</label></div>{% endif %}
+                        {% endfor %}
+                        <button class="btn btn-sm btn-outline-primary" type="submit">Record response</button>
+                    </form>
+                    {% endif %}
+                    {% endwith %}
+                    <div class="small text-muted mt-1">Responses are separate from guardian approval and chaperone signups.</div>
+                </div>
+                {% endif %}
                 <div class="alert alert-light border py-2 small" role="status">
                     <strong>Travel readiness:</strong> {{ event.travel_ready_signup_count }} ready of {{ event.travel_active_signup_count }} active sign-up{% if event.travel_active_signup_count != 1 %}s{% endif %}.
                     This tracks guardian approval, a current required signed form, and required departure only; payment is not included.
@@ -279,11 +326,12 @@
                     {% if event.id in my_chaperone_event_ids %}
                     <form action="{% url 'travel:chaperone_cancel' program.id event.id %}" method="post" class="mb-0 mt-2">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-warning js-confirm" data-confirm="Back out of chaperoning {{ event.name }}?">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary js-confirm" data-confirm="Back out of chaperoning {{ event.name }}?">
                             <i class="bi bi-person-dash me-1"></i>I'm no longer available
                         </button>
                     </form>
                     {% else %}
+                    {% if not event.signup_closed or can_manage %}
                     <form action="{% url 'travel:chaperone_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-2">
                         {% csrf_token %}
                         <span class="small text-muted">Parents of students in this program are welcome to come along:</span>
@@ -294,10 +342,11 @@
                             {% endfor %}
                         </select>
                         {% endif %}
-                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-person-plus me-1"></i>I'd like to chaperone
                         </button>
                     </form>
+                    {% endif %}
                     {% endif %}
                     {% endif %}
 
@@ -320,7 +369,7 @@
                             </div>
                         </div>
                         {% endif %}
-                        <button type="submit" class="btn btn-sm btn-outline-warning">Add chaperone</button>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Add chaperone</button>
                     </form>
                     {% endif %}
                     </div>
@@ -343,13 +392,13 @@
                             {% include "travel/_readiness_status.html" with signup=my_signup %}
                         </div>
                         <div class="d-flex gap-2">
-                            {% if my_signup.can_be_withdrawn %}
+                            {% if my_signup.can_be_withdrawn and not event.is_competition %}
                             <form action="{% url 'travel:signup_withdraw' program.id my_signup.id %}" method="post" class="mb-0">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Back out of {{ event.name }}?">Back out</button>
                             </form>
                             {% endif %}
-                            {% if my_signup.can_be_signed_up_again %}
+                            {% if my_signup.can_be_signed_up_again and not event.is_competition %}
                             <form action="{% url 'travel:signup_rejoin' program.id my_signup.id %}" method="post" class="mb-0">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-primary">Sign up again</button>
@@ -383,6 +432,8 @@
                 </div>
                 {% else %}
                 {% with signup_form=signup_forms|get_item:event.id %}
+                {% if not event.is_competition %}
+                {% if not event.signup_closed or user_role == 'LeadMentor' %}
                 {% if signup_form %}
                 <form action="{% url 'travel:signup' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
                     {% csrf_token %}
@@ -423,8 +474,39 @@
                     {% endif %}
                 </form>
                 {% endif %}
+                {% endif %}
+                {% endif %}
                 {% endwith %}
                 {% endif %}
+                {% endwith %}
+                {% endif %}
+
+                {% if user_role == 'Student' and event.is_competition %}
+                {% with my_signup=signup_by_event|get_item:event.id my_rsvp=competition_rsvp_by_event|get_item:event.id %}
+                <form action="{% url 'travel:competition_rsvp' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
+                    {% csrf_token %}
+                    <strong>Competition attendance</strong>
+                    {% if my_rsvp %}<p class="small mb-2">Your response: <strong>{{ my_rsvp.get_response_display }}</strong></p>{% endif %}
+                    {% if not my_signup or my_signup.status == 'withdrawn' or my_signup.status == 'declined' %}
+                    {% if not event.signup_closed %}
+                    {% if event.has_multiple_departures or event.requires_departure %}
+                    <label class="small" for="student_rsvp_departure_{{ event.id }}">Departure</label>
+                    <select class="form-select form-select-sm mb-2" name="departure" id="student_rsvp_departure_{{ event.id }}">
+                        <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
+                        {% for departure in event.ordered_departures %}<option value="{{ departure.id }}">{{ departure.display_label }}</option>{% endfor %}
+                    </select>
+                    {% endif %}
+                    {% for cost in event.ordered_cost_options %}
+                    {% if not cost.is_required %}<div class="form-check small"><input class="form-check-input" type="checkbox" name="cost_items" value="{{ cost.id }}" id="student_rsvp_cost_{{ event.id }}_{{ cost.id }}"><label class="form-check-label" for="student_rsvp_cost_{{ event.id }}_{{ cost.id }}">{{ cost.name }} (${{ cost.amount|floatformat:2 }})</label></div>{% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    {% endif %}
+                    <div class="d-flex gap-2 mt-2">
+                        {% if not event.signup_closed or my_signup.status == 'interested' or my_signup.status == 'approved' %}<button class="btn btn-sm btn-primary" type="submit" name="response" value="yes">I'm attending</button>{% endif %}
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" name="response" value="no">I'm not attending</button>
+                    </div>
+                    <p class="small text-muted mb-0 mt-2">This response is separate from guardian approval and does not replace a required permission form.</p>
+                </form>
                 {% endwith %}
                 {% endif %}
 
@@ -500,6 +582,38 @@
                 {% endfor %}
                 {% endif %}
 
+                {% if viewer_is_parent and event.is_competition %}
+                {% for parent_row in parent_rows %}
+                {% if parent_row.can_respond_to_competitions %}
+                {% with parent_signup=parent_row.signup_by_event|get_item:event.id parent_rsvp=parent_row.competition_rsvp_by_event|get_item:event.id %}
+                <form action="{% url 'travel:competition_rsvp' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="student" value="{{ parent_row.student.pk }}">
+                    <strong>{{ parent_row.student.display_name }} — competition attendance</strong>
+                    {% if parent_rsvp %}<p class="small mb-2">Current response: <strong>{{ parent_rsvp.get_response_display }}</strong></p>{% endif %}
+                    {% if not event.signup_closed or parent_signup.status == 'interested' or parent_signup.status == 'approved' %}
+                    {% if event.has_multiple_departures or event.requires_departure %}
+                    <label class="small" for="parent_rsvp_departure_{{ event.id }}_{{ parent_row.student.pk }}">Departure</label>
+                    <select class="form-select form-select-sm mb-2" name="departure" id="parent_rsvp_departure_{{ event.id }}_{{ parent_row.student.pk }}">
+                        <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
+                        {% for departure in event.ordered_departures %}<option value="{{ departure.id }}">{{ departure.display_label }}</option>{% endfor %}
+                    </select>
+                    {% endif %}
+                    {% for cost in event.ordered_cost_options %}
+                    {% if not cost.is_required %}<div class="form-check small"><input class="form-check-input" type="checkbox" name="cost_items" value="{{ cost.id }}" id="parent_rsvp_cost_{{ event.id }}_{{ parent_row.student.pk }}_{{ cost.id }}"><label class="form-check-label" for="parent_rsvp_cost_{{ event.id }}_{{ parent_row.student.pk }}_{{ cost.id }}">{{ cost.name }} (${{ cost.amount|floatformat:2 }})</label></div>{% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    <div class="d-flex gap-2 mt-2">
+                        {% if not event.signup_closed or parent_signup.status == 'interested' or parent_signup.status == 'approved' %}<button class="btn btn-sm btn-primary" type="submit" name="response" value="yes">Attending</button>{% endif %}
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" name="response" value="no">Not attending</button>
+                    </div>
+                    <p class="small text-muted mb-0 mt-2">The student's attendance response is separate from your travel approval decision and from chaperone signup.</p>
+                </form>
+                {% endwith %}
+                {% endif %}
+                {% endfor %}
+                {% endif %}
+
                 {# ── Mentor view ──────────────────────────────────────────── #}
                 {% with mentor_form=mentor_staff_forms|get_item:event.id %}
                 {% if can_manage or viewer_is_mentor %}
@@ -540,6 +654,7 @@
                     </form>
                 </div>
                 {% else %}
+                {% if not event.signup_closed or can_manage %}
                 <form action="{% url 'travel:mentor_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-2">
                     {% csrf_token %}
                     <span class="small text-muted">Mentors are welcome to come along as chaperones:</span>
@@ -552,6 +667,7 @@
                     {% endif %}
                     <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-plus me-1"></i>I'm going</button>
                 </form>
+                {% endif %}
                 {% endif %}
                 {% endif %}
 
@@ -580,17 +696,17 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="alert alert-light border shadow-sm">No upcoming trips have been posted yet. Check back soon!</div>
+    <div class="alert alert-light border shadow-sm">No upcoming events have been posted yet. Check back soon!</div>
     {% endif %}
 
     {% if past_events %}
-    <h2 class="h5 fw-semibold text-uppercase text-muted mb-2">Past Trips</h2>
+    <h2 class="h5 fw-semibold text-uppercase text-muted mb-2">Past Events</h2>
     <div class="list-group mb-4">
         {% for event in past_events %}
         <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center">
             <div>
                 <strong>{{ event.name }}</strong>
-                <span class="text-muted small ms-2">{{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}</span>
+                <span class="text-muted small ms-2">{{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}{% if event.start_time %} {{ event.start_time|time:"g:i A" }}{% if event.end_time %} &ndash; {{ event.end_time|time:"g:i A" }}, organization local time{% endif %}{% endif %}</span>
                 {% if event.location_name %}<span class="text-muted small ms-2">{{ event.location_name }}</span>{% endif %}
             </div>
             {% if can_edit or can_manage %}

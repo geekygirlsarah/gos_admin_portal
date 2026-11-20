@@ -6,6 +6,7 @@ from PIL import Image, UnidentifiedImageError
 from programs.models import Adult, Student
 from programs.utils import active_students_in_program
 from travel.models import (
+    TravelCompetitionRSVP,
     TravelCostOption,
     TravelDeparture,
     TravelEvent,
@@ -62,8 +63,12 @@ class TravelEventForm(forms.ModelForm):
         model = TravelEvent
         fields = [
             "name",
+            "is_competition",
             "start_date",
             "end_date",
+            "start_time",
+            "end_time",
+            "signup_deadline",
             "requires_departure",
             "location_name",
             "location_address",
@@ -73,6 +78,11 @@ class TravelEventForm(forms.ModelForm):
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "start_time": forms.TimeInput(attrs={"type": "time"}),
+            "end_time": forms.TimeInput(attrs={"type": "time"}),
+            "signup_deadline": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -256,6 +266,19 @@ class TravelSignupDepartureForm(forms.ModelForm):
         self.fields["departure"].empty_label = (
             "Choose a departure" if requires_departure else "No specific departure"
         )
+
+
+class TravelCompetitionRSVPForm(forms.Form):
+    student = forms.ModelChoiceField(queryset=Student.objects.none())
+    response = forms.ChoiceField(choices=TravelCompetitionRSVP.Response.choices)
+
+    def __init__(self, *args, **kwargs):
+        students = kwargs.pop("students", None)
+        super().__init__(*args, **kwargs)
+        self.fields["student"].queryset = (
+            students if students is not None else Student.objects.none()
+        )
+        _apply_bootstrap_classes(self)
 
 
 class TravelParentChaperoneStaffForm(forms.ModelForm):

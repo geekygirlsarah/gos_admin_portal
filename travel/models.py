@@ -1,3 +1,4 @@
+from datetime import datetime, time
 from decimal import Decimal
 from uuid import uuid4
 
@@ -7,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.models import Adult, Student
@@ -50,6 +52,17 @@ class TravelEvent(models.Model):
     name = models.CharField(max_length=255, verbose_name="Trip / event name")
     start_date = models.DateField()
     end_date = models.DateField()
+    is_competition = models.BooleanField(
+        default=False,
+        help_text="Mark local competitions that need a separate yes/no attendance response.",
+    )
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    signup_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="After this local time, only lead mentors can add attendees.",
+    )
     location_name = models.CharField(max_length=255, blank=True)
     location_address = models.CharField(max_length=255, blank=True)
     requires_departure = models.BooleanField(
@@ -98,8 +111,32 @@ class TravelEvent(models.Model):
 
     def clean(self):
         super().clean()
+        if bool(self.start_time) != bool(self.end_time):
+            raise ValidationError(
+                "Provide both an event start time and end time, or leave both blank."
+            )
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError("End date must be on or after the start date.")
+        if (
+            self.start_date
+            and self.end_date == self.start_date
+            and self.start_time
+            and self.end_time
+            and self.end_time < self.start_time
+        ):
+            raise ValidationError(
+                {"end_time": "End time must be after start time for a same-day event."}
+            )
+        if self.signup_deadline and self.start_date:
+            event_start = timezone.make_aware(
+                datetime.combine(self.start_date, self.start_time or time.min)
+            )
+            if self.signup_deadline > event_start:
+                raise ValidationError(
+                    {
+                        "signup_deadline": "Signup deadline must be before the event starts."
+                    }
+                )
 
     @property
     def ordered_departures(self):
@@ -635,6 +672,65 @@ class TravelSignup(models.Model):
         super().clean()
         if self.departure and self.departure.event_id != self.event_id:
             raise ValidationError("The departure must belong to this trip.")
+
+
+class TravelCompetitionRSVP(models.Model):
+    """Explicit yes/no attendance response, separate from guardian approval."""
+
+    class Response(models.TextChoices):
+        YES = "yes", "Attending"
+        NO = "no", "Not attending"
+
+    YES = Response.YES
+    NO = Response.NO
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="travel_competition_rsvps",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    event = models.ForeignKey(
+        TravelEvent, on_delete=models.CASCADE, related_name="competition_rsvps"
+    )
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name="travel_competition_rsvps"
+    )
+    response = models.CharField(max_length=3, choices=Response.choices)
+    responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    responded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("event", "student"), name="unique_travel_competition_rsvp"
+            )
+        ]
+        ordering = ["student__legal_first_name", "student__last_name", "student_id"]
+
+    def clean(self):
+        super().clean()
+        if not self.event.is_competition:
+            raise ValidationError(
+                "Attendance responses are only available for competitions."
+            )
+        if (
+            self.organization_id != self.event.organization_id
+            or self.student.organization_id != self.organization_id
+            or (
+                self.event.program_id
+                and self.event.program.organization_id != self.organization_id
+            )
+        ):
+            raise ValidationError(
+                "Competition RSVP records must belong to one organization."
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 def _signed_permission_upload_to(instance, filename):

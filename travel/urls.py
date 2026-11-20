@@ -13,6 +13,11 @@ urlpatterns = [
     ),
     path("events/<int:pk>/signup/", views.TravelSignupView.as_view(), name="signup"),
     path(
+        "events/<int:pk>/competition-rsvp/",
+        views.TravelCompetitionRSVPView.as_view(),
+        name="competition_rsvp",
+    ),
+    path(
         "signups/<int:pk>/signed-form/",
         views.TravelSignedPermissionUploadView.as_view(),
         name="signup_signed_form_upload",

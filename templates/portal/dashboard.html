@@ -202,7 +202,7 @@ STUDENT DASHBOARD
                         {% endif %}
                         {% if enrollment.has_travel %}
                             <a class="btn btn-sm btn-outline-primary" href="{% url 'travel:event_list' enrollment.program.pk %}">
-                                <i class="bi bi-airplane me-1"></i>Travel
+                                <i class="bi bi-airplane me-1"></i>Travel &amp; Competitions
                             </a>
                         {% endif %}
                         <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_map' enrollment.program.pk %}">
@@ -258,7 +258,7 @@ STUDENT DASHBOARD
                     {% if enrollment.has_travel %}
                     <div class="mt-2 p-3 bg-light rounded-3 border-0">
                         <div class="d-flex align-items-center justify-content-between mb-1">
-                            <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel</span>
+                            <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel &amp; Competitions</span>
                             <a href="{% url 'travel:event_list' enrollment.program.id %}" class="small text-decoration-none">View all &raquo;</a>
                         </div>
                         {% if enrollment.travel_highlights %}
@@ -266,7 +266,7 @@ STUDENT DASHBOARD
                                 {% for signup in enrollment.travel_highlights %}
                                     <li class="mb-1">
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }}{% if signup.event.start_time %}, {{ signup.event.start_time|time:"g:i A" }}{% endif %})</span></span>
                                             <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
                                                 {{ signup.get_status_display }}
                                             </span>
@@ -276,7 +276,7 @@ STUDENT DASHBOARD
                                 {% endfor %}
                             </ul>
                         {% else %}
-                            <p class="text-muted small mb-0">You're not signed up for any upcoming trips.</p>
+                            <p class="text-muted small mb-0">You're not signed up for any upcoming events.</p>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -493,7 +493,7 @@ PARENT DASHBOARD
                             <div class="col-md-6">
                                 <div class="p-3 bg-white rounded-3 border-0 h-100">
                                     <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel</span>
+                                        <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel &amp; Competitions</span>
                                         {% if row.enrollment.has_travel %}
                                             <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="small text-decoration-none">View all &raquo;</a>
                                         {% endif %}
@@ -504,7 +504,7 @@ PARENT DASHBOARD
                                                 {% for signup in row.enrollment.travel_highlights %}
                                                     <li class="mb-1">
                                                         <div class="d-flex justify-content-between align-items-center">
-                                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }}{% if signup.event.start_time %}, {{ signup.event.start_time|time:"g:i A" }}{% endif %})</span></span>
                                                             <span>
                                                                 {% if signup.status == 'interested' %}
                                                                     <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="badge bg-warning text-dark text-decoration-none rounded-pill">Action needed</a>
@@ -518,7 +518,7 @@ PARENT DASHBOARD
                                                 {% endfor %}
                                             </ul>
                                         {% else %}
-                                            <p class="text-muted small mb-0">No upcoming trips.</p>
+                                            <p class="text-muted small mb-0">No upcoming events.</p>
                                         {% endif %}
                                     {% else %}
                                         <p class="text-muted mb-0 small">N/A</p>
@@ -670,7 +670,7 @@ MENTOR DASHBOARD
 
 {% if mentor_travel_signups %}
 <section class="mb-5">
-    <h2 class="h4 mb-3 fw-bold">My Travel Trips</h2>
+    <h2 class="h4 mb-3 fw-bold">My Travel &amp; Competition Events</h2>
     <div class="card shadow-sm">
         <ul class="list-group list-group-flush">
             {% for signup in mentor_travel_signups %}
@@ -678,7 +678,7 @@ MENTOR DASHBOARD
                 <div class="me-3">
                     <strong class="d-block">{{ signup.event.name }}</strong>
                     <small class="text-muted">
-                        <i class="bi bi-calendar-event me-1"></i>{{ signup.event.start_date|date:"N j, Y" }}
+                        <i class="bi bi-calendar-event me-1"></i>{{ signup.event.start_date|date:"N j, Y" }}{% if signup.event.start_time %} at {{ signup.event.start_time|time:"g:i A" }}{% endif %}
                         <i class="bi bi-geo-alt ms-2 me-1"></i>{{ signup.event.location_name|default:"Location TBD" }}
                         {% if signup.is_driver %}
                             <span class="badge bg-info text-dark ms-2 rounded-pill"><i class="bi bi-car-front me-1"></i>Driver</span>

@@ -159,10 +159,10 @@
                             <li><a class="dropdown-item{% if 'orders' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'orders:order_list' p.pk %}">Order Requests{% if student_orders_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
                             {% endfor %}
                             {% for p in student_travel_programs %}
-                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if student_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel &amp; Competitions{% if student_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
                             {% endfor %}
                             {% for p in parent_travel_programs %}
-                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if parent_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
+                            <li><a class="dropdown-item{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel &amp; Competitions{% if parent_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a></li>
                             {% endfor %}
                             {% for p in carpool_map_programs %}
                             <li><a class="dropdown-item{% if 'map' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'program_student_map' p.pk %}">Carpool Map ({{ p.name }})</a></li>
@@ -196,7 +196,7 @@
                                         {% can_read user 'travel_details' current_program as can_read_trip_details %}
                                         {% if current_program_has_travel %}
                                             {% if navbar_role != 'Mentor' or can_read_trip_details %}
-                                        <li><a class="dropdown-item{% if 'travel' in request.path %} active{% endif %}" href="{% url 'travel:event_list' current_program.pk %}">Travel</a></li>
+                                        <li><a class="dropdown-item{% if 'travel' in request.path %} active{% endif %}" href="{% url 'travel:event_list' current_program.pk %}">Travel &amp; Competitions</a></li>
                                             {% endif %}
                                         {% endif %}
                                     {% endif %}

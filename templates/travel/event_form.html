@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Trip - {{ program.name }}{% endblock %}
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Event - {{ program.name }}{% endblock %}
 
 {% block content %}
 <div class="container my-4">
     <div class="row justify-content-center">
         <div class="col-lg-10 col-xl-9">
-            <h1 class="h3 fw-bold mb-1">{% if form.instance.pk %}Edit Trip{% else %}Add Trip{% endif %}</h1>
+            <h1 class="h3 fw-bold mb-1">{% if form.instance.pk %}Edit Event{% else %}Add Event{% endif %}</h1>
             <p class="text-muted mb-4">{{ program.name }}</p>
 
             <form method="post" enctype="multipart/form-data" novalidate>
@@ -18,7 +18,7 @@
 
                 <section class="card shadow-sm mb-4">
                     <div class="card-header bg-white">
-                        <h2 class="h5 fw-semibold mb-0"><i class="bi bi-card-text me-2 text-primary"></i>Trip details</h2>
+                        <h2 class="h5 fw-semibold mb-0"><i class="bi bi-card-text me-2 text-primary"></i>Event details</h2>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
@@ -33,14 +33,23 @@
                                 {% if form.location_name.errors %}<div class="text-danger small">{{ form.location_name.errors }}</div>{% endif %}
                             </div>
                             {% for field in form %}
-                            {% if field.name == 'start_date' or field.name == 'end_date' %}
+                            {% if field.name == 'start_date' or field.name == 'end_date' or field.name == 'start_time' or field.name == 'end_time' or field.name == 'signup_deadline' %}
                             <div class="col-md-6">
                                 <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                                 {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                                 {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
                             </div>
                             {% endif %}
                             {% endfor %}
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.is_competition }}
+                                    <label for="{{ form.is_competition.id_for_label }}" class="form-check-label">Competition with a separate student attendance response</label>
+                                </div>
+                                {% if form.is_competition.help_text %}<div class="form-text">{{ form.is_competition.help_text }}</div>{% endif %}
+                                {% if form.is_competition.errors %}<div class="text-danger small">{{ form.is_competition.errors }}</div>{% endif %}
+                            </div>
                             <div class="col-12">
                                 <div class="form-check">
                                     {{ form.requires_departure }}

@@ -14,6 +14,7 @@ from django.urls import reverse
 from programs.models import AdultStudentRelationship
 from programs.utils import send_templated_notification
 from travel.models import (
+    TravelCompetitionRSVP,
     TravelEvent,
     TravelMentorSignup,
     TravelParentChaperoneSignup,
@@ -347,6 +348,64 @@ def _family_notice_recipients(signup, organization):
         if normalized_email:
             unique_recipients.setdefault(normalized_email, email.strip())
     return list(unique_recipients.values())
+
+
+def notify_competition_rsvp(event_id, student_id, response, organization_id):
+    """Notify a competition student's family after an explicit RSVP change."""
+    rsvp = (
+        TravelCompetitionRSVP.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            event_id=event_id,
+            event__organization_id=organization_id,
+            event__is_competition=True,
+            event__program__organization_id=organization_id,
+            student_id=student_id,
+            student__organization_id=organization_id,
+        )
+        .select_related("event__program", "student__user")
+        .first()
+    )
+    if rsvp is None or rsvp.response != response:
+        return False
+    organization = rsvp.organization
+    signup = (
+        TravelSignup.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            event=rsvp.event,
+            student=rsvp.student,
+            event__organization=organization,
+            student__organization=organization,
+        )
+        .first()
+    )
+    recipients = student_recipients(rsvp.student) + parent_recipients(
+        rsvp.student, organization=organization
+    )
+    if not recipients:
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel & Competitions: Attendance response for {rsvp.event.name}",
+            "travel/emails/competition_rsvp_updated.html",
+            {
+                "event": rsvp.event,
+                "program": rsvp.event.program,
+                "student": rsvp.student,
+                "response": rsvp.get_response_display(),
+                "approval_pending": bool(
+                    signup and signup.status == TravelSignup.INTERESTED
+                ),
+                "signup_withdrawn": bool(
+                    signup and signup.status == TravelSignup.WITHDRAWN
+                ),
+                "trip_link": trip_link(rsvp.event),
+            },
+            recipients,
+            organization,
+        )
+    )
 
 
 def notify_signup_departure_changed(
