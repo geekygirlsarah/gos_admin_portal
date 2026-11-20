@@ -110,25 +110,37 @@
                         <h4 class="h6 fw-semibold mb-0" id="student-signups-title">Student Sign-ups</h4>
                     </div>
                     <div class="card-body">
+                {% if can_manage %}
+                <div class="alert alert-light border py-2 small" role="status">
+                    <strong>Travel readiness:</strong> {{ event.travel_ready_signup_count }} ready of {{ event.travel_active_signup_count }} active sign-up{% if event.travel_active_signup_count != 1 %}s{% endif %}.
+                    This tracks guardian approval, a current required signed form, and required departure only; payment is not included.
+                    {% if event.travel_outstanding_signups %}
+                    <ul class="mb-0 mt-1">
+                        {% for outstanding_signup in event.travel_outstanding_signups %}
+                        <li><a href="#travel-signup-{{ outstanding_signup.pk }}">{{ outstanding_signup.student.display_name }}</a>: {{ outstanding_signup.readiness_action_labels|join:", " }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endif %}
                 {% regroup event.signups.all by status as signup_status_groups %}
                 {% if signup_status_groups %}
                 {% for status_group in signup_status_groups %}
                 <div class="student-signup-status-group mb-3" data-status="{{ status_group.grouper }}">
                     <h5 class="h6 fw-semibold">{% if status_group.grouper == 'approved' %}Parent Approved{% elif status_group.grouper == 'interested' %}Interested{% elif status_group.grouper == 'declined' %}Declined{% else %}{{ status_group.list.0.get_status_display }}{% endif %}</h5>
                 {% for signup in status_group.list %}
-                <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom">
+                <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom" id="travel-signup-{{ signup.pk }}">
                     <div>
                         <strong>{{ signup.student.display_name }}</strong>
                         <span class="badge {% if signup.status == 'approved' %}bg-success{% elif signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ signup.get_status_display }}</span>
                         {% if signup.departure %}<span class="text-muted small ms-2">{{ signup.departure.display_label }}</span>{% endif %}
                         {% if can_manage and signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
                         {% if can_manage and signup.can_be_withdrawn %}
-                        {% if signup.status == 'interested' or event.requires_permission_form and not signup.current_signed_permission_form or event.requires_departure and not signup.departure_id %}
+                        {% include "travel/_readiness_status.html" with signup=signup %}
+                        {% if signup.readiness_action_labels %}
                         <div class="small mt-1"><strong>Outstanding trip requirements</strong>
                             <ul class="mb-1">
-                                {% if signup.status == 'interested' %}<li>Parent approval</li>{% endif %}
-                                {% if event.requires_permission_form and not signup.current_signed_permission_form %}<li>Signed permission form</li>{% endif %}
-                                {% if event.requires_departure and not signup.departure_id %}<li>Departure selection</li>{% endif %}
+                                {% for label in signup.readiness_action_labels %}<li>{{ label }}</li>{% endfor %}
                             </ul>
                         </div>
                         {% else %}
@@ -328,6 +340,7 @@
                             {% if my_signup.departure %}<span class="small text-muted ms-2">{{ my_signup.departure.display_label }}</span>{% endif %}
                             {% if my_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ my_signup.approved_total|floatformat:2 }}</span>
                             {% elif my_signup.status == 'interested' %}<span class="small text-muted ms-2">Current trip cost: ${{ my_signup.total_cost|floatformat:2 }}</span>{% endif %}
+                            {% include "travel/_readiness_status.html" with signup=my_signup %}
                         </div>
                         <div class="d-flex gap-2">
                             {% if my_signup.can_be_withdrawn %}
@@ -433,6 +446,7 @@
                             {% for cost in parent_signup.approval_costs %}<span>{{ cost.name }} (${{ cost.amount|floatformat:2 }}){% if not forloop.last %}, {% endif %}</span>{% empty %}None{% endfor %}
                         </div>
                         {% endif %}
+                        {% include "travel/_readiness_status.html" with signup=parent_signup %}
                     </div>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
                         {% if viewer_is_parent and event.requires_permission_form and parent_signup.can_be_withdrawn %}
@@ -589,16 +603,26 @@
             {% endif %}
             {% if can_manage %}
             <div class="w-100 mt-2">
+                <div class="small border-bottom pb-2 mb-2">
+                    <strong>Travel readiness:</strong> {{ event.travel_ready_signup_count }} ready of {{ event.travel_active_signup_count }} active sign-up{% if event.travel_active_signup_count != 1 %}s{% endif %}.
+                    This tracks guardian approval, a current required signed form, and required departure only; payment is not included.
+                    {% if event.travel_outstanding_signups %}
+                    <ul class="mb-0 mt-1">
+                        {% for outstanding_signup in event.travel_outstanding_signups %}
+                        <li><a href="#travel-signup-{{ outstanding_signup.pk }}">{{ outstanding_signup.student.display_name }}</a>: {{ outstanding_signup.readiness_action_labels|join:", " }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
                 {% for signup in event.signups.all %}
                 {% if signup.can_be_withdrawn %}
-                <div class="border-top pt-2 mt-2 small">
+                <div class="border-top pt-2 mt-2 small" id="travel-signup-{{ signup.pk }}">
                     <strong>{{ signup.student.display_name }}</strong>
-                    {% if signup.status == 'interested' or event.requires_permission_form and not signup.current_signed_permission_form or event.requires_departure and not signup.departure_id %}
+                    {% include "travel/_readiness_status.html" with signup=signup %}
+                    {% if signup.readiness_action_labels %}
                     <div><strong>Outstanding trip requirements</strong></div>
                     <ul>
-                        {% if signup.status == 'interested' %}<li>Parent approval</li>{% endif %}
-                        {% if event.requires_permission_form and not signup.current_signed_permission_form %}<li>Signed permission form</li>{% endif %}
-                        {% if event.requires_departure and not signup.departure_id %}<li>Departure selection</li>{% endif %}
+                        {% for label in signup.readiness_action_labels %}<li>{{ label }}</li>{% endfor %}
                     </ul>
                     {% else %}<div>No outstanding tracked trip requirements</div>{% endif %}
                     {% if event.requires_permission_form %}
@@ -624,6 +648,7 @@
             {% if parent_signup and parent_signup.can_be_withdrawn %}
             <div class="w-100 border-top pt-2 mt-2 small">
                 <strong>{{ row.student.display_name }}</strong> &mdash; {{ parent_signup.get_status_display }}
+                {% include "travel/_readiness_status.html" with signup=parent_signup %}
                 {% if event.location_address %}<div>{{ event.location_address }}</div>{% endif %}
                 {% if event.description %}<div>{{ event.description|linebreaksbr }}</div>{% endif %}
                 <div>Current trip cost: ${{ parent_signup.total_cost|floatformat:2 }}</div>
@@ -661,6 +686,16 @@
             {% endif %}
             {% endwith %}
             {% endfor %}
+            {% endif %}
+            {% if user_role == 'Student' %}
+            {% with past_student_signup=signup_by_event|get_item:event.id %}
+            {% if past_student_signup and past_student_signup.can_be_withdrawn %}
+            <div class="w-100 border-top pt-2 mt-2 small">
+                <strong>Your sign-up</strong> &mdash; {{ past_student_signup.get_status_display }}
+                {% include "travel/_readiness_status.html" with signup=past_student_signup %}
+            </div>
+            {% endif %}
+            {% endwith %}
             {% endif %}
         </div>
         {% endfor %}

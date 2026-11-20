@@ -1,0 +1,12 @@
+{% if signup.status == 'interested' or signup.status == 'approved' %}
+<div class="small mt-1 travel-readiness-status">
+    <strong>Tracked readiness: {% if signup.is_ready_for_travel %}Complete{% else %}Action needed{% endif %}</strong>
+    <ul class="list-inline mb-0">
+        {% for requirement in signup.readiness_requirements %}
+        <li class="list-inline-item badge {% if requirement.complete %}bg-success{% elif requirement.required %}bg-warning text-dark{% else %}bg-secondary{% endif %} mb-1">
+            {{ requirement.label }}: {{ requirement.status }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

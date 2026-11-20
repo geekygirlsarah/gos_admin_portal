@@ -449,6 +449,101 @@ class TravelSignup(models.Model):
         )
 
     @property
+    def has_outdated_signed_permission_form(self):
+        if (
+            self.event.organization_id != self.organization_id
+            or self.student.organization_id != self.organization_id
+        ):
+            return False
+        if hasattr(self, "outdated_signed_permission_forms"):
+            return bool(self.outdated_signed_permission_forms)
+        return (
+            self.signed_permission_forms.filter(
+                organization_id=self.organization_id,
+                signup__organization_id=self.organization_id,
+                signup__event__organization_id=self.organization_id,
+                signup__student__organization_id=self.organization_id,
+            )
+            .exclude(form_version=self.event.permission_form_version)
+            .exclude(file="")
+            .exists()
+        )
+
+    @property
+    def readiness_requirements(self):
+        if self.status == self.APPROVED:
+            guardian_status = "Approved"
+        elif self.status == self.INTERESTED:
+            guardian_status = "Pending"
+        else:
+            guardian_status = self.get_status_display()
+
+        current_form = self.current_signed_permission_form
+        if not self.event.requires_permission_form:
+            form_status = "Not required"
+        elif current_form:
+            form_status = "Current"
+        elif self.has_outdated_signed_permission_form:
+            form_status = "Out of date"
+        else:
+            form_status = "Needed"
+
+        if self.departure_id:
+            departure_status = "Selected"
+            if not self.event.requires_departure:
+                departure_status = "Selected (optional)"
+        elif self.event.requires_departure:
+            departure_status = "Needed"
+        else:
+            departure_status = "Optional"
+
+        return (
+            {
+                "key": "guardian_decision",
+                "label": "Guardian approval",
+                "status": guardian_status,
+                "required": True,
+                "complete": self.status == self.APPROVED,
+            },
+            {
+                "key": "signed_form",
+                "label": "Signed permission form",
+                "status": form_status,
+                "required": self.event.requires_permission_form,
+                "complete": not self.event.requires_permission_form
+                or current_form is not None,
+            },
+            {
+                "key": "departure",
+                "label": "Departure",
+                "status": departure_status,
+                "required": self.event.requires_departure,
+                "complete": not self.event.requires_departure
+                or self.departure_id is not None,
+            },
+        )
+
+    @property
+    def is_ready_for_travel(self):
+        if self.status not in (self.INTERESTED, self.APPROVED):
+            return False
+        return all(
+            requirement["complete"]
+            for requirement in self.readiness_requirements
+            if requirement["required"]
+        )
+
+    @property
+    def outstanding_readiness_labels(self):
+        if self.status not in (self.INTERESTED, self.APPROVED):
+            return []
+        return [
+            requirement["label"]
+            for requirement in self.readiness_requirements
+            if requirement["required"] and not requirement["complete"]
+        ]
+
+    @property
     def needs_permission_acknowledgment(self):
         return self.event.requires_permission_form and not (
             self.permission_acknowledged

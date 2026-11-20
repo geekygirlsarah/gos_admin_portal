@@ -72,6 +72,7 @@ from travel.services import (
     notify_trip_cancelled,
     trip_change_summary,
 )
+from travel.utils import signed_permission_form_prefetches
 
 logger = logging.getLogger(__name__)
 
@@ -181,20 +182,11 @@ def _locked_local_travel_signup(organization, program, pk):
 
 
 def _current_signed_forms(organization):
-    return Prefetch(
-        "signed_permission_forms",
-        queryset=TravelSignedPermissionForm.objects.for_organization(organization)
-        .filter(
-            organization=organization,
-            signup__organization=organization,
-            signup__event__organization=organization,
-            signup__student__organization=organization,
-            form_version=F("signup__event__permission_form_version"),
-        )
-        .exclude(file="")
-        .order_by("-uploaded_at", "-pk"),
-        to_attr="current_signed_permission_forms",
-    )
+    return signed_permission_form_prefetches(organization)[0]
+
+
+def _outdated_signed_forms(organization):
+    return signed_permission_form_prefetches(organization)[1]
 
 
 class MentorTripDetailsReadPermissionMixin:
@@ -239,6 +231,7 @@ class TravelEventListView(
             .prefetch_related(
                 "cost_items",
                 _current_signed_forms(org),
+                _outdated_signed_forms(org),
                 Prefetch(
                     "student__adultstudentrelationship_set",
                     queryset=AdultStudentRelationship.objects.for_organization(org)
@@ -422,7 +415,13 @@ class TravelEventListView(
 
         events = [e for e in self.get_queryset() if e.start_date is not None]
         for event in events:
+            active_signups = []
             for signup in event.signups.all():
+                signup.travel_readiness_requirements = signup.readiness_requirements
+                signup.readiness_action_labels = signup.outstanding_readiness_labels
+                signup.travel_ready = signup.is_ready_for_travel
+                if signup.status in (TravelSignup.INTERESTED, TravelSignup.APPROVED):
+                    active_signups.append(signup)
                 eligible_guardians = [
                     adult
                     for adult in signup.student.all_parents
@@ -434,6 +433,13 @@ class TravelEventListView(
                 signup.reminder_delivery_problems = getattr(
                     signup, "travel_reminder_delivery_problems", []
                 )
+            event.travel_active_signup_count = len(active_signups)
+            event.travel_ready_signup_count = sum(
+                signup.travel_ready for signup in active_signups
+            )
+            event.travel_outstanding_signups = [
+                signup for signup in active_signups if not signup.travel_ready
+            ]
         events.sort(key=lambda e: (e.start_date or date.max, e.name))
         upcoming_events = [e for e in events if not e.is_past]
         past_events = [e for e in events if e.is_past]
@@ -485,8 +491,12 @@ class TravelEventListView(
                 signups = list(
                     _local_travel_signups(org, self.program)
                     .filter(student=student)
-                    .select_related("event", "departure", "approved_by")
-                    .prefetch_related("cost_items", _current_signed_forms(org))
+                    .select_related("student", "event", "departure", "approved_by")
+                    .prefetch_related(
+                        "cost_items",
+                        _current_signed_forms(org),
+                        _outdated_signed_forms(org),
+                    )
                 )
                 signup_by_event = {s.event_id: s for s in signups}
                 context["my_events"] = [
@@ -541,7 +551,7 @@ class TravelEventListView(
             signups = (
                 _local_travel_signups(org, self.program)
                 .filter(student_id__in=local_child_ids)
-                .select_related("event", "departure", "approved_by")
+                .select_related("student", "event", "departure", "approved_by")
                 .prefetch_related(
                     "cost_items",
                     Prefetch(
@@ -551,6 +561,7 @@ class TravelEventListView(
                         ),
                     ),
                     _current_signed_forms(org),
+                    _outdated_signed_forms(org),
                 )
             )
             for signup in signups:

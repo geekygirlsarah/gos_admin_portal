@@ -288,15 +288,23 @@ class TravelViewTest(TestCase):
             )
             self.assertEqual(response.status_code, 200, msg=username)
             html = response.content.decode()
+            roster_section_start = html.index('aria-labelledby="student-signups-title"')
+            roster_section_end = html.index("</section>", roster_section_start)
+            roster_section = html[roster_section_start:roster_section_end]
+            roster_start = roster_section.index(
+                '<div class="student-signup-status-group'
+            )
+            roster_html = roster_section[roster_start:]
 
             group_order = [
-                html.index(f'data-status="{status}"') for status in expected_statuses
+                roster_html.index(f'data-status="{status}"')
+                for status in expected_statuses
             ]
             self.assertEqual(group_order, sorted(group_order), msg=username)
             for heading in ("Parent Approved", "Interested", "Declined", "Withdrawn"):
-                self.assertIn(heading, html)
+                self.assertIn(heading, roster_html)
 
-            name_order = [html.index(name) for name in expected_names]
+            name_order = [roster_html.index(name) for name in expected_names]
             self.assertEqual(name_order, sorted(name_order), msg=username)
 
     def test_mentor_without_trip_read_permission_cannot_view_trips(self):
@@ -352,9 +360,12 @@ class TravelViewTest(TestCase):
 
         response = self.client.get(url)
         self.assertContains(response, "Outstanding trip requirements")
-        self.assertContains(response, "Parent approval")
+        self.assertContains(response, "Guardian approval")
         self.assertContains(response, "Signed permission form")
-        self.assertContains(response, "Departure selection")
+        self.assertContains(response, "Departure: Needed")
+        self.assertContains(response, "Travel readiness")
+        self.assertContains(response, "0 ready of 1 active sign-up")
+        self.assertContains(response, f'href="#travel-signup-{signup.pk}"')
 
         signup.status = TravelSignup.APPROVED
         signup.departure = self.departure
@@ -362,8 +373,9 @@ class TravelViewTest(TestCase):
         signup.save()
         response = self.client.get(url)
         self.assertContains(response, "Signed permission form")
-        self.assertNotContains(response, "Departure selection")
-        self.assertNotContains(response, "Parent approval</li>")
+        self.assertNotContains(response, "Departure: Needed")
+        self.assertNotContains(response, "Guardian approval: Pending")
+        self.assertContains(response, "0 ready of 1 active sign-up")
 
         self.event.permission_form = ""
         self.event.requires_departure = False
@@ -373,8 +385,9 @@ class TravelViewTest(TestCase):
         signup.save()
         response = self.client.get(url)
         self.assertContains(response, "No outstanding tracked trip requirements")
-        self.assertNotContains(response, "Departure selection")
-        self.assertNotContains(response, "Signed permission form</li>")
+        self.assertNotContains(response, "Departure: Needed")
+        self.assertNotContains(response, "Signed permission form: Needed")
+        self.assertContains(response, "1 ready of 1 active sign-up")
 
         for status in (TravelSignup.DECLINED, TravelSignup.WITHDRAWN):
             signup.status = status
@@ -385,6 +398,91 @@ class TravelViewTest(TestCase):
                 self.assertNotContains(
                     response, "No outstanding tracked trip requirements"
                 )
+                self.assertNotContains(response, "1 ready of 1 active sign-up")
+
+    def test_family_readiness_is_visible_for_past_active_signups(self):
+        past_date = timezone.localdate() - timedelta(days=2)
+        past_event = TravelEvent.objects.create(
+            program=self.program,
+            name="Past Competition",
+            start_date=past_date,
+            end_date=past_date,
+            requires_departure=True,
+        )
+        TravelSignup.objects.create(
+            student=self.student,
+            event=past_event,
+            status=TravelSignup.INTERESTED,
+        )
+        url = reverse("travel:event_list", args=[self.program.pk])
+
+        for username in ("student", "parent"):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Past Competition")
+                self.assertContains(response, "Guardian approval: Pending")
+                self.assertContains(response, "Departure: Needed")
+
+    def test_dashboard_shows_independent_readiness_only_for_local_signup(self):
+        self.event.permission_form = "travel/forms/blank.pdf"
+        self.event.requires_departure = True
+        self.event.save()
+        TravelSignup.objects.create(student=self.student, event=self.event)
+
+        foreign_organization = Organization.objects.create(
+            name="Foreign Dashboard Travel", slug="foreign-dashboard-travel"
+        )
+        foreign_event = TravelEvent.objects.create(
+            organization=foreign_organization,
+            program=self.program,
+            name="Foreign Competition",
+            start_date=self.event.start_date,
+            end_date=self.event.end_date,
+            permission_form="travel/forms/foreign-blank.pdf",
+            requires_departure=True,
+        )
+        TravelSignup.objects.create(
+            organization=foreign_organization,
+            student=self.student,
+            event=foreign_event,
+        )
+
+        for username in ("student", "parent"):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(reverse("profile_dashboard"))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Guardian approval: Pending")
+                self.assertContains(response, "Signed permission form: Needed")
+                self.assertContains(response, "Departure: Needed")
+                self.assertNotContains(response, "Foreign Competition")
+
+    def test_student_highlights_prefetch_readiness_for_multiple_signups(self):
+        from travel.utils import get_student_travel_highlights
+
+        self.student.organization = self.organization
+        self.event.permission_form = "travel/forms/blank.pdf"
+        self.event.save(update_fields=["permission_form"])
+        TravelSignup.objects.create(student=self.student, event=self.event)
+        second_event = TravelEvent.objects.create(
+            program=self.program,
+            name="Second Competition",
+            start_date=self.event.start_date + timedelta(days=10),
+            end_date=self.event.end_date + timedelta(days=10),
+            permission_form="travel/forms/blank.pdf",
+        )
+        TravelSignup.objects.create(student=self.student, event=second_event)
+
+        with self.assertNumQueries(4):
+            signups = get_student_travel_highlights(self.student, self.program)
+            readiness = [signup.readiness_requirements for signup in signups]
+
+        self.assertEqual(len(signups), 2)
+        self.assertTrue(
+            all("Guardian approval" in [r["label"] for r in row] for row in readiness)
+        )
 
     def test_mentor_with_trip_write_can_edit_but_not_manage_rosters_or_delete(self):
         from programs.models import RolePermission

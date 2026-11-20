@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Travel reminder emails for pending approvals and outstanding signed-form/departure actions three days after signup and seven and one days before travel; delivery claims are tenant scoped, reviewable by leads, and not automatically retried when uncertain.
 - Travel families now receive separate notices for signup decisions, signed-form uploads, event updates, departure changes, and cancellations; event cancellations notify active families and signed adult attendees without linking to a deleted event.
+- Travel signup readiness is shown separately for guardian approval, a current signed form, and required departure on family views, dashboards, and lead rosters; lead views summarize outstanding active signups without implying fees are paid.
 
 ### Changed
 - Travel signup and selected-cost creation now commit atomically; signup notifications run after commit, and delivery failures no longer remove the signup.

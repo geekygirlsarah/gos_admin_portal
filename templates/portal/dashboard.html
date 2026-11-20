@@ -264,11 +264,14 @@ STUDENT DASHBOARD
                         {% if enrollment.travel_highlights %}
                             <ul class="list-unstyled mb-0 small">
                                 {% for signup in enrollment.travel_highlights %}
-                                    <li class="mb-1 d-flex justify-content-between align-items-center">
-                                        <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
-                                        <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
-                                            {{ signup.get_status_display }}
-                                        </span>
+                                    <li class="mb-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                            <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
+                                                {{ signup.get_status_display }}
+                                            </span>
+                                        </div>
+                                        {% include "travel/_readiness_status.html" with signup=signup %}
                                     </li>
                                 {% endfor %}
                             </ul>
@@ -499,15 +502,18 @@ PARENT DASHBOARD
                                         {% if row.enrollment.travel_highlights %}
                                             <ul class="list-unstyled mb-0 small">
                                                 {% for signup in row.enrollment.travel_highlights %}
-                                                    <li class="mb-1 d-flex justify-content-between align-items-center">
-                                                        <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
-                                                        <span>
-                                                            {% if signup.status == 'interested' %}
-                                                                <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="badge bg-warning text-dark text-decoration-none rounded-pill">Action needed</a>
-                                                            {% else %}
-                                                                <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %} rounded-pill">{{ signup.get_status_display }}</span>
-                                                            {% endif %}
-                                                        </span>
+                                                    <li class="mb-1">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                                            <span>
+                                                                {% if signup.status == 'interested' %}
+                                                                    <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="badge bg-warning text-dark text-decoration-none rounded-pill">Action needed</a>
+                                                                {% else %}
+                                                                    <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %} rounded-pill">{{ signup.get_status_display }}</span>
+                                                                {% endif %}
+                                                            </span>
+                                                        </div>
+                                                        {% include "travel/_readiness_status.html" with signup=signup %}
                                                     </li>
                                                 {% endfor %}
                                             </ul>

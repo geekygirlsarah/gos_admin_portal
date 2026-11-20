@@ -280,6 +280,62 @@ class SignedPermissionFormTests(TestCase):
             all("does not approve" in message.body for message in mail.outbox)
         )
 
+    def test_readiness_separates_guardian_approval_form_and_departure(self):
+        self.event.requires_departure = True
+        self.event.save(update_fields=["requires_departure"])
+        self.signup.departure = None
+        self.signup.save(update_fields=["departure"])
+
+        requirements = {
+            item["key"]: item for item in self.signup.readiness_requirements
+        }
+        self.assertEqual(requirements["guardian_decision"]["status"], "Pending")
+        self.assertEqual(requirements["signed_form"]["status"], "Needed")
+        self.assertEqual(requirements["departure"]["status"], "Needed")
+        self.assertFalse(self.signup.is_ready_for_travel)
+
+        self.upload(self.guardian)
+        self.signup.refresh_from_db()
+        requirements = {
+            item["key"]: item for item in self.signup.readiness_requirements
+        }
+        self.assertEqual(requirements["guardian_decision"]["status"], "Pending")
+        self.assertEqual(requirements["signed_form"]["status"], "Current")
+        self.assertEqual(requirements["departure"]["status"], "Needed")
+        self.assertFalse(self.signup.is_ready_for_travel)
+
+        self.signup.departure = self.departure
+        self.signup.save(update_fields=["departure"])
+        self.approve()
+        self.signup.refresh_from_db()
+        self.assertTrue(self.signup.is_ready_for_travel)
+
+        self.event.permission_form = "travel/forms/replacement.pdf"
+        self.event.save(update_fields=["permission_form"])
+        self.signup.refresh_from_db()
+        requirements = {
+            item["key"]: item for item in self.signup.readiness_requirements
+        }
+        self.assertEqual(requirements["guardian_decision"]["status"], "Approved")
+        self.assertEqual(requirements["signed_form"]["status"], "Out of date")
+        self.assertEqual(requirements["departure"]["status"], "Selected")
+        self.assertFalse(self.signup.is_ready_for_travel)
+
+    def test_optional_form_and_departure_are_not_readiness_requirements(self):
+        self.event.permission_form = ""
+        self.event.requires_departure = False
+        self.event.save(update_fields=["permission_form", "requires_departure"])
+        self.signup.status = TravelSignup.APPROVED
+        self.signup.departure = None
+        self.signup.save(update_fields=["status", "departure"])
+
+        requirements = {
+            item["key"]: item for item in self.signup.readiness_requirements
+        }
+        self.assertEqual(requirements["signed_form"]["status"], "Not required")
+        self.assertEqual(requirements["departure"]["status"], "Optional")
+        self.assertTrue(self.signup.is_ready_for_travel)
+
     def test_signed_file_is_encrypted_and_download_is_protected_attachment(self):
         self.upload(self.guardian)
         signed = self.signup.signed_permission_forms.get()
@@ -517,6 +573,9 @@ class SignedPermissionFormTests(TestCase):
                 form_version=self.event.permission_form_version
             ).exists()
         )
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+        self.assertContains(response, "Guardian approval: Approved")
+        self.assertContains(response, "Signed permission form: Out of date")
         self.upload(self.guardian)
         self.assertTrue(
             self.signup.signed_permission_forms.filter(
@@ -568,7 +627,8 @@ class SignedPermissionFormTests(TestCase):
         signups = {signup.pk: signup for signup in event.signups.all()}
         self.assertFalse(signups[self.signup.pk].needs_permission_acknowledgment)
         self.assertTrue(signups[other_signup.pk].needs_permission_acknowledgment)
-        self.assertContains(response, "Signed permission form</li>", count=1)
+        self.assertContains(response, "Signed permission form: Current", count=1)
+        self.assertContains(response, "Signed permission form: Needed", count=1)
 
         for user in (self.student_user, self.mentor):
             with self.subTest(user=user.username):

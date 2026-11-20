@@ -129,6 +129,15 @@ before it can be approved. Signed files are encrypted and stored
 under the protected `private/` prefix. PDF, JPEG, and PNG uploads are limited to
 10 MB.
 
+Travel readiness is shown as separate guardian-approval, signed-form, and
+departure statuses on family views, the dashboard, and the lead roster. A form is
+current only when its upload matches the event's current form version; a replaced
+form is shown as out of date. Forms and departures that are not required are
+explicitly marked optional/not required. Only active signups count toward the
+lead's ready and outstanding totals. “Complete” means these tracked requirements
+are met; it does not mean fees are paid or that other untracked arrangements are
+complete.
+
 Each successful signed-form upload sends the student and eligible local
 guardians a receipt notice. Uploading does not approve the current cost or travel
 choices; a guardian must explicitly confirm those choices. Event cancellation
