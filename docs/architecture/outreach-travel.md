@@ -91,8 +91,17 @@ active signup. An actual change returns an approved signup to pending guardian
 approval, recalculates a tracked balance charge, and notifies the student and
 eligible local guardians after the update commits. No-op edits preserve approval
 and do not send notices. Lead Mentors can reassign an active student's departure;
-this preserves the approval and charge and sends the student and eligible local
-guardians a notice that no new approval is needed.
+an approved signup returns to pending guardian approval while retaining its
+balance charge and current signed form. The student and eligible local guardians
+receive an after-commit notice asking them to confirm the new departure.
+
+Editing a selected departure's details also reopens approval for approved
+signups assigned to that departure. The current charge and signed form are
+preserved; the approval snapshot is cleared and the transition is audit logged.
+General event-change notices go to active pending and approved families and
+signed-up adults. Each family receives its own message, including any
+signup-specific cost or departure change, so another student's amount or choices
+are not disclosed.
 
 Trip deletion is refused before audit logging if a foreign-owned departure,
 cost option, or signup would be deleted or changed. This includes foreign
@@ -102,10 +111,10 @@ records are preserved for review rather than detached or reassigned.
 ### Parent Approval Workflow & Notifications
 - Students submit initial sign-ups (`interested`).
 - **Guardian Approval Invariant**: **Only a student's linked parents can approve or decline** (`_ParentSignupActionView` verifies `parent.students.filter(pk=...)`).
-- State-transition notification functions live in `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`). Signup and selected costs commit atomically before the confirmation/approval-request email is sent. A delivery exception leaves the signup intact, produces a user-facing warning and a log entry containing identifiers and the exception type only; delivery is not automatically retried.
+- State-transition notification functions live in `travel/services.py` (`notify_signup_created`, `notify_signup_approved`, `notify_signup_declined`). Signup and selected costs commit atomically before notices are sent. Family members are sent separate messages so one recipient failure does not prevent attempts to notify others; failures are logged without addresses or personal details, and uncertain sends are not automatically retried.
 - Direct signup and adult-notice helpers fail closed when signup, event, program, participant, or departure organization ownership is inconsistent; guardian recipients are additionally restricted to the event organization.
-- When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email.
-- If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending parent approval. An after-commit email with that student's previous and current totals goes only to the student and eligible local guardians; other attendees do not receive the individualized amount. Edits that do not change a student's total preserve the approval. Charge changes are audit logged.
+- When a trip is edited, students with pending or approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded. Family messages are individual and can include only that signup's private cost and departure details.
+- If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending guardian approval. An after-commit family email shows that student's previous and current totals; other attendees do not receive the individualized amount. Edits that do not change the total or selected departure preserve approval. Charge changes and departure-triggered reapproval are audit logged.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.
 
 Lead Mentors see each active signup's outstanding parent approval, signed form,
@@ -119,6 +128,25 @@ the displayed choices, prices, and form version; a stale page must be reloaded
 before it can be approved. Signed files are encrypted and stored
 under the protected `private/` prefix. PDF, JPEG, and PNG uploads are limited to
 10 MB.
+
+Each successful signed-form upload sends the student and eligible local
+guardians a receipt notice. Uploading does not approve the current cost or travel
+choices; a guardian must explicitly confirm those choices. Event cancellation
+notices are sent after the deletion commits to pending and approved families and
+signed-up mentors/chaperones, and do not contain a link to the deleted event.
+
+`python manage.py send_travel_reminders --organization <slug> --dry-run` previews
+due reminder messages without sending or claiming them. The reminder command
+sends one combined family email for outstanding approval, signed-form, or
+departure actions three days after signup and seven days and one day before the
+selected departure (or event start when no departure is selected). Trigger dates
+use the organization's configured time zone. Claims and delivery outcomes are
+stored in the tenant-scoped `TravelReminderDelivery` ledger; uncertain sends,
+interrupted claims, and signups with no eligible recipients are not automatically
+retried. Leads see missing eligible guardian contact and unresolved reminder
+outcomes on the roster. The command is not scheduled automatically; operators
+must separately review tenant email settings and dry-run counts before arranging
+a daily schedule.
 
 The reapproval migration resets approved signups with a permission form, including
 past trips, and preserves their existing balance charges. It records the previous

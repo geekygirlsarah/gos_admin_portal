@@ -134,6 +134,18 @@
                         {% else %}
                         <div class="small text-muted">No outstanding tracked trip requirements</div>
                         {% endif %}
+                        {% if signup.guardian_contact_missing %}
+                        <div class="small text-warning mt-1"><strong>Lead follow-up:</strong> No linked guardian has an eligible email address; contact the family directly. Student email alone does not count as guardian contact.</div>
+                        {% endif %}
+                        {% if signup.reminder_delivery_problems %}
+                        <div class="small text-warning mt-1"><strong>Reminder delivery needs review:</strong>
+                            <ul class="mb-1">
+                                {% for delivery in signup.reminder_delivery_problems %}
+                                <li>{{ delivery.get_reminder_type_display }} — {{ delivery.get_status_display }}{% if delivery.status == 'unknown' %}; do not retry automatically{% endif %}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
                         {% if event.requires_permission_form %}
                         {% with signed_form=signup.current_signed_permission_form %}
                         {% if signed_form %}<a class="small" href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% endif %}

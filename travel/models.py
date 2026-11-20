@@ -585,6 +585,81 @@ class TravelReapprovalSnapshot(models.Model):
     approved_total = models.DecimalField(max_digits=10, decimal_places=2, null=True)
 
 
+class TravelReminderDelivery(models.Model):
+    """Claim and outcome for one reminder trigger on a student signup."""
+
+    class ReminderType(models.TextChoices):
+        AFTER_SIGNUP = "after_signup", "Three days after signup"
+        SEVEN_DAYS = "seven_days", "Seven days before travel"
+        ONE_DAY = "one_day", "One day before travel"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        ACCEPTED = "accepted", "Accepted"
+        FAILED = "failed", "Confirmed pre-send failure"
+        UNKNOWN = "unknown", "Unknown delivery outcome"
+        NO_RECIPIENTS = "no_recipients", "No eligible recipients"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="travel_reminder_deliveries",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    signup = models.ForeignKey(
+        TravelSignup,
+        on_delete=models.CASCADE,
+        related_name="reminder_deliveries",
+    )
+    reminder_type = models.CharField(max_length=16, choices=ReminderType.choices)
+    target_date = models.DateField()
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    recipient_count = models.PositiveSmallIntegerField(default=0)
+    accepted_count = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("signup", "reminder_type", "target_date"),
+                name="travel_reminder_date_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("organization", "status", "claimed_at"),
+                name="travel_reminder_org_status_idx",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if not self.signup_id or not self.organization_id:
+            return
+        if (
+            self.signup.organization_id != self.organization_id
+            or self.signup.event.organization_id != self.organization_id
+            or self.signup.student.organization_id != self.organization_id
+        ):
+            raise ValidationError(
+                {
+                    "organization": "The reminder, signup, event, and student must share an organization."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Travel reminder for signup {self.signup_id} ({self.reminder_type})"
+
+
 class TravelMentorSignup(models.Model):
     """A mentor going on a trip. Any number may sign up; ``is_driver`` is a
     Lead-Mentor-checked flag so mentors who are driving can be identified."""

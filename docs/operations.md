@@ -223,6 +223,7 @@ use `--dry-run` first when the command supports it.
 | Monthly Balances   | `python manage.py send_monthly_balances --all-balances`   | Supports `--days-back`, `--student-id`, and `--dry-run` |
 | Calendar Reminders | `python manage.py send_calendar_reminders --days-ahead 3` | Supports `--dry-run`                                    |
 | Application Reminders | `python manage.py send_application_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000) |
+| Travel Reminders | `python manage.py send_travel_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000); not scheduled automatically |
 | Application Expiration | `python manage.py expire_applications --organization <slug>` | Read-only by default; destructive `--execute`; supports `--limit` (maximum 500) |
 | Audit Digest       | `python manage.py audit_digest --days 7`                  | Generates a summary of critical audit events            |
 
@@ -259,6 +260,19 @@ process is not automatically retried: review the application’s email history
 and provider records before taking an operator-approved recovery action. Do not
 clear or reset uncertain claims based only on the command summary; the system
 does not guarantee exactly-once delivery.
+
+Travel reminders are not scheduled automatically. Preview with
+`python manage.py send_travel_reminders --organization <slug> --dry-run`; the
+command requires an active organization and does not create claims or send mail
+in dry-run mode. It checks for outstanding approval, current signed-form, and
+required-departure actions three days after signup and seven days and one day
+before the selected departure (or event start when no departure is selected),
+using the organization's configured time zone. Before arranging a daily schedule,
+verify the organization's email settings and review dry-run counts. Delivery
+claims and outcomes are tenant scoped; uncertain or interrupted claims and
+no-recipient outcomes are not automatically retried. Leads can see missing
+eligible guardian contacts and unresolved reminder outcomes on the travel roster.
+No scheduler or deployment configuration is changed by this feature.
 
 ## Email History Retention
 

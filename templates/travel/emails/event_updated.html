@@ -9,5 +9,17 @@
     <li><strong>{{ change.title }}</strong>{% if change.detail %}: {{ change.detail }}{% endif %}</li>
     {% endfor %}
 </ul>
-<p>Please log in to the portal and review the Travel page for {{ program.name }}. If your student's total has changed, a separate message will show the revised amount and explain the updated approval step; other approvals remain on file.</p>
+{% if signup_update.cost_changed %}
+<p>The student's total changed from <strong>${{ signup_update.previous_total|floatformat:2 }}</strong> to <strong>${{ signup_update.new_total|floatformat:2 }}</strong>. {% if signup_update.approval_reopened %}Parent or guardian approval is needed again{% else %}Parent or guardian approval remains outstanding for the updated choices{% endif %}; the existing signed permission form remains valid.</p>
+{% endif %}
+{% if signup_update.departure_changed %}
+<p>The student's selected departure changed from <strong>{{ signup_update.previous_departure }}</strong> to <strong>{{ signup_update.current_departure }}</strong>. Parent or guardian approval is needed again for the current travel choices; the existing signed permission form remains valid.</p>
+{% endif %}
+{% if approval_pending and not signup_update.cost_changed and not signup_update.departure_changed %}
+<p>This student's signup is waiting for parent or guardian approval of the current choices.</p>
+{% endif %}
+{% if permission_form_changed and event.requires_permission_form %}
+<p>The permission form has changed. A new signed copy is needed; uploading it does not itself approve the current cost and travel choices.</p>
+{% endif %}
+<p>Please log in to the portal and review the Travel page for {{ program.name }}.</p>
 {% endblock %}

@@ -47,6 +47,10 @@ class AuditEvent(models.TextChoices):
 
     # --- Travel ---
     TRAVEL_CHARGE_UPDATED = "TRAVEL_CHARGE_UPDATED", "Travel charge updated"
+    TRAVEL_APPROVAL_REOPENED = (
+        "TRAVEL_APPROVAL_REOPENED",
+        "Travel signup approval reopened",
+    )
 
     # --- Multi-Tenant & Platform Admin ---
     USER_IMPERSONATED = "USER_IMPERSONATED", "User impersonated by superuser"

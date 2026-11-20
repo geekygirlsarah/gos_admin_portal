@@ -721,7 +721,7 @@ class TravelViewTest(TestCase):
         page = response.content.decode()
         self.assertIn("alert-info", page)
         self.assertIn("Trip updated.", page)
-        self.assertIn("students with approved sign-ups", page)
+        self.assertIn("students with pending or approved sign-ups", page)
         self.assertIn("eligible parents/guardians", page)
         self.assertIn("signed-up mentors and parent chaperones", page)
         signup.refresh_from_db()
@@ -904,6 +904,36 @@ class TravelViewTest(TestCase):
         self.assertEqual(signup.balance_amount, Decimal("300.00"))
         self.assertEqual(len(mail.outbox), 2)
 
+    def test_cost_change_notifies_pending_signup_of_its_new_total(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+        signup.cost_items.add(self.hotel)
+        payload = self.event_edit_payload()
+        payload["costs-0-amount"] = "425.00"
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        signup.refresh_from_db()
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
+        self.assertIsNone(signup.approved_total)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"student@example.com", "parent@example.com"},
+        )
+        for message in mail.outbox:
+            self.assertIn("300.00", message.body)
+            self.assertIn("425.00", message.body)
+            self.assertIn("approval remains outstanding", message.body)
+
     def test_making_an_optional_fee_required_reprices_approved_signups(self):
         signup = TravelSignup.objects.create(
             student=self.student,
@@ -1042,7 +1072,10 @@ class TravelViewTest(TestCase):
         self.assertEqual(len(mail.outbox), 2)
         for message in mail.outbox:
             self.assertIn("Hotel", message.body)
-            self.assertIn("425.00", message.body)
+            self.assertNotIn("425.00", message.body)
+            self.assertIn(
+                "Families receive their own signup total separately", message.body
+            )
 
     def test_edit_deduplicates_signed_up_guardian_and_mentor(self):
         TravelSignup.objects.create(
@@ -1750,8 +1783,10 @@ class TravelViewTest(TestCase):
             second_departure,
             [str(message) for message in response.wsgi_request._messages],
         )
-        self.assertEqual(signup.status, TravelSignup.APPROVED)
-        self.assertEqual(signup.approved_total, Decimal("300.00"))
+        self.assertEqual(signup.status, TravelSignup.INTERESTED)
+        self.assertIsNone(signup.approved_total)
+        self.assertIsNone(signup.approved_by)
+        self.assertEqual(signup.balance_amount, Decimal("300.00"))
         self.assertEqual(
             {message.to[0] for message in mail.outbox},
             {"student@example.com", "parent@example.com"},
@@ -1759,7 +1794,7 @@ class TravelViewTest(TestCase):
         for message in mail.outbox:
             self.assertIn(self.departure.display_label, message.body)
             self.assertIn(second_departure.display_label, message.body)
-            self.assertNotIn("re-approve", message.body.lower())
+            self.assertIn("approval", message.body.lower())
 
         mail.outbox = []
         response = self.client.post(
@@ -2031,7 +2066,7 @@ class TravelViewTest(TestCase):
         self.assertNotIn("mail transport failed", log.output[0])
         self.assertTrue(
             any(
-                "couldn't send its notification" in str(message)
+                "could not be confirmed" in str(message)
                 for message in response.wsgi_request._messages
             )
         )
@@ -2658,6 +2693,88 @@ class TravelViewTest(TestCase):
             child_names,
             ["Aaron Smith", "Alice Brown", "Bob Jones", "Test Student"],
         )
+
+    def test_decision_notification_reaches_student_and_each_eligible_guardian(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+        self.client.force_login(self.parent_user)
+
+        self.client.post(
+            reverse("travel:signup_approve", args=[self.program.pk, signup.pk]),
+            {"approval_token": signup.approval_token},
+        )
+
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"student@example.com", "parent@example.com"},
+        )
+
+    def test_event_update_notifies_pending_signup_without_exposing_other_families(self):
+        from travel.services import notify_approved_trip_changes
+
+        TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+
+        notify_approved_trip_changes(
+            self.event.pk,
+            self.organization.pk,
+            [{"title": "Departure", "detail": "Changed schedule"}],
+        )
+
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"student@example.com", "parent@example.com"},
+        )
+        self.assertTrue(
+            all("Changed schedule" in message.body for message in mail.outbox)
+        )
+
+    def test_event_cancellation_notifies_active_families_and_signed_adults(self):
+        signup = TravelSignup.objects.create(
+            organization=self.organization,
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
+            approved_total=Decimal("300.00"),
+            balance_amount=Decimal("300.00"),
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=self.mentor_adult,
+            event=self.event,
+        )
+        TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=self.parent_adult,
+            event=self.event,
+        )
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_delete", args=[self.program.pk, self.event.pk])
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TravelEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {
+                "student@example.com",
+                "parent@example.com",
+                "mentor@example.com",
+            },
+        )
+        for message in mail.outbox:
+            self.assertIn("cancelled", message.subject.lower())
+            self.assertIn(self.event.name, message.body)
+            self.assertNotIn("/travel/", message.body)
 
 
 class TravelOrganizationCreationTests(TestCase):

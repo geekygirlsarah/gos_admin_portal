@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from uuid import UUID
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
@@ -257,6 +258,27 @@ class SignedPermissionFormTests(TestCase):
         self.signup.refresh_from_db()
         self.assertEqual(self.signup.status, TravelSignup.APPROVED)
         self.assertEqual(self.signup.approved_by, self.guardian_adult)
+
+    def test_signed_form_upload_notifies_family_without_approving(self):
+        self.student_user.email = "signed-student@example.test"
+        self.student_user.save(update_fields=["email"])
+        self.guardian_adult.personal_email = "signed-guardian@example.test"
+        self.guardian_adult.email_updates = True
+        self.guardian_adult.save(update_fields=["personal_email", "email_updates"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.upload(self.guardian)
+
+        self.assertEqual(response.status_code, 302)
+        self.signup.refresh_from_db()
+        self.assertEqual(self.signup.status, TravelSignup.INTERESTED)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"signed-student@example.test", "signed-guardian@example.test"},
+        )
+        self.assertTrue(
+            all("does not approve" in message.body for message in mail.outbox)
+        )
 
     def test_signed_file_is_encrypted_and_download_is_protected_attachment(self):
         self.upload(self.guardian)
@@ -623,6 +645,42 @@ class SignedPermissionFormTests(TestCase):
         self.assertEqual(self.signup.status, TravelSignup.APPROVED)
         self.assertEqual(str(self.signup.approved_total), "75.00")
         self.assertEqual(self.signup.signed_permission_forms.count(), 1)
+
+    def test_staff_departure_time_change_requires_reapproval_without_new_form(self):
+        self.student_user.email = "signed-student@example.test"
+        self.student_user.save(update_fields=["email"])
+        self.guardian_adult.personal_email = "signed-guardian@example.test"
+        self.guardian_adult.email_updates = True
+        self.guardian_adult.save(update_fields=["personal_email", "email_updates"])
+        self.signup.cost_items.add(self.cost)
+        self.upload(self.guardian)
+        signed = self.signup.signed_permission_forms.get()
+        self.approve()
+        mail.outbox.clear()
+        payload = self.event_edit_payload([self.departure])
+        payload["departures-0-leave_time"] = "14:30"
+        self.client.force_login(self.lead)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.signup.refresh_from_db()
+        self.assertEqual(self.signup.status, TravelSignup.INTERESTED)
+        self.assertIsNone(self.signup.approved_total)
+        self.assertEqual(str(self.signup.balance_amount), "50.00")
+        self.assertEqual(self.signup.current_signed_permission_form.pk, signed.pk)
+        self.assertFalse(self.signup.needs_permission_acknowledgment)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {"signed-student@example.test", "signed-guardian@example.test"},
+        )
+        self.assertTrue(
+            all("approval" in message.body.lower() for message in mail.outbox)
+        )
 
     def test_trip_deletion_removes_signed_form_files_after_commit(self):
         self.upload(self.guardian)
