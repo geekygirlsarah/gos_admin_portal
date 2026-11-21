@@ -1193,19 +1193,19 @@ class TravelEventDeleteView(
                 )
 
             signups = list(
-                TravelSignup.objects.select_for_update()
+                TravelSignup.objects.select_for_update(of=("self",))
                 .filter(event=event)
                 .select_related(
                     "organization", "student", "event__program", "departure"
                 )
             )
             related_signups = list(
-                TravelSignup.objects.select_for_update().filter(
+                TravelSignup.objects.select_for_update(of=("self",)).filter(
                     pk__in=related_signup_ids
                 )
             )
             mentor_signups = list(
-                TravelMentorSignup.objects.select_for_update()
+                TravelMentorSignup.objects.select_for_update(of=("self",))
                 .filter(event=event)
                 .select_related(
                     "organization",
@@ -1216,7 +1216,7 @@ class TravelEventDeleteView(
                 )
             )
             parent_signups = list(
-                TravelParentChaperoneSignup.objects.select_for_update()
+                TravelParentChaperoneSignup.objects.select_for_update(of=("self",))
                 .filter(event=event)
                 .select_related(
                     "organization",

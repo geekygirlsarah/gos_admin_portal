@@ -27,6 +27,8 @@ from travel.models import (
     TravelCostOption,
     TravelDeparture,
     TravelEvent,
+    TravelMentorSignup,
+    TravelParentChaperoneSignup,
     TravelSignedPermissionForm,
     TravelSignup,
 )
@@ -889,6 +891,34 @@ class SignedPermissionFormTests(TestCase):
         )
 
     def test_trip_deletion_removes_signed_form_files_after_commit(self):
+        self.signup.departure = None
+        self.signup.save(update_fields=["departure"])
+        mentor = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="No Account",
+            last_name="Mentor",
+            is_mentor=True,
+            login_enabled=False,
+            email_updates=False,
+        )
+        parent = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="No Account",
+            last_name="Parent",
+            is_parent=True,
+            login_enabled=False,
+            email_updates=False,
+        )
+        mentor_signup = TravelMentorSignup.objects.create(
+            organization=self.organization,
+            adult=mentor,
+            event=self.event,
+        )
+        parent_signup = TravelParentChaperoneSignup.objects.create(
+            organization=self.organization,
+            adult=parent,
+            event=self.event,
+        )
         self.upload(self.guardian)
         signed = self.signup.signed_permission_forms.get()
         name = signed.file.name
@@ -900,6 +930,12 @@ class SignedPermissionFormTests(TestCase):
             )
         self.assertEqual(response.status_code, 302)
         self.assertFalse(TravelEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertFalse(
+            TravelMentorSignup.objects.filter(pk=mentor_signup.pk).exists()
+        )
+        self.assertFalse(
+            TravelParentChaperoneSignup.objects.filter(pk=parent_signup.pk).exists()
+        )
         self.assertFalse(default_storage.exists(name))
 
     def test_parent_decisions_reject_foreign_relationships_and_signups(self):
