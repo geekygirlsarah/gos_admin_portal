@@ -1,0 +1,9 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel permission form received{% endblock %}
+{% block header %}Permission Form Received: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p>A signed permission form for <strong>{{ student.display_name }}</strong> and <strong>{{ event.name }}</strong> was uploaded.</p>
+<p>Uploading a form does not approve the current cost or travel choices. A parent or guardian must review and explicitly approve those choices separately.</p>
+<p><a href="{{ trip_link }}">Review the trip details</a></p>
+{% endblock %}

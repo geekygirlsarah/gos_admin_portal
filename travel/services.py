@@ -6,18 +6,23 @@ student (when they have a linked account) and/or their parents -- using
 ``programs/signals.py``.
 """
 
+import logging
+
 from django.db.models import F, Prefetch, Q
 from django.urls import reverse
 
 from programs.models import AdultStudentRelationship
 from programs.utils import send_templated_notification
 from travel.models import (
+    TravelCompetitionRSVP,
     TravelEvent,
     TravelMentorSignup,
     TravelParentChaperoneSignup,
     TravelSignup,
 )
 from travel.utils import parent_recipients, student_recipients
+
+logger = logging.getLogger(__name__)
 
 
 def trip_link(event):
@@ -38,6 +43,44 @@ def _base_context(signup):
     }
 
 
+def _send_individually(subject, template_name, context, recipients, organization):
+    """Attempt each authorized recipient independently; never retry uncertain sends."""
+    unique_recipients = {}
+    for recipient in recipients:
+        normalized = recipient.strip().casefold()
+        if normalized:
+            unique_recipients.setdefault(normalized, recipient.strip())
+
+    accepted = 0
+    for recipient_index, recipient in enumerate(unique_recipients.values(), start=1):
+        try:
+            send_templated_notification(
+                subject,
+                template_name,
+                context,
+                [recipient],
+                organization=organization,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Travel notification delivery outcome is uncertain "
+                "(organization_id=%s recipient_index=%s error_type=%s).",
+                organization.pk,
+                recipient_index,
+                type(exc).__name__,
+            )
+        else:
+            accepted += 1
+    return accepted, len(unique_recipients)
+
+
+def _delivery_succeeded(result):
+    if result is None:
+        return False
+    accepted, attempted = result
+    return attempted > 0 and accepted == attempted
+
+
 def _trusted_notification_organization(signup, profile):
     event = signup.event
     organization = getattr(signup, "organization", None)
@@ -56,93 +99,381 @@ def _trusted_notification_organization(signup, profile):
 def notify_signup_created(signup):
     """Student signed up (or a lead mentor added them): confirm to the student,
     ask the parents to review and approve."""
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
     context = _base_context(signup)
 
     student_to = student_recipients(signup.student)
+    results = []
     if student_to:
-        send_templated_notification(
-            f"Travel: You signed up for {signup.event.name}",
-            "travel/emails/signup_created.html",
-            context,
-            student_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+        results.append(
+            _send_individually(
+                f"Travel: You signed up for {signup.event.name}",
+                "travel/emails/signup_created.html",
+                context,
+                student_to,
+                organization,
+            )
         )
 
-    parent_to = parent_recipients(signup.student)
+    parent_to = parent_recipients(signup.student, organization=organization)
     if parent_to:
-        send_templated_notification(
-            f"Travel: {signup.student} wants to go to {signup.event.name} - please approve",
-            "travel/emails/parent_approval_requested.html",
-            context,
-            parent_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+        results.append(
+            _send_individually(
+                f"Travel: {signup.student} wants to go to {signup.event.name} - please approve",
+                "travel/emails/parent_approval_requested.html",
+                context,
+                parent_to,
+                organization,
+            )
         )
+    else:
+        results.append((0, 0))
+    return (
+        bool(parent_to)
+        and bool(results)
+        and all(
+            accepted == attempted for accepted, attempted in results if attempted > 0
+        )
+    )
 
 
 def notify_signup_approved(signup):
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
+    recipient = _family_notice_recipients(signup, organization)
     if not recipient:
         return
     context = _base_context(signup)
-    send_templated_notification(
-        f"Travel: {signup.event.name} signup approved",
-        "travel/emails/signup_approved.html",
-        context,
-        recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: {signup.event.name} signup approved",
+            "travel/emails/signup_approved.html",
+            context,
+            recipient,
+            organization,
+        )
     )
 
 
 def notify_signup_declined(signup):
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
+    recipient = _family_notice_recipients(signup, organization)
     if not recipient:
         return
     context = _base_context(signup)
-    send_templated_notification(
-        f"Travel: {signup.event.name} signup declined",
-        "travel/emails/signup_declined.html",
-        context,
-        recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: {signup.event.name} signup declined",
+            "travel/emails/signup_declined.html",
+            context,
+            recipient,
+            organization,
+        )
     )
 
 
 def notify_signup_withdrawn(signup):
     """Student (or a lead mentor for them) backed out: let the parents know and
     (when the student has an account) the student."""
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return
     context = _base_context(signup)
-    parent_to = parent_recipients(signup.student)
+    parent_to = parent_recipients(signup.student, organization=organization)
+    results = []
     if parent_to:
-        send_templated_notification(
-            f"Travel: {signup.student} is no longer going to {signup.event.name}",
-            "travel/emails/signup_withdrawn.html",
-            context,
-            parent_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+        results.append(
+            _send_individually(
+                f"Travel: {signup.student} is no longer going to {signup.event.name}",
+                "travel/emails/signup_withdrawn.html",
+                context,
+                parent_to,
+                organization,
+            )
         )
     student_to = student_recipients(signup.student)
     if student_to:
-        send_templated_notification(
-            f"Travel: You are no longer going to {signup.event.name}",
-            "travel/emails/signup_withdrawn.html",
-            context,
-            student_to,
-            organization=_trusted_notification_organization(signup, signup.student),
+        results.append(
+            _send_individually(
+                f"Travel: You are no longer going to {signup.event.name}",
+                "travel/emails/signup_withdrawn.html",
+                context,
+                student_to,
+                organization,
+            )
         )
+    return (
+        bool(parent_to)
+        and bool(results)
+        and all(
+            accepted == attempted for accepted, attempted in results if attempted > 0
+        )
+    )
 
 
 def notify_signup_decision_undone(signup):
     """A parent rescinded an earlier approve/decline; it's back to 'interested'."""
-    recipient = student_recipients(signup.student) or parent_recipients(signup.student)
+    organization = _trusted_notification_organization(signup, signup.student)
+    if organization is None:
+        return False
+    recipient = _family_notice_recipients(signup, organization)
     if not recipient:
-        return
+        return False
     context = _base_context(signup)
-    send_templated_notification(
-        f"Travel: {signup.event.name} decision updated",
-        "travel/emails/signup_decision_undone.html",
-        context,
-        recipient,
-        organization=_trusted_notification_organization(signup, signup.student),
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: {signup.event.name} decision updated",
+            "travel/emails/signup_decision_undone.html",
+            context,
+            recipient,
+            organization,
+        )
+    )
+
+
+def notify_signed_permission_uploaded(signup_id, organization_id):
+    signup, organization = _signup_for_family_notice(signup_id, organization_id)
+    if signup is None:
+        return False
+    recipients = _family_notice_recipients(signup, organization)
+    if not recipients:
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: Signed permission form received for {signup.event.name}",
+            "travel/emails/signed_permission_uploaded.html",
+            _base_context(signup),
+            recipients,
+            organization,
+        )
+    )
+
+
+def build_trip_cancellation_notice(
+    event, student_signups, mentor_signups, chaperone_signups
+):
+    organization = event.organization
+    if event.program_id and event.program.organization_id != organization.pk:
+        return None
+
+    recipients = {}
+    for signup in student_signups:
+        if signup.status not in (TravelSignup.INTERESTED, TravelSignup.APPROVED):
+            continue
+        if _trusted_notification_organization(signup, signup.student) != organization:
+            continue
+        for email in _family_notice_recipients(signup, organization):
+            recipients.setdefault(email.casefold(), email)
+
+    for signup in (*mentor_signups, *chaperone_signups):
+        if (
+            not signup.adult.login_enabled
+            or not signup.adult.email_updates
+            or _trusted_notification_organization(signup, signup.adult) != organization
+        ):
+            continue
+        email = (_adult_email(signup.adult) or "").strip()
+        if email:
+            recipients.setdefault(email.casefold(), email)
+
+    return {
+        "organization": organization,
+        "event_name": event.name,
+        "program_name": event.program.name if event.program_id else "",
+        "start_date": event.start_date,
+        "end_date": event.end_date,
+        "location_name": event.location_name,
+        "recipients": list(recipients.values()),
+    }
+
+
+def notify_trip_cancelled(notice):
+    if not notice or not notice["recipients"]:
+        return False
+    context = {key: value for key, value in notice.items() if key != "recipients"}
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel event cancelled: {notice['event_name']}",
+            "travel/emails/event_cancelled.html",
+            context,
+            notice["recipients"],
+            notice["organization"],
+        )
+    )
+
+
+def _signup_for_family_notice(signup_id, organization_id):
+    signup = (
+        TravelSignup.objects.for_organization(organization_id)
+        .filter(
+            pk=signup_id,
+            organization_id=organization_id,
+            event__organization_id=organization_id,
+            event__program__organization_id=organization_id,
+            student__organization_id=organization_id,
+            status__in=(TravelSignup.INTERESTED, TravelSignup.APPROVED),
+        )
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization_id=organization_id,
+                departure__event_id=F("event_id"),
+            )
+        )
+        .select_related(
+            "organization", "student__user", "event", "event__program", "departure"
+        )
+        .first()
+    )
+    if signup is None:
+        return None, None
+    organization = signup.organization
+    if _trusted_notification_organization(signup, signup.student) != organization:
+        return None, None
+    return signup, organization
+
+
+def _family_notice_recipients(signup, organization):
+    recipients = student_recipients(signup.student) + parent_recipients(
+        signup.student, organization=organization
+    )
+    unique_recipients = {}
+    for email in recipients:
+        normalized_email = email.strip().casefold()
+        if normalized_email:
+            unique_recipients.setdefault(normalized_email, email.strip())
+    return list(unique_recipients.values())
+
+
+def notify_competition_rsvp(event_id, student_id, response, organization_id):
+    """Notify a competition student's family after an explicit RSVP change."""
+    rsvp = (
+        TravelCompetitionRSVP.objects.for_organization(organization_id)
+        .filter(
+            organization_id=organization_id,
+            event_id=event_id,
+            event__organization_id=organization_id,
+            event__is_competition=True,
+            event__program__organization_id=organization_id,
+            student_id=student_id,
+            student__organization_id=organization_id,
+        )
+        .select_related("event__program", "student__user")
+        .first()
+    )
+    if rsvp is None or rsvp.response != response:
+        return False
+    organization = rsvp.organization
+    signup = (
+        TravelSignup.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            event=rsvp.event,
+            student=rsvp.student,
+            event__organization=organization,
+            student__organization=organization,
+        )
+        .first()
+    )
+    recipients = student_recipients(rsvp.student) + parent_recipients(
+        rsvp.student, organization=organization
+    )
+    if not recipients:
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel & Competitions: Attendance response for {rsvp.event.name}",
+            "travel/emails/competition_rsvp_updated.html",
+            {
+                "event": rsvp.event,
+                "program": rsvp.event.program,
+                "student": rsvp.student,
+                "response": rsvp.get_response_display(),
+                "approval_pending": bool(
+                    signup and signup.status == TravelSignup.INTERESTED
+                ),
+                "signup_withdrawn": bool(
+                    signup and signup.status == TravelSignup.WITHDRAWN
+                ),
+                "trip_link": trip_link(rsvp.event),
+            },
+            recipients,
+            organization,
+        )
+    )
+
+
+def notify_signup_departure_changed(
+    signup_id, organization_id, previous_departure, current_departure
+):
+    """Notify a student and their local guardians after a staff reassignment."""
+    signup, organization = _signup_for_family_notice(signup_id, organization_id)
+    if signup is None:
+        return False
+    recipients = _family_notice_recipients(signup, organization)
+    if not recipients:
+        return False
+    context = {
+        "event": signup.event,
+        "program": signup.event.program,
+        "student": signup.student,
+        "previous_departure": previous_departure,
+        "current_departure": current_departure,
+        "trip_link": trip_link(signup.event),
+    }
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: Departure changed for {signup.event.name}",
+            "travel/emails/signup_departure_changed.html",
+            context,
+            recipients,
+            organization,
+        )
+    )
+
+
+def notify_signup_choices_updated(
+    signup_id,
+    organization_id,
+    previous_departure,
+    current_departure,
+    previous_costs,
+    current_costs,
+    previous_total,
+    current_total,
+):
+    """Notify the family that student-edited choices are awaiting approval."""
+    signup, organization = _signup_for_family_notice(signup_id, organization_id)
+    if signup is None:
+        return False
+    recipients = _family_notice_recipients(signup, organization)
+    if not recipients:
+        return False
+    context = {
+        "event": signup.event,
+        "program": signup.event.program,
+        "student": signup.student,
+        "previous_departure": previous_departure,
+        "current_departure": current_departure,
+        "previous_costs": previous_costs,
+        "current_costs": current_costs,
+        "previous_total": previous_total,
+        "current_total": current_total,
+        "trip_link": trip_link(signup.event),
+    }
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: {signup.student} updated trip choices for {signup.event.name}",
+            "travel/emails/signup_choices_updated.html",
+            context,
+            recipients,
+            organization,
+        )
     )
 
 
@@ -165,54 +496,74 @@ def _adult_context(adult, signup):
 
 
 def notify_mentor_signup_created(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return False
     email = _adult_email(signup.adult)
     if not email:
-        return
-    send_templated_notification(
-        f"Travel: You're going to {signup.event.name}",
-        "travel/emails/mentor_signup_confirmed.html",
-        _adult_context(signup.adult, signup),
-        [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: You're going to {signup.event.name}",
+            "travel/emails/mentor_signup_confirmed.html",
+            _adult_context(signup.adult, signup),
+            [email],
+            organization,
+        )
     )
 
 
 def notify_mentor_signup_cancelled(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return False
     email = _adult_email(signup.adult)
     if not email:
-        return
-    send_templated_notification(
-        f"Travel: You're no longer going to {signup.event.name}",
-        "travel/emails/mentor_signup_cancelled.html",
-        _adult_context(signup.adult, signup),
-        [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: You're no longer going to {signup.event.name}",
+            "travel/emails/mentor_signup_cancelled.html",
+            _adult_context(signup.adult, signup),
+            [email],
+            organization,
+        )
     )
 
 
 def notify_parent_chaperone_signup_created(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return False
     email = _adult_email(signup.adult)
     if not email:
-        return
-    send_templated_notification(
-        f"Travel: You're signed up to chaperone {signup.event.name}",
-        "travel/emails/parent_chaperone_confirmed.html",
-        _adult_context(signup.adult, signup),
-        [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: You're signed up to chaperone {signup.event.name}",
+            "travel/emails/parent_chaperone_confirmed.html",
+            _adult_context(signup.adult, signup),
+            [email],
+            organization,
+        )
     )
 
 
 def notify_parent_chaperone_signup_cancelled(signup):
+    organization = _trusted_notification_organization(signup, signup.adult)
+    if organization is None:
+        return False
     email = _adult_email(signup.adult)
     if not email:
-        return
-    send_templated_notification(
-        f"Travel: You're no longer chaperoning {signup.event.name}",
-        "travel/emails/parent_chaperone_cancelled.html",
-        _adult_context(signup.adult, signup),
-        [email],
-        organization=_trusted_notification_organization(signup, signup.adult),
+        return False
+    return _delivery_succeeded(
+        _send_individually(
+            f"Travel: You're no longer chaperoning {signup.event.name}",
+            "travel/emails/parent_chaperone_cancelled.html",
+            _adult_context(signup.adult, signup),
+            [email],
+            organization,
+        )
     )
 
 
@@ -298,13 +649,20 @@ def trip_change_summary(event_form, departure_formset, cost_formset):
             }
         )
 
-    _append_inline_changes(changes, departure_formset, "Departure", "label")
+    cost_changes_start = len(changes)
     _append_inline_changes(changes, cost_formset, "Cost option", "name")
+    for change in changes[cost_changes_start:]:
+        if "amount" in change["title"].casefold():
+            change["detail"] = (
+                "The event cost option amount changed. Families receive their own "
+                "signup total separately."
+            )
+    _append_inline_changes(changes, departure_formset, "Departure", "label")
     return changes
 
 
 def notify_approved_trip_changes(event_id, organization_id, changes, signup_updates=()):
-    """Notify affected families and signed-up adult attendees about trip edits."""
+    """Notify active families and signed-up adults about event edits."""
     if not changes:
         return
 
@@ -321,96 +679,72 @@ def notify_approved_trip_changes(event_id, organization_id, changes, signup_upda
         return
 
     signup_updates_by_id = {update["signup_id"]: update for update in signup_updates}
-    if signup_updates_by_id:
-        relationships = (
-            AdultStudentRelationship.objects.for_organization(organization)
-            .filter(
-                organization=organization,
-                adult__organization=organization,
-                student__organization=organization,
-            )
-            .select_related("adult", "student")
+    delivery_results = []
+    relationships = (
+        AdultStudentRelationship.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            adult__organization=organization,
+            student__organization=organization,
         )
-        updated_signups = (
-            TravelSignup.objects.for_organization(organization)
-            .filter(
-                pk__in=signup_updates_by_id,
-                event=event,
-                event__organization=organization,
-                event__program__organization=organization,
-                student__organization=organization,
-            )
-            .filter(
-                Q(departure__isnull=True)
-                | Q(
-                    departure__organization=organization,
-                    departure__event_id=F("event_id"),
-                )
-            )
-            .select_related("student__user", "event", "event__program", "departure")
-            .prefetch_related(
-                Prefetch(
-                    "student__adultstudentrelationship_set",
-                    queryset=relationships,
-                    to_attr="tenant_contact_relationships",
-                )
-            )
-        )
-        for signup in updated_signups:
-            if (
-                _trusted_notification_organization(signup, signup.student)
-                != organization
-            ):
-                continue
-            if signup.departure_id and signup.departure.event_id != event.pk:
-                continue
-            update = signup_updates_by_id[signup.pk]
-            context = {
-                "event": event,
-                "program": event.program,
-                "student": signup.student,
-                "previous_total": update["previous_total"],
-                "new_total": update["new_total"],
-                "trip_link": trip_link(event),
-            }
-            recipients = student_recipients(signup.student) + parent_recipients(
-                signup.student, organization=organization
-            )
-            seen = set()
-            for email in recipients:
-                normalized_email = email.strip().casefold()
-                if not normalized_email or normalized_email in seen:
-                    continue
-                seen.add(normalized_email)
-                send_templated_notification(
-                    f"Travel: Updated cost for {event.name}",
-                    "travel/emails/signup_cost_updated.html",
-                    context,
-                    [email.strip()],
-                    organization=organization,
-                )
-
+        .select_related("adult", "student")
+    )
     signups = (
         TravelSignup.objects.for_organization(organization)
         .filter(
             event=event,
             event__organization=organization,
+            event__program__organization=organization,
             student__organization=organization,
-            status=TravelSignup.APPROVED,
+            status__in=(TravelSignup.INTERESTED, TravelSignup.APPROVED),
         )
-        .select_related("student__user", "event", "departure")
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization=organization,
+                departure__event_id=F("event_id"),
+            )
+        )
+        .select_related("student__user", "event", "event__program", "departure")
+        .prefetch_related(
+            Prefetch(
+                "student__adultstudentrelationship_set",
+                queryset=relationships,
+                to_attr="tenant_contact_relationships",
+            )
+        )
     )
-    recipients = {}
+    family_recipients = set()
     for signup in signups:
         if _trusted_notification_organization(signup, signup.student) != organization:
             continue
-        for email in student_recipients(signup.student) + parent_recipients(
-            signup.student, organization=organization
-        ):
-            normalized_email = email.strip().casefold()
-            if normalized_email:
-                recipients.setdefault(normalized_email, email.strip())
+        update = signup_updates_by_id.get(signup.pk)
+        context = {
+            "event": event,
+            "program": event.program,
+            "student": signup.student,
+            "changes": changes,
+            "signup_update": update,
+            "approval_pending": signup.status == TravelSignup.INTERESTED,
+            "permission_form_changed": any(
+                change["title"] == "Permission form" for change in changes
+            ),
+            "trip_link": trip_link(event),
+        }
+        recipients = _family_notice_recipients(signup, organization)
+        if recipients:
+            family_recipients.update(email.strip().casefold() for email in recipients)
+            delivery_results.append(
+                _send_individually(
+                    f"Travel: Updates to {event.name}",
+                    "travel/emails/event_updated.html",
+                    context,
+                    recipients,
+                    organization,
+                )
+            )
 
+    adult_recipients = {}
     for model in (TravelMentorSignup, TravelParentChaperoneSignup):
         adult_signups = (
             model.objects.for_organization(organization)
@@ -434,7 +768,8 @@ def notify_approved_trip_changes(event_id, organization_id, changes, signup_upda
                 signup.adult
             ).strip()
             if email:
-                recipients.setdefault(email.casefold(), email)
+                if email.casefold() not in family_recipients:
+                    adult_recipients.setdefault(email.casefold(), email)
 
     context = {
         "event": event,
@@ -442,11 +777,16 @@ def notify_approved_trip_changes(event_id, organization_id, changes, signup_upda
         "changes": changes,
         "trip_link": trip_link(event),
     }
-    for email in recipients.values():
-        send_templated_notification(
-            f"Travel: Updates to {event.name}",
-            "travel/emails/event_updated.html",
-            context,
-            [email],
-            organization=organization,
+    if adult_recipients:
+        delivery_results.append(
+            _send_individually(
+                f"Travel: Updates to {event.name}",
+                "travel/emails/event_updated.html",
+                context,
+                adult_recipients.values(),
+                organization,
+            )
         )
+    return bool(delivery_results) and all(
+        _delivery_succeeded(result) for result in delivery_results
+    )

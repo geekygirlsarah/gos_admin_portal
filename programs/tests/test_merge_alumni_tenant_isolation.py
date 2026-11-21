@@ -18,6 +18,7 @@ from travel.models import (
     TravelEvent,
     TravelMentorSignup,
     TravelParentChaperoneSignup,
+    TravelSignedPermissionForm,
     TravelSignup,
 )
 
@@ -292,6 +293,36 @@ class MergeAlumniTenantIsolationTests(TestCase):
         signup.refresh_from_db()
         self.assertEqual(signup.student_id, source.pk)
         self.assertEqual(signup.organization_id, self.beta.pk)
+
+    def test_student_merge_reports_signed_travel_form_and_preserves_records(self):
+        keep = self.make_student(self.alpha, first="Keep")
+        source = self.make_student(self.alpha, first="Source")
+        program = Program.objects.create(organization=self.alpha, name="Alpha Program")
+        event = TravelEvent.objects.create(
+            organization=self.alpha,
+            program=program,
+            name="Trip",
+            start_date="2035-05-01",
+            end_date="2035-05-02",
+        )
+        signup = TravelSignup.objects.create(
+            organization=self.alpha, student=source, event=event
+        )
+        signed = TravelSignedPermissionForm.objects.create(
+            organization=self.alpha,
+            signup=signup,
+            form_version=event.permission_form_version,
+            file="private/travel/signed_permissions/test.pdf",
+        )
+        response = self.tenant_post(
+            reverse("student_merge"), {"keep": keep.pk, "source": source.pk}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "signed travel permission forms")
+        self.assertTrue(Student.objects.filter(pk=source.pk).exists())
+        self.assertTrue(
+            TravelSignedPermissionForm.objects.filter(pk=signed.pk).exists()
+        )
 
     def test_parent_merge_stops_before_deleting_foreign_owned_travel_signup(self):
         keep = self.make_adult(self.alpha, first="Keep")

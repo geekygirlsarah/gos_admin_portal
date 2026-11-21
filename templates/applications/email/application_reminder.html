@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    {% if missing_documents %}
+      <p>You still need to complete required permission forms for your {{ organization_name }} application.</p>
+    {% else %}
+      <p>This is a reminder to continue your {{ organization_name }} application.</p>
+    {% endif %}
+    {% if program_name %}<p><strong>Program:</strong> {{ program_name }}</p>{% endif %}
+    {% if inactivity_due %}
+      <p>It has been about 48 hours since the last recorded application progress.</p>
+    {% endif %}
+    {% if deadline_due %}
+      <p>The application window{% if program_name %} for {{ program_name }}{% endif %} closes on {{ deadline|date:"F j, Y" }}. Please complete the application before it closes.</p>
+    {% endif %}
+    {% if missing_documents %}
+      <p>Use the protected documents page below to review or upload the required forms. A parent or guardian must complete the existing email verification step before accessing documents.</p>
+    {% else %}
+      <p>Use the link below to resume your application. If a parent handoff is in progress, this link preserves the existing handoff verification gate.</p>
+    {% endif %}
+    <p><a href="{{ application_url }}">Continue your application</a></p>
+    <p>If you have already completed this step, you can ignore this reminder.</p>
+  </body>
+</html>

@@ -5,7 +5,8 @@ import uuid
 
 import pghistory
 from django.conf import settings
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
@@ -19,6 +20,17 @@ from programs.validators import validate_phone_number, validate_zip_code
 from .fields import EncryptedFileField, EncryptedTextField, sync_linked_user
 
 logger = logging.getLogger(__name__)
+
+
+class StudentRevisionQuerySet(OrganizationQuerySet):
+    def update(self, **kwargs):
+        kwargs["profile_revision"] = models.F("profile_revision") + 1
+        return super().update(**kwargs)
+
+
+class StudentManager(OrganizationManager.from_queryset(StudentRevisionQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_incomplete_application_profile=False)
 
 
 def _student_photo_upload_to(instance, filename):
@@ -56,7 +68,18 @@ class Student(models.Model):
         related_name="students",
         help_text="Organization that owns this student (multi-tenant).",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = StudentManager()
+    all_objects = OrganizationManager.from_queryset(StudentRevisionQuerySet)()
+
+    is_incomplete_application_profile = models.BooleanField(
+        default=False,
+        db_default=False,
+        editable=False,
+        help_text="Application draft profile hidden from ordinary portal access until accepted.",
+    )
+    profile_revision = models.PositiveIntegerField(
+        default=1, db_default=1, editable=False
+    )
 
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
@@ -264,6 +287,8 @@ class Student(models.Model):
     @property
     def primary_contact(self):
         """Backwards-compatible accessor: the primary-contact Adult."""
+        if self.is_incomplete_application_profile:
+            return None
         rel = self.primary_contact_relationship
         if (
             rel is None
@@ -273,7 +298,12 @@ class Student(models.Model):
         ):
             return None
         adult = rel.adult
-        return adult if adult.organization_id == self.organization_id else None
+        return (
+            adult
+            if adult.organization_id == self.organization_id
+            and not adult.is_incomplete_application_profile
+            else None
+        )
 
     @primary_contact.setter
     def primary_contact(self, adult):
@@ -296,6 +326,8 @@ class Student(models.Model):
     @property
     def secondary_contact(self):
         """Backwards-compatible accessor: the secondary-contact Adult."""
+        if self.is_incomplete_application_profile:
+            return None
         rel = self.secondary_contact_relationship
         if (
             rel is None
@@ -305,7 +337,12 @@ class Student(models.Model):
         ):
             return None
         adult = rel.adult
-        return adult if adult.organization_id == self.organization_id else None
+        return (
+            adult
+            if adult.organization_id == self.organization_id
+            and not adult.is_incomplete_application_profile
+            else None
+        )
 
     @secondary_contact.setter
     def secondary_contact(self, adult):
@@ -336,6 +373,13 @@ class Student(models.Model):
             self.__dict__.pop(f"_pending_{slot}_contact", None)
             return
         if (
+            self.is_incomplete_application_profile
+            or adult.is_incomplete_application_profile
+        ):
+            raise ValidationError(
+                "Incomplete application profiles cannot have live guardian relationships."
+            )
+        if (
             self.organization_id is not None
             and adult.organization_id != self.organization_id
         ):
@@ -365,7 +409,11 @@ class Student(models.Model):
     def _same_organization_relationships(self):
         from .adults import AdultStudentRelationship
 
-        if self.pk is None or self.organization_id is None:
+        if (
+            self.pk is None
+            or self.organization_id is None
+            or self.is_incomplete_application_profile
+        ):
             return AdultStudentRelationship.objects.none()
         prefetched_relationships = getattr(self, "tenant_contact_relationships", None)
         if prefetched_relationships is not None:
@@ -376,6 +424,8 @@ class Student(models.Model):
                 student=self,
                 adult__organization=self.organization,
                 student__organization=self.organization,
+                adult__is_incomplete_application_profile=False,
+                student__is_incomplete_application_profile=False,
             )
             .select_related("adult", "student")
         )
@@ -387,6 +437,13 @@ class Student(models.Model):
         from .adults import Adult, AdultStudentRelationship
 
         changed = False
+        if self.is_incomplete_application_profile and any(
+            self.__dict__.get(f"_pending_{slot}_contact") is not None
+            for slot in ("primary", "secondary")
+        ):
+            raise ValidationError(
+                "Incomplete application profiles cannot have live guardian relationships."
+            )
         for slot in ("primary", "secondary"):
             pending = self.__dict__.pop(f"_pending_{slot}_contact", None)
             if pending is None:
@@ -397,6 +454,10 @@ class Student(models.Model):
             ):
                 raise ValidationError(
                     "A student contact must belong to the same organization."
+                )
+            if pending.is_incomplete_application_profile:
+                raise ValidationError(
+                    "Incomplete application profiles cannot have live guardian relationships."
                 )
             rel, _ = AdultStudentRelationship.objects.for_organization(
                 self.organization_id
@@ -442,6 +503,9 @@ class Student(models.Model):
         relationship to THIS student and a 'specific_rel' attribute for the
         free-text specific relationship (e.g. father, stepmom).
         """
+        if self.is_incomplete_application_profile:
+            return []
+
         seen_ids = set()
         result = []
 
@@ -454,7 +518,11 @@ class Student(models.Model):
         relationships_by_pk = {r.pk: r for r in relationships}
 
         def add_adult(adult):
-            if adult and adult.id not in seen_ids:
+            if (
+                adult
+                and not adult.is_incomplete_application_profile
+                and adult.id not in seen_ids
+            ):
                 rel_data = rels.get(adult.id, ("parent", ""))
                 adult.attached_rel = rel_data[0]
                 adult.specific_rel = rel_data[1]
@@ -509,7 +577,16 @@ class Student(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        default_manager_name = "objects"
+        base_manager_name = "all_objects"
         ordering = ["preferred_first_name", "last_name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_incomplete_application_profile=False)
+                | models.Q(user__isnull=True),
+                name="student_incomplete_profile_no_user",
+            )
+        ]
         indexes = [
             models.Index(
                 fields=["last_name", "preferred_first_name"],
@@ -555,7 +632,7 @@ class Student(models.Model):
             return
         try:
             valid = set(
-                AdultStudentRelationship.objects.filter(
+                AdultStudentRelationship.all_objects.filter(
                     pk__in=ptrs, adult__isnull=False
                 ).values_list("pk", flat=True)
             )
@@ -581,7 +658,7 @@ class Student(models.Model):
         if self.personal_email:
             email = self.personal_email.strip().lower()
             # Check other students
-            others = Student.objects.filter(
+            others = Student.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             )
             if self.pk:
@@ -594,7 +671,7 @@ class Student(models.Model):
                 )
 
             # Check parents/mentors
-            if Adult.objects.filter(
+            if Adult.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
@@ -606,7 +683,7 @@ class Student(models.Model):
         if self.org_email:
             email = self.org_email.strip().lower()
             # Check other students
-            others = Student.objects.filter(
+            others = Student.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             )
             if self.pk:
@@ -617,7 +694,7 @@ class Student(models.Model):
                 )
 
             # Check parents/mentors
-            if Adult.objects.filter(
+            if Adult.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
@@ -625,6 +702,13 @@ class Student(models.Model):
                 )
 
     def save(self, *args, **kwargs):
+        if self.is_incomplete_application_profile and self.user_id:
+            raise ValidationError(
+                {
+                    "user": "Incomplete application profiles cannot be linked to accounts."
+                }
+            )
+
         # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
         from programs.utils import normalize_image_field
 
@@ -642,7 +726,27 @@ class Student(models.Model):
 
         normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
         self._prune_dangling_contacts()
-        super().save(*args, **kwargs)
+        using = kwargs.get("using") or self._state.db or "default"
+        if self.pk is None:
+            super().save(*args, **kwargs)
+        else:
+            with transaction.atomic(using=using):
+                current_revision = (
+                    type(self)
+                    .all_objects.using(using)
+                    .select_for_update()
+                    .filter(pk=self.pk)
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+                if current_revision is not None:
+                    self.profile_revision = current_revision + 1
+                    update_fields = kwargs.get("update_fields")
+                    if update_fields is not None:
+                        kwargs["update_fields"] = set(update_fields) | {
+                            "profile_revision"
+                        }
+                super().save(*args, **kwargs)
         # Create through rows for any primary/secondary contacts assigned
         # before the Student had a PK, then persist the pointers.
         self._resolve_deferred_contacts()

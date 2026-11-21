@@ -13,6 +13,31 @@ urlpatterns = [
     ),
     path("events/<int:pk>/signup/", views.TravelSignupView.as_view(), name="signup"),
     path(
+        "events/<int:pk>/competition-rsvp/",
+        views.TravelCompetitionRSVPView.as_view(),
+        name="competition_rsvp",
+    ),
+    path(
+        "signups/<int:pk>/signed-form/",
+        views.TravelSignedPermissionUploadView.as_view(),
+        name="signup_signed_form_upload",
+    ),
+    path(
+        "signed-forms/<int:pk>/download/",
+        views.TravelSignedPermissionDownloadView.as_view(),
+        name="signup_signed_form_download",
+    ),
+    path(
+        "signups/<int:pk>/edit/",
+        views.TravelSignupEditView.as_view(),
+        name="signup_edit",
+    ),
+    path(
+        "signups/<int:pk>/departure/",
+        views.TravelSignupDepartureView.as_view(),
+        name="signup_departure",
+    ),
+    path(
         "signups/<int:pk>/rejoin/",
         views.TravelSignupRejoinView.as_view(),
         name="signup_rejoin",
@@ -56,6 +81,11 @@ urlpatterns = [
         "mentor-signups/<int:pk>/driver/",
         views.TravelMentorDriverToggleView.as_view(),
         name="mentor_driver_toggle",
+    ),
+    path(
+        "mentor-signups/<int:pk>/remove/",
+        views.TravelMentorRemoveView.as_view(),
+        name="mentor_remove",
     ),
     path(
         "events/<int:pk>/chaperone-signup/",

@@ -1,0 +1,18 @@
+Hi {{ application.applicant_name|default:"" }},
+
+Before a lead mentor can approve {{ application.student_name|default:"your student" }}'s application to {{ application.program|default:"the program" }}, please download, sign, and upload these required forms:
+{% for document in documents %}
+  - {{ document.name }}{% if document.description %}: {{ document.description }}{% endif %}
+{% endfor %}
+The verification code for the document page is sent to the responsible parent or guardian.
+{% if documents_url %}
+Open the protected document page:
+
+  {{ documents_url }}
+{% endif %}
+
+Application ID: {{ application.application_id }}
+
+If you have any questions, just reply to this email.
+
+— {{ org_email_settings.organization_name|default:"Momentum" }}

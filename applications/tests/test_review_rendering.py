@@ -163,6 +163,7 @@ class AdultToPrefillAttributeErrorTest(TestCase):
         self.student = Student.objects.create(
             preferred_first_name="Zebo",
             last_name="Sarkarov",
+            personal_email="zebo.sarkarov12@gmail.com",
             secondary_contact=self.adult,
         )
         # The secondary_contact setter creates the through row already; keep

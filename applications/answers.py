@@ -1,10 +1,20 @@
 """Preserve answers captured by the existing student application wizard."""
 
+import json
 from uuid import UUID
 
 from django.db import transaction
+from django.utils.crypto import salted_hmac
 
-from .models import Application, ProgramApplicationQuestion, StudentApplicationAnswer
+from programs.models import Program
+
+from .models import (
+    Application,
+    ApplicationFixedAnswer,
+    ApplicationQuestionSet,
+    ProgramApplicationQuestion,
+    StudentApplicationAnswer,
+)
 
 EXPERIENCE_QUESTIONS = {
     "interest_reason": (
@@ -24,6 +34,8 @@ EXPERIENCE_QUESTIONS = {
         "How did you hear about this program?",
     ),
 }
+
+CUSTOM_QUESTION_SNAPSHOTS_KEY = "_custom_question_snapshots"
 
 
 def build_custom_question_snapshot(application):
@@ -78,12 +90,57 @@ def validate_custom_question_snapshot(snapshot, require_answers=False):
             raise ValueError("Required custom questions are unanswered.")
 
 
+def experience_form_version(application):
+    """Return a signed version of the Step 6 state relevant to the form."""
+    data = application.data
+    if not isinstance(data, dict):
+        raise ValueError("Application answer data is malformed.")
+    has_snapshot = "step6-custom" in data
+    has_program = "_custom_question_program_id" in data
+    if has_snapshot != has_program:
+        raise ValueError("Custom application question ownership is missing.")
+    snapshot = None
+    snapshot_program_id = None
+    if has_snapshot:
+        snapshot_program_id = data["_custom_question_program_id"]
+        if (
+            type(snapshot_program_id) is not int
+            or snapshot_program_id != application.program_id
+        ):
+            raise ValueError("Custom questions belong to a different program.")
+        snapshot = data["step6-custom"]
+        validate_custom_question_snapshot(snapshot)
+    fixed_answers = data.get("step6-experience", {})
+    legacy_answers = data.get("step6", {})
+    if not isinstance(fixed_answers, dict) or not isinstance(legacy_answers, dict):
+        raise ValueError("Application experience-step data is malformed.")
+    state = json.dumps(
+        {
+            "organization_id": application.organization_id,
+            "program_id": application.program_id,
+            "snapshot_program_id": snapshot_program_id,
+            "snapshot": snapshot,
+            "fixed_answers": fixed_answers,
+            "legacy_answers": legacy_answers,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return salted_hmac(
+        "application-experience-form", state, algorithm="sha256"
+    ).hexdigest()
+
+
 def freeze_custom_question_snapshot(application):
     """Persist one program-bound question set without overwriting newer step data."""
     with transaction.atomic(using=application._state.db):
         current = (
             Application.objects.using(application._state.db)
-            .filter(pk=application.pk, organization_id=application.organization_id)
+            .filter(
+                pk=application.pk,
+                organization_id=application.organization_id,
+                superseded_at__isnull=True,
+            )
             .select_for_update()
             .first()
         )
@@ -131,6 +188,87 @@ def freeze_custom_question_snapshot(application):
         }
         current.save(update_fields=["data", "updated_at"])
         return snapshot
+
+
+def switch_custom_question_snapshot(application, target_program):
+    """Move the active snapshot aside and restore the target program's snapshot."""
+    using = application._state.db
+    organization_programs = (
+        Program.objects.using(using)
+        .for_organization(application.organization)
+        .filter(organization_id=application.organization_id)
+    )
+    if not organization_programs.filter(pk=target_program.pk).exists():
+        raise ValueError("The selected program does not belong to this organization.")
+    if (
+        application.program_id
+        and not organization_programs.filter(pk=application.program_id).exists()
+    ):
+        raise ValueError("The current program does not belong to this organization.")
+
+    current_program_id = application.program_id
+    target_program_id = target_program.pk
+    data = application.data
+    if not isinstance(data, dict):
+        raise ValueError("Application answer data is malformed.")
+    if current_program_id == target_program_id:
+        return data
+
+    has_snapshot = "step6-custom" in data
+    has_program = "_custom_question_program_id" in data
+    if has_snapshot != has_program:
+        raise ValueError("Custom application question ownership is missing.")
+
+    active_snapshot = None
+    if has_snapshot:
+        snapshot_program = data["_custom_question_program_id"]
+        if type(snapshot_program) is not int or snapshot_program != current_program_id:
+            raise ValueError("Custom questions belong to a different program.")
+        active_snapshot = data["step6-custom"]
+        validate_custom_question_snapshot(active_snapshot)
+
+    archive = data.get(CUSTOM_QUESTION_SNAPSHOTS_KEY, {})
+    if not isinstance(archive, dict):
+        raise ValueError("Custom application question archive is malformed.")
+    validated_archive = {}
+    for program_key, snapshot in archive.items():
+        try:
+            archived_program_id = int(program_key)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "Custom application question archive is malformed."
+            ) from exc
+        if (
+            not isinstance(program_key, str)
+            or str(archived_program_id) != program_key
+            or archived_program_id <= 0
+            or archived_program_id == current_program_id
+        ):
+            raise ValueError("Custom application question archive is ambiguous.")
+        validate_custom_question_snapshot(snapshot)
+        validated_archive[program_key] = snapshot
+
+    updated_data = dict(data)
+    if active_snapshot is not None:
+        current_program_key = str(current_program_id)
+        if current_program_key in validated_archive:
+            raise ValueError("The current custom question snapshot is duplicated.")
+        validated_archive[current_program_key] = active_snapshot
+
+    target_program_key = str(target_program_id)
+    if target_program_key in validated_archive:
+        updated_data["step6-custom"] = validated_archive.pop(target_program_key)
+        updated_data["_custom_question_program_id"] = target_program_id
+    else:
+        updated_data.pop("step6-custom", None)
+        updated_data.pop("_custom_question_program_id", None)
+
+    if validated_archive:
+        updated_data[CUSTOM_QUESTION_SNAPSHOTS_KEY] = validated_archive
+    else:
+        updated_data.pop(CUSTOM_QUESTION_SNAPSHOTS_KEY, None)
+    application.data = updated_data
+    return updated_data
 
 
 def extract_experience_answers(data):
@@ -205,5 +343,61 @@ def save_experience_answers(application, student, answers):
                 "student": student,
                 "question_text": labels[application.applicant_type == "parent"],
                 "answer": answer,
+            },
+        )
+
+
+def save_structured_experience_answers(application, student):
+    """Copy typed fixed and frozen-question answers to the accepted student."""
+    if student.organization_id != application.organization_id:
+        raise ValueError("Application answers and student must share an organization.")
+
+    fixed_answers = ApplicationFixedAnswer.objects.for_organization(
+        application.organization
+    ).filter(
+        application_id=application.pk,
+        organization_id=application.organization_id,
+    )
+    for item in fixed_answers:
+        labels = EXPERIENCE_QUESTIONS.get(item.question_key)
+        if not labels or not item.answer or not item.answer.strip():
+            continue
+        StudentApplicationAnswer.objects.get_or_create(
+            organization_id=application.organization_id,
+            application=application,
+            student=student,
+            source_step=item.source_step,
+            question_key=item.question_key,
+            defaults={
+                "question_text": labels[application.applicant_type == "parent"],
+                "answer": item.answer,
+            },
+        )
+
+    if not application.program_id:
+        return
+    question_set = (
+        ApplicationQuestionSet.objects.for_organization(application.organization)
+        .filter(
+            application_id=application.pk,
+            organization_id=application.organization_id,
+            program_id=application.program_id,
+        )
+        .first()
+    )
+    if question_set is None:
+        return
+    for item in question_set.answers.all():
+        if not item.answer or not item.answer.strip():
+            continue
+        StudentApplicationAnswer.objects.get_or_create(
+            organization_id=application.organization_id,
+            application=application,
+            student=student,
+            source_step="step6-custom",
+            question_key=str(item.question_id),
+            defaults={
+                "question_text": item.question_text,
+                "answer": item.answer,
             },
         )

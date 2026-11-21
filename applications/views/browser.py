@@ -4,19 +4,160 @@ import time
 
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
+from django.db import transaction
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
 from programs.constants import OTP_TTL_SECONDS
+from programs.models import Program
 
 from ..forms import OtpVerifyForm
 from ..models import Application, generate_otp_code, normalize_step_keys
 from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import send_otp_email
-from .utils import _get_application_or_404, _redirect_to_current_step, logger
+from .utils import (
+    _get_application_or_404,
+    _is_handoff_authorized,
+    _redirect_to_current_step,
+    logger,
+)
+
+_RESUME_ELIGIBLE_STATUSES = (
+    Application.Status.DRAFT,
+    Application.Status.EMAIL_VERIFIED,
+    Application.Status.AWAITING_PARENT,
+)
+
+
+def _pending_resume_key(application):
+    return (
+        f"application_pending_resume:{application.organization_id}:"
+        f"{application.application_id}"
+    )
+
+
+def _resume_source_digest(application):
+    email = (application.email or "").strip().casefold()
+    value = f"{application.organization_id}:{application.application_id}:{email}"
+    return salted_hmac("applications.resume_source", value).hexdigest()
+
+
+def begin_pending_resume(request, source, target):
+    request.session[_pending_resume_key(target)] = {
+        "source_application_id": source.application_id,
+        "source_email_digest": _resume_source_digest(source),
+    }
+    request.session.modified = True
+
+
+def complete_pending_resume(request, target):
+    key = _pending_resume_key(target)
+    intent = request.session.get(key)
+    if not isinstance(intent, dict):
+        return None
+    if not _has_browser_access(request, target):
+        return None
+    if _identity(target)["role"] == "handoff_parent" and not _is_handoff_authorized(
+        request, target
+    ):
+        return None
+
+    source_id = intent.get("source_application_id")
+    expected_digest = intent.get("source_email_digest")
+    if not source_id or source_id == target.application_id or not expected_digest:
+        request.session.pop(key, None)
+        messages.error(
+            request,
+            "We couldn't safely resume that application. Neither application was "
+            "changed. Please return to your active application or start a new one.",
+        )
+        return redirect("apply_start")
+
+    using = target._state.db
+    organization = target.organization
+    source = None
+    target_current = None
+    valid = False
+    with transaction.atomic(using=using):
+        locked_applications = list(
+            Application.objects.using(using)
+            .for_organization(organization)
+            .filter(application_id__in=[source_id, target.application_id])
+            .order_by("pk")
+            .select_for_update()
+        )
+        by_id = {item.application_id: item for item in locked_applications}
+        source = by_id.get(source_id)
+        target_current = by_id.get(target.application_id)
+        if source is not None and target_current is not None:
+            source_email = (source.email or "").strip().casefold()
+            target_email = (target_current.email or "").strip().casefold()
+            current_digest = _resume_source_digest(source)
+            program_ids = {
+                item.program_id
+                for item in (source, target_current)
+                if item.program_id is not None
+            }
+            valid_program_ids = set(
+                Program.objects.using(using)
+                .for_organization(organization)
+                .filter(pk__in=program_ids)
+                .values_list("pk", flat=True)
+            )
+            programs_are_tenant_bound = all(
+                item.program_id is None or item.program_id in valid_program_ids
+                for item in (source, target_current)
+            )
+            target_is_handoff = _identity(target_current)["role"] == "handoff_parent"
+            valid = (
+                source.organization_id == organization.pk
+                and target_current.organization_id == organization.pk
+                and source.superseded_at is None
+                and target_current.superseded_at is None
+                and source.status in _RESUME_ELIGIBLE_STATUSES
+                and target_current.status in _RESUME_ELIGIBLE_STATUSES
+                and source.email_verified_at is not None
+                and source_email
+                and source_email == target_email
+                and constant_time_compare(current_digest, expected_digest)
+                and programs_are_tenant_bound
+                and _has_browser_access(request, source)
+                and _has_browser_access(request, target_current)
+                and (
+                    not target_is_handoff
+                    or _is_handoff_authorized(request, target_current)
+                )
+            )
+            if valid:
+                source.superseded_at = timezone.now()
+                source.save(update_fields=["superseded_at"])
+
+    request.session.pop(key, None)
+    if not valid:
+        messages.error(
+            request,
+            "We couldn't safely resume that application. Neither application was "
+            "changed. Please return to your active application or start a new one.",
+        )
+        if (
+            source is not None
+            and source.superseded_at is None
+            and source.status in _RESUME_ELIGIBLE_STATUSES
+            and _has_browser_access(request, source)
+        ):
+            return redirect("apply_duplicate_found", app_id=source.application_id)
+        return redirect("apply_start")
+
+    request.session.pop(_key(source, "browser_access"), None)
+    request.session.pop(_key(source, "bootstrap"), None)
+    request.session.pop(_key(source, "browser_challenge"), None)
+    request.session.pop(f"handoff_token_{source.application_id}", None)
+    messages.success(request, "Access verified. Resuming your existing application.")
+    return _redirect_to_current_step(target_current)
 
 
 def _identity(application):
@@ -162,6 +303,9 @@ class BrowserVerificationView(View):
                 update_fields=["email_verified_at", "status", "updated_at"]
             )
         _grant_browser_access(request, application)
+        resume_response = complete_pending_resume(request, application)
+        if resume_response is not None:
+            return resume_response
         return _redirect_to_current_step(application)
 
     def _render(self, request, application, form):

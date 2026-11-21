@@ -8,6 +8,7 @@ acknowledgment before the send can be confirmed.
 """
 
 from django.contrib.auth.models import ContentType, Group, Permission, User
+from django.template.loader import render_to_string
 from django.test import TestCase
 from django.urls import reverse
 
@@ -41,6 +42,12 @@ class EmailSendConfirmModalTests(TestCase):
             with self.subTest(marker=marker):
                 self.assertContains(response, marker)
 
+    def _assert_on_behalf_organization(self, response, organization):
+        self.assertContains(
+            response,
+            f"This message is written on behalf of {organization.name}.",
+        )
+
     def _login_reviewer(self):
         """Create a tenant Lead Mentor who can review applications."""
         ct, _ = ContentType.objects.get_or_create(
@@ -64,6 +71,7 @@ class EmailSendConfirmModalTests(TestCase):
         self.client.login(username="reviewer", password="password123")  # nosec B106
 
     def test_program_email_page_shows_confirm_modal(self):
+        organization = Organization.objects.get(slug="gos")
         program = Program.objects.create(name="Test Program", active=True)
         mentor = User.objects.create_user(
             username="mentor_user", password="password123"  # nosec B106
@@ -79,16 +87,20 @@ class EmailSendConfirmModalTests(TestCase):
         self.client.login(username="mentor_user", password="password123")  # nosec B106
         response = self.client.get(reverse("program_email", args=[program.pk]))
         self._assert_modal_present(response)
+        self._assert_on_behalf_organization(response, organization)
 
     def test_program_messaging_page_shows_confirm_modal(self):
+        organization = Organization.objects.get(slug="gos")
         User.objects.create_superuser(
             username="lead_mentor", password="password123"  # nosec B106
         )
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         response = self.client.get(reverse("program_messaging"))
         self._assert_modal_present(response)
+        self._assert_on_behalf_organization(response, organization)
 
     def test_program_email_balances_page_shows_confirm_modal(self):
+        organization = Organization.objects.get(slug="gos")
         program = Program.objects.create(name="Test Program", active=True)
         User.objects.create_superuser(
             username="lead_mentor", password="password123"  # nosec B106
@@ -96,11 +108,33 @@ class EmailSendConfirmModalTests(TestCase):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         response = self.client.get(reverse("program_dues_email", args=[program.pk]))
         self._assert_modal_present(response)
+        self._assert_on_behalf_organization(response, organization)
 
     def test_application_review_messaging_shows_confirm_modal(self):
+        organization = Organization.objects.get(slug="gos")
         self._login_reviewer()
         response = self.client.get(reverse("application_review_messaging"))
         self._assert_modal_present(response)
+        self._assert_on_behalf_organization(response, organization)
+
+    def test_confirm_modal_uses_generic_fallback_without_organization_name(self):
+        rendered = render_to_string("programs/_email_send_confirm_modal.html", {})
+
+        self.assertIn(
+            "This message is written on behalf of the team.",
+            rendered,
+        )
+
+    def test_confirm_modal_escapes_organization_name(self):
+        rendered = render_to_string(
+            "programs/_email_send_confirm_modal.html",
+            {"email_confirm_organization_name": "A <team> & B"},
+        )
+
+        self.assertIn(
+            "This message is written on behalf of A &lt;team&gt; &amp; B.",
+            rendered,
+        )
 
     def test_compose_pages_use_tiptap_editor_not_quill(self):
         program = Program.objects.create(name="Test Program", active=True)

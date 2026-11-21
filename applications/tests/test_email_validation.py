@@ -39,6 +39,30 @@ class EmailSenderNameReproductionTest(TestCase):
 class EmailSubaddressingValidationReproductionTests(TestCase):
     """Test that we correctly allow/prevent student emails being reused as parent emails."""
 
+    def parent_info_form(
+        self, email, other_parent_email="", email_updates=True, **kwargs
+    ):
+        data = {
+            "legal_first_name": "Pat",
+            "last_name": "Parent",
+            "relationship_to_student": "parent",
+            "email": email,
+            "address": "123 Main St",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15213",
+            "phone_number": "555-444-1212",
+            "phone_type": "cell",
+        }
+        if email_updates:
+            data["email_updates"] = "on"
+        return ParentInfoForm(
+            data=data,
+            student_emails=[],
+            other_parent_email=other_parent_email,
+            **kwargs,
+        )
+
     def test_parent_info_form_validation(self):
         form = ParentInfoForm(
             data={"email": "name@email.com"}, student_emails=["name@email.com"]
@@ -96,6 +120,29 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
             student_emails=["student+something@email.com"],
         )
         self.assertTrue(form.is_valid(), form.errors)
+
+    def test_parent_info_form_rejects_same_guardian_email_case_insensitively(self):
+        form = self.parent_info_form(
+            " GUARDIAN@example.test ", other_parent_email="guardian@example.test"
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+    def test_parent_info_form_allows_optional_and_distinct_guardian_email(self):
+        optional_form = self.parent_info_form(
+            "",
+            other_parent_email="primary@example.test",
+            require_email=False,
+            email_updates=False,
+        )
+        distinct_form = self.parent_info_form(
+            "guardian+secondary@example.test",
+            other_parent_email="guardian@example.test",
+        )
+
+        self.assertTrue(optional_form.is_valid(), optional_form.errors)
+        self.assertTrue(distinct_form.is_valid(), distinct_form.errors)
 
     def test_parent_handoff_form_validation(self):
         from applications.forms import ParentHandoffForm

@@ -154,9 +154,8 @@ class Step7WelcomeBackBannerTests(TestCase):
 
     def test_step7_prefills_primary_contact_when_two_adults_share_email(self):
         """
-        When two Adults share the same email (e.g. a mother and father), step 7
-        must prefill with the one who is already a primary_contact for a student,
-        not an arbitrary record.
+        A shared email is not enough to identify which Adult is applying, so
+        step 7 must not prefill either person or offer a relationship-derived swap.
         """
         shared_email = "shared@example.com"
 
@@ -188,9 +187,6 @@ class Step7WelcomeBackBannerTests(TestCase):
         student.secondary_contact = john
         student.save()
 
-        # Ensure John was created first so .first() would return him without the fix.
-        self.assertLess(john.pk, mary.pk) if john.pk < mary.pk else None
-
         app = _verified(
             applicant_type=Application.Type.PARENT,
             email=shared_email,
@@ -201,11 +197,52 @@ class Step7WelcomeBackBannerTests(TestCase):
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        # The welcome-back banner and form should be prefilled with Mary (the
-        # primary contact). John may appear elsewhere (e.g. the swap box) but
-        # the form's first_name field must show Mary, not John.
-        self.assertContains(response, "Mary")
-        self.assertContains(
-            response,
-            'value="Mary"',
+        self.assertIsNone(response.context["welcome_back"])
+        self.assertFalse(response.context["has_secondary"])
+        self.assertNotContains(response, "Welcome back")
+        self.assertNotContains(response, "Swap primary")
+        form = response.context["form"]
+        self.assertNotIn("Mary", form.initial.values())
+        self.assertNotIn("John", form.initial.values())
+        self.assertNotEqual(form["legal_first_name"].value(), "Mary")
+        self.assertNotEqual(form["legal_first_name"].value(), "John")
+
+    def test_ambiguous_email_does_not_replace_saved_primary_contact_fields(self):
+        first_adult = Adult.objects.create(
+            legal_first_name="First",
+            last_name="Guardian",
+            personal_email="saved-shared@example.com",
+            is_parent=True,
         )
+        Adult.objects.create(
+            legal_first_name="Second",
+            last_name="Guardian",
+            personal_email="saved-shared@example.com",
+            is_parent=True,
+        )
+        Student.objects.create(
+            legal_first_name="Child",
+            last_name="Guardian",
+            primary_contact=first_adult,
+        )
+        saved_parent = {
+            "legal_first_name": "Manually Saved",
+            "last_name": "Applicant",
+            "email": "saved-shared@example.com",
+        }
+        app = _verified(
+            applicant_type=Application.Type.PARENT,
+            email="saved-shared@example.com",
+            current_step=7,
+            data={"step7-primaryparent": saved_parent},
+        )
+        verify_application_browser(self.client, app)
+
+        response = self.client.get(
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="Manually Saved"')
+        app.refresh_from_db()
+        self.assertEqual(app.data["step7-primaryparent"], saved_parent)

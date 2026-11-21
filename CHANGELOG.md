@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-20
+
+### Added
+- Travel & Competitions events support explicit student attending/not-attending responses, optional organization-local event times, and signup deadlines; linked guardians and Lead Mentors can record responses, which remain separate from guardian approval and chaperone signups.
+- Travel reminder emails for pending approvals and outstanding signed-form/departure actions three days after signup and seven and one days before travel; delivery claims are tenant scoped, reviewable by leads, and not automatically retried when uncertain.
+- Travel families now receive separate notices for signup decisions, signed-form uploads, event updates, departure changes, and cancellations; event cancellations notify active families and signed adult attendees without linking to a deleted event.
+- Travel signup readiness is shown separately for guardian approval, a current signed form, and required departure on family views, dashboards, and lead rosters; lead views summarize outstanding active signups without implying fees are paid.
+
+### Changed
+- Travel chaperone signup, cancellation, and lead-added buttons use higher-contrast gray outline styling.
+- Travel event details default to collapsed; student rosters group by approval status and departure, show only outstanding follow-up in high-contrast warnings, and keep staff controls tied to each student.
+- Student, parent chaperone, and mentor rosters use responsive tables; interested student rows no longer repeat guardian approval as a pending requirement.
+- Travel roster actions use a compact edit modal, approved costs show their current included options to Lead Mentors, and Lead Mentors can remove mentors from trips.
+- Parent travel approval, signed-form upload, competition attendance, and chaperone signup use larger controls with clearer spacing.
+- Parent travel guidance distinguishes signed permission from portal approval and explains cost-only reapproval and outdated forms.
+- Parent permission acknowledgments now explicitly confirm approval for the student to attend and for any listed costs.
+- Past trips are grouped under a collapsed history section with outstanding follow-up flagged.
+- Travel signup and selected-cost creation now commit atomically; signup notifications run after commit, and delivery failures no longer remove the signup.
+- Travel signup transitions now lock and recheck tenant-scoped records; inconsistent linked student, guardian, or adult records do not receive travel notifications.
+- Travel Django admin is read-only and available only to platform superusers outside tenant context.
+- Lead departure reassignment and edits to a selected departure now require guardian reapproval while preserving the charge and valid signed form; pending families also receive event-change notices.
+
+## 2026-11-19
+
+### Added
+- Travel trips can be free, can optionally require students to choose a departure, and let students edit their departure and cost choices with guardian reapproval after actual changes.
+- Lead Mentors can change a student's departure without reopening guardian approval; the student and eligible guardians receive a notice.
+- Travel rosters show pending parent approval, signed forms, and required departures. Linked guardians and Lead Mentors can upload signed forms, with protected downloads and separate parent approval.
+
+### Changed
+- Existing approved travel signups with permission forms, including past trips, return to pending parent reapproval while retaining their current charges. Signed forms remain valid for later reapproval until the blank form is replaced.
+
+## 2026-11-18
+
+### Changed
+- Removed the redundant Basic export link from the student export modal; the configurable Export action remains available.
+- Added a reminder to protect student information and delete exported files when finished.
+- Added tenant-scoped application inactivity and deadline reminders with a read-only dry-run, protected resume/document links, and reviewable delivery outcomes; no scheduler is enabled.
+- Added a dry-run-by-default, tenant-scoped 30-day application expiration command for unfinished drafts, parent handoffs, and submitted applications missing required forms; explicit `--execute` deletes eligible applications and their owned uploaded files, with no scheduler enabled.
+- Restarting a verified duplicate application now retains older drafts and protected documents as superseded records; resume requires verification for the existing application, and guardian handoffs remain active until the guardian verifies access.
+- Step 5 withholds student prefill and the guardian student picker, and Step 7 withholds direct guardian-email prefill and swap discovery, when an email matches multiple people in the same organization. Relationship-derived guardian prefill and student-address fallback require a uniquely identified student or linked guardian; conversion matching remains unchanged.
+
+## 2026-11-17
+
+### Changed
+- Lead Mentors can select individual student export columns; existing export defaults and grouped export links are preserved.
+- Switching an application to a different program preserves its program-bound custom-question answers and restores them if the applicant switches back.
+- Staff application edits now require a signed current-state version and reject stale, missing, or forged form submissions without overwriting newer answers.
+- Program-specific questions now appear on the applicant experience step, retain their wording per application, and required answers are checked again before submission.
+- Required permission forms are collected before application acceptance; the reviewer rechecks uploads, while existing approved applications and guardian-protected document access remain supported.
+- Primary and secondary guardian forms reject matching email addresses, including changes introduced while a form is being saved; blank secondary emails and distinct plus-tag addresses remain supported.
+
 ## 2026-11-16
 
 ### Added
@@ -24,7 +76,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Lead Mentors can view historical application experience answers on student profiles, including answers from separately linked applications.
-- Program settings can store custom application questions with required, active, and display-order settings; they are not yet shown to applicants.
+- Program settings can store custom application questions with required, active, and display-order settings.
 
 ### Changed
 - Lead Mentors can edit stored custom answers on submitted or approved applications, with stale-edit detection.

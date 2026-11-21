@@ -10,7 +10,7 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
-from applications.forms import ConfirmSubmitForm
+from applications.forms import ConfirmSubmitForm, MentorClearanceDetailForm
 from applications.models import Application
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult
@@ -319,6 +319,78 @@ class MentorFlowTests(TestCase):
         app.refresh_from_db()
         self.assertEqual(app.data["mentor_clearance_detail"]["paca"], "have")
         self.assertEqual(app.data["mentor_clearance_detail"]["fbi"], "need")
+
+    def test_clearance_detail_write_rechecks_current_interest(self):
+        app = self.verified_mentor_app()
+        app.data = {"mentor_clearance_interest": {"interested": "yes"}}
+        app.save()
+        original_is_valid = MentorClearanceDetailForm.is_valid
+        changed = False
+
+        def is_valid(form):
+            nonlocal changed
+            valid = original_is_valid(form)
+            if valid and not changed:
+                changed = True
+                latest = Application.objects.get(pk=app.pk)
+                latest.data["mentor_clearance_interest"]["interested"] = "no"
+                latest.save(update_fields=["data", "updated_at"])
+            return valid
+
+        with patch.object(MentorClearanceDetailForm, "is_valid", new=is_valid):
+            response = self.client.post(
+                reverse(
+                    "apply_mentor_clearance_detail",
+                    kwargs={"app_id": app.application_id},
+                ),
+                {"paca": "have", "patch": "need", "fbi": "need"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "apply_mentor_clearance_interest",
+                kwargs={"app_id": app.application_id},
+            ),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.data["mentor_clearance_interest"]["interested"], "no")
+        self.assertNotIn("mentor_clearance_detail", app.data)
+
+    def test_mentor_step_write_does_not_update_application_submitted_mid_request(self):
+        app = self.verified_mentor_app()
+        app.data = {"mentor_clearance_interest": {"interested": "yes"}}
+        app.save()
+        original_is_valid = MentorClearanceDetailForm.is_valid
+
+        def submit_latest_application(form):
+            valid = original_is_valid(form)
+            if valid:
+                Application.objects.filter(pk=app.pk).update(
+                    status=Application.Status.SUBMITTED
+                )
+            return valid
+
+        with patch.object(
+            MentorClearanceDetailForm, "is_valid", new=submit_latest_application
+        ):
+            response = self.client.post(
+                reverse(
+                    "apply_mentor_clearance_detail",
+                    kwargs={"app_id": app.application_id},
+                ),
+                {"paca": "have", "patch": "need", "fbi": "need"},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("apply_submitted", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertNotIn("mentor_clearance_detail", app.data)
 
     # --- Confirm + submit ----------------------------------------------
 

@@ -127,12 +127,14 @@ class LegacyStepKeyRegressionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'value="Jane"')
         self.assertContains(response, 'value="Pat"')
+        version = response.context["form"].initial["custom_snapshot_version"]
 
         # Resubmitting the form (the lead mentor just fixing a typo) must
         # write to the current keys and drop the legacy duplicates.
         response = self.client.post(
             url,
             {
+                "custom_snapshot_version": version,
                 "step5-student__legal_first_name": "Jane",
                 "step5-student__last_name": "Smith",
                 "step5-student__date_of_birth": "2010-01-01",
@@ -227,9 +229,12 @@ class LegacyStepKeyRegressionTests(TestCase):
             {"step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"}}
         )
         url = reverse("application_review_edit", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        version = response.context["form"].initial["custom_snapshot_version"]
         response = self.client.post(
             url,
             {
+                "custom_snapshot_version": version,
                 "step5-student__legal_first_name": "Grace",
                 "step5-student__last_name": "Hopper",
                 "step7-primaryparent__can_receive_texts": "on",

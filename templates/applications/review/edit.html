@@ -4,10 +4,8 @@
 {% block review_body %}
   <form method="post" class="mb-3">
     {% csrf_token %}
-    {% if form.custom_snapshot_version %}
-      {{ form.custom_snapshot_version }}
-      {% for e in form.custom_snapshot_version.errors %}<div class="alert alert-danger" role="alert">{{ e }} Reload this page before saving.</div>{% endfor %}
-    {% endif %}
+    {{ form.custom_snapshot_version }}
+    {% for e in form.custom_snapshot_version.errors %}<div class="alert alert-danger" role="alert">{{ e }} Reload this page before saving.</div>{% endfor %}
     {% if form.non_field_errors %}
       <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
     {% elif form.custom_snapshot_error %}

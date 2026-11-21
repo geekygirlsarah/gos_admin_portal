@@ -1,11 +1,16 @@
+import logging
 from datetime import date
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core import signing
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Case, F, IntegerField, Prefetch, Q, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import Http404
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -14,7 +19,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView, V
 from audit.events import AuditEvent
 from audit.mixins import AuditedDeleteMixin
 from audit.service import log_deletion, log_event
-from programs.models import Program, Student
+from programs.models import AdultStudentRelationship, Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
     can_user_delete,
@@ -23,40 +28,96 @@ from programs.permission_views import (
     get_user_role,
     user_is_lead_mentor,
     user_is_mentor_or_lead,
+    user_is_parent,
 )
 from programs.utils import active_students_in_program
 from programs.views.mixins import DynamicReadPermissionMixin
 from travel.forms import (
     TravelApprovalForm,
+    TravelCompetitionRSVPForm,
     TravelCostOptionFormSet,
     TravelDepartureFormSet,
     TravelEventForm,
     TravelMentorStaffSignupForm,
     TravelParentChaperoneStaffForm,
+    TravelSignedPermissionFormUpload,
+    TravelSignupDepartureForm,
     TravelSignupForm,
     TravelStaffSignupForm,
 )
 from travel.models import (
+    TravelCompetitionRSVP,
     TravelCostOption,
     TravelDeparture,
     TravelEvent,
     TravelMentorSignup,
     TravelParentChaperoneSignup,
+    TravelReapprovalSnapshot,
+    TravelReminderDelivery,
+    TravelSignedPermissionForm,
     TravelSignup,
 )
 from travel.services import (
+    build_trip_cancellation_notice,
     notify_approved_trip_changes,
+    notify_competition_rsvp,
     notify_mentor_signup_cancelled,
     notify_mentor_signup_created,
     notify_parent_chaperone_signup_cancelled,
     notify_parent_chaperone_signup_created,
+    notify_signed_permission_uploaded,
     notify_signup_approved,
+    notify_signup_choices_updated,
     notify_signup_created,
     notify_signup_decision_undone,
     notify_signup_declined,
+    notify_signup_departure_changed,
     notify_signup_withdrawn,
+    notify_trip_cancelled,
     trip_change_summary,
 )
+from travel.utils import signed_permission_form_prefetches
+
+logger = logging.getLogger(__name__)
+
+
+def _notify_signup_created_after_commit(request, signup):
+    try:
+        sent = notify_signup_created(signup)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Travel signup notification delivery failed "
+            "(signup_id=%s, event_id=%s, error_type=%s).",
+            signup.pk,
+            signup.event_id,
+            type(exc).__name__,
+        )
+        sent = False
+    if sent is not True:
+        messages.warning(
+            request,
+            "The signup was saved, but its email notice could not be confirmed "
+            "for every recipient. Review family contact details and follow up directly.",
+        )
+
+
+def _notify_with_warning(request, notifier, *args, **kwargs):
+    try:
+        sent = notifier(*args, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Travel notification delivery failed (action=%s, error_type=%s).",
+            notifier.__name__,
+            type(exc).__name__,
+        )
+        sent = False
+    if sent is not True:
+        messages.warning(
+            request,
+            "The change was saved, but one or more email notices could not be "
+            "confirmed. Review contact details and email history, then follow up directly.",
+        )
+    return sent
 
 
 class TravelProgramMixin:
@@ -70,13 +131,22 @@ class TravelProgramMixin:
 
     def dispatch(self, request, *args, **kwargs):
         org = getattr(request, "organization", None)
-        self.program = get_object_or_404(
-            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        time_zone = (
+            org.get_setting("time_zone") or settings.TIME_ZONE
+            if org is not None
+            else settings.TIME_ZONE
         )
-        is_mentor = user_is_mentor_or_lead(request.user, org=org)
-        if not self.program.features.filter(key="travel").exists() and not is_mentor:
-            raise Http404("Travel is not enabled for this program.")
-        return super().dispatch(request, *args, **kwargs)
+        with timezone.override(time_zone):
+            self.program = get_object_or_404(
+                Program.objects.for_organization(org), pk=kwargs.get("program_id")
+            )
+            is_mentor = user_is_mentor_or_lead(request.user, org=org)
+            if (
+                not self.program.features.filter(key="travel").exists()
+                and not is_mentor
+            ):
+                raise Http404("Travel is not enabled for this program.")
+            return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -85,6 +155,51 @@ class TravelProgramMixin:
 
     def get_success_url(self):
         return reverse("travel:event_list", kwargs={"program_id": self.program.id})
+
+
+def _local_travel_signups(organization, program):
+    return (
+        TravelSignup.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            event__organization=organization,
+            event__program=program,
+            event__program__organization=organization,
+            student__organization=organization,
+        )
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization=organization,
+                departure__event_id=F("event_id"),
+            )
+        )
+    )
+
+
+def _locked_local_travel_signup(organization, program, pk):
+    signup = get_object_or_404(_local_travel_signups(organization, program), pk=pk)
+    event = get_object_or_404(
+        TravelEvent.objects.for_organization(organization).select_for_update(),
+        pk=signup.event_id,
+        program=program,
+        organization=organization,
+    )
+    return get_object_or_404(
+        _local_travel_signups(organization, program)
+        .select_for_update(of=("self",))
+        .select_related("student", "event", "departure"),
+        pk=pk,
+        event=event,
+    )
+
+
+def _current_signed_forms(organization):
+    return signed_permission_form_prefetches(organization)[0]
+
+
+def _outdated_signed_forms(organization):
+    return signed_permission_form_prefetches(organization)[1]
 
 
 class MentorTripDetailsReadPermissionMixin:
@@ -126,7 +241,39 @@ class TravelEventListView(
                 | Q(departure__organization=org, departure__event_id=F("event_id"))
             )
             .select_related("student", "departure", "approved_by", "event")
-            .prefetch_related("cost_items")
+            .prefetch_related(
+                "cost_items",
+                _current_signed_forms(org),
+                _outdated_signed_forms(org),
+                Prefetch(
+                    "student__adultstudentrelationship_set",
+                    queryset=AdultStudentRelationship.objects.for_organization(org)
+                    .filter(
+                        organization=org,
+                        adult__organization=org,
+                        student__organization=org,
+                        adult__is_incomplete_application_profile=False,
+                        student__is_incomplete_application_profile=False,
+                    )
+                    .select_related("adult", "student"),
+                    to_attr="tenant_contact_relationships",
+                ),
+                Prefetch(
+                    "reminder_deliveries",
+                    queryset=TravelReminderDelivery.objects.for_organization(org)
+                    .filter(
+                        organization=org,
+                        status__in=(
+                            TravelReminderDelivery.Status.PENDING,
+                            TravelReminderDelivery.Status.FAILED,
+                            TravelReminderDelivery.Status.UNKNOWN,
+                            TravelReminderDelivery.Status.NO_RECIPIENTS,
+                        ),
+                    )
+                    .order_by("-created_at"),
+                    to_attr="travel_reminder_delivery_problems",
+                ),
+            )
             .order_by(
                 Case(
                     When(status=TravelSignup.APPROVED, then=Value(0)),
@@ -188,6 +335,16 @@ class TravelEventListView(
                 Lower("adult__last_name"),
             )
         )
+        competition_rsvps_qs = (
+            TravelCompetitionRSVP.objects.for_organization(org)
+            .filter(
+                organization=org,
+                event__program=self.program,
+                event__organization=org,
+                student__organization=org,
+            )
+            .select_related("student", "responded_by")
+        )
         return (
             TravelEvent.objects.for_organization(
                 getattr(self.request, "organization", None)
@@ -197,6 +354,7 @@ class TravelEventListView(
                 Prefetch("departures", queryset=departures_qs),
                 Prefetch("cost_options", queryset=cost_options_qs),
                 Prefetch("signups", queryset=signups_qs),
+                Prefetch("competition_rsvps", queryset=competition_rsvps_qs),
                 Prefetch("mentor_signups", queryset=mentors_qs),
                 Prefetch("parent_chaperones", queryset=chaperones_qs),
             )
@@ -208,8 +366,20 @@ class TravelEventListView(
             e.id: TravelSignupForm(
                 departures=e.departures.all(),
                 cost_options=e.cost_options.all(),
+                requires_departure=e.requires_departure,
             )
             for e in events
+        }
+
+    def _signup_edit_forms(self, signups):
+        return {
+            signup.pk: TravelSignupForm(
+                instance=signup,
+                departures=signup.event.departures.all(),
+                cost_options=signup.event.cost_options.all(),
+                requires_departure=signup.event.requires_departure,
+            )
+            for signup in signups
         }
 
     def _staff_forms(self, events):
@@ -218,6 +388,7 @@ class TravelEventListView(
                 program=self.program,
                 departures=e.departures.all(),
                 cost_options=e.cost_options.all(),
+                requires_departure=e.requires_departure,
             )
             for e in events
         }
@@ -267,6 +438,109 @@ class TravelEventListView(
         context["user_role"] = role
 
         events = [e for e in self.get_queryset() if e.start_date is not None]
+        signup_status_order = {
+            TravelSignup.APPROVED: 0,
+            TravelSignup.INTERESTED: 1,
+            TravelSignup.DECLINED: 2,
+            TravelSignup.WITHDRAWN: 3,
+        }
+        for event in events:
+            event.competition_rsvp_rows = list(event.competition_rsvps.all())
+            event.viewer_needs_action = False
+            event.viewer_past_trip_needs_attention = False
+            event_signups = list(event.signups.all())
+            departure_order = {
+                departure.pk: index
+                for index, departure in enumerate(event.ordered_departures)
+            }
+            event.signup_closed = bool(
+                event.signup_deadline and timezone.now() >= event.signup_deadline
+            )
+            event.signup_deadline_local = (
+                timezone.localtime(event.signup_deadline)
+                if event.signup_deadline
+                else None
+            )
+            if role == "LeadMentor" and event.is_competition:
+                active_program_students = active_students_in_program(
+                    self.program, organization=org
+                )
+                context.setdefault("competition_rsvp_forms", {})[event.pk] = (
+                    TravelCompetitionRSVPForm(students=active_program_students)
+                )
+            active_signups = []
+            for signup in event_signups:
+                signup.travel_readiness_requirements = signup.readiness_requirements
+                signup.readiness_action_labels = signup.outstanding_readiness_labels
+                signup.roster_missing_requirements = [
+                    requirement
+                    for requirement in signup.travel_readiness_requirements
+                    if requirement["required"]
+                    and not requirement["complete"]
+                    and not (
+                        signup.status == TravelSignup.INTERESTED
+                        and requirement["key"] == "guardian_decision"
+                    )
+                ]
+                signup.travel_ready = signup.is_ready_for_travel
+                if signup.status in (TravelSignup.INTERESTED, TravelSignup.APPROVED):
+                    active_signups.append(signup)
+                eligible_guardians = [
+                    adult
+                    for adult in signup.student.all_parents
+                    if adult.login_enabled
+                    and adult.email_updates
+                    and (adult.personal_email or "").strip()
+                ]
+                signup.guardian_contact_missing = not eligible_guardians
+                signup.reminder_delivery_problems = getattr(
+                    signup, "travel_reminder_delivery_problems", []
+                )
+            event.signup_status_groups = []
+            ordered_signups = sorted(
+                event_signups,
+                key=lambda signup: (
+                    signup_status_order.get(signup.status, 4),
+                    departure_order.get(signup.departure_id, len(departure_order)),
+                    (
+                        signup.student.preferred_first_name
+                        or signup.student.legal_first_name
+                        or ""
+                    ).casefold(),
+                    (signup.student.last_name or "").casefold(),
+                    signup.student_id,
+                ),
+            )
+            status_group = None
+            departure_group = None
+            for signup in ordered_signups:
+                if status_group is None or status_group["grouper"] != signup.status:
+                    status_group = {
+                        "grouper": signup.status,
+                        "list": [],
+                        "departure_groups": [],
+                    }
+                    event.signup_status_groups.append(status_group)
+                    departure_group = None
+                if (
+                    departure_group is None
+                    or departure_group["grouper"] != signup.departure_id
+                ):
+                    departure_group = {
+                        "grouper": signup.departure_id,
+                        "departure": signup.departure,
+                        "list": [],
+                    }
+                    status_group["departure_groups"].append(departure_group)
+                departure_group["list"].append(signup)
+                status_group["list"].append(signup)
+            event.travel_active_signup_count = len(active_signups)
+            event.travel_ready_signup_count = sum(
+                signup.travel_ready for signup in active_signups
+            )
+            event.travel_outstanding_signups = [
+                signup for signup in active_signups if not signup.travel_ready
+            ]
         events.sort(key=lambda e: (e.start_date or date.max, e.name))
         upcoming_events = [e for e in events if not e.is_past]
         past_events = [e for e in events if e.is_past]
@@ -276,6 +550,7 @@ class TravelEventListView(
         context["past_events"] = past_events
         context["can_manage"] = False
         context["viewer_is_mentor"] = user_is_mentor_or_lead(user, org=org)
+        context["viewer_is_parent"] = user_is_parent(user, org=org)
 
         # Trip details are editable by mentors when configured; trip rosters
         # and deletion remain Lead-Mentor-only.
@@ -315,11 +590,17 @@ class TravelEventListView(
             if student is not None:
                 org = getattr(self.request, "organization", None)
                 signups = list(
-                    TravelSignup.objects.for_organization(org)
-                    .filter(student=student, event__program=self.program)
-                    .select_related("event", "departure", "approved_by")
-                    .prefetch_related("cost_items")
+                    _local_travel_signups(org, self.program)
+                    .filter(student=student)
+                    .select_related("student", "event", "departure", "approved_by")
+                    .prefetch_related(
+                        "cost_items",
+                        _current_signed_forms(org),
+                        _outdated_signed_forms(org),
+                    )
                 )
+                for signup in signups:
+                    signup.readiness_action_labels = signup.outstanding_readiness_labels
                 signup_by_event = {s.event_id: s for s in signups}
                 context["my_events"] = [
                     e for e in upcoming_events if e.id in signup_by_event
@@ -328,8 +609,31 @@ class TravelEventListView(
                     e for e in upcoming_events if e.id not in signup_by_event
                 ]
                 context["signup_by_event"] = signup_by_event
+                competition_rsvps = (
+                    TravelCompetitionRSVP.objects.for_organization(org)
+                    .filter(
+                        organization=org,
+                        event__program=self.program,
+                        event__organization=org,
+                        student=student,
+                        student__organization=org,
+                    )
+                    .select_related("event")
+                )
+                context["competition_rsvp_by_event"] = {
+                    rsvp.event_id: rsvp for rsvp in competition_rsvps
+                }
                 context["signup_forms"] = self._signup_forms(
                     [e for e in upcoming_events if e.id not in signup_by_event]
+                )
+                context["signup_edit_forms"] = self._signup_edit_forms(
+                    [
+                        signup
+                        for signup in signups
+                        if signup.status
+                        in (TravelSignup.INTERESTED, TravelSignup.APPROVED)
+                        and not signup.event.is_past
+                    ]
                 )
                 context["can_sign_up"] = True
             else:
@@ -340,24 +644,68 @@ class TravelEventListView(
             adult = user.adult_profile
         except Exception:
             adult = None
-        if adult is not None and adult.students.exists():
+        if (
+            adult is not None
+            and user_is_parent(user, org=org)
+            and adult.organization_id == org.pk
+        ):
             parent_rows = []
-            children = adult.all_students()
+            local_child_ids = set(
+                AdultStudentRelationship.objects.for_organization(org)
+                .filter(adult=adult, student__organization=org)
+                .values_list("student_id", flat=True)
+            )
+            active_child_ids = set(
+                active_students_in_program(self.program, organization=org)
+                .filter(pk__in=local_child_ids)
+                .values_list("pk", flat=True)
+            )
+            competition_rsvps_by_student = {}
+            for rsvp in (
+                TravelCompetitionRSVP.objects.for_organization(org)
+                .filter(
+                    organization=org,
+                    event__program=self.program,
+                    event__organization=org,
+                    student_id__in=active_child_ids,
+                    student__organization=org,
+                )
+                .select_related("event")
+            ):
+                competition_rsvps_by_student.setdefault(rsvp.student_id, {})[
+                    rsvp.event_id
+                ] = rsvp
+            children = [
+                child for child in adult.all_students() if child.pk in local_child_ids
+            ]
             children.sort(
                 key=lambda s: (
                     (s.preferred_first_name or s.legal_first_name or "").lower(),
                     (s.last_name or "").lower(),
                 )
             )
+            signups_by_student = {}
+            signups = (
+                _local_travel_signups(org, self.program)
+                .filter(student_id__in=local_child_ids)
+                .select_related("student", "event", "departure", "approved_by")
+                .prefetch_related(
+                    "cost_items",
+                    Prefetch(
+                        "event__cost_options",
+                        queryset=TravelCostOption.objects.for_organization(org).filter(
+                            event__organization=org
+                        ),
+                    ),
+                    _current_signed_forms(org),
+                    _outdated_signed_forms(org),
+                )
+            )
+            for signup in signups:
+                signup.readiness_action_labels = signup.outstanding_readiness_labels
+                signups_by_student.setdefault(signup.student_id, []).append(signup)
             for child in children:
-                org = getattr(self.request, "organization", None)
-                signups = [
-                    s
-                    for s in TravelSignup.objects.for_organization(org)
-                    .filter(student=child, event__program=self.program)
-                    .select_related("event", "departure", "approved_by")
-                    .prefetch_related("cost_items")
-                ]
+                signups = signups_by_student.get(child.pk, [])
                 signup_by_event = {s.event_id: s for s in signups}
                 pending = [s for s in signups if s.status == TravelSignup.INTERESTED]
                 parent_rows.append(
@@ -366,6 +714,10 @@ class TravelEventListView(
                         "signups": signups,
                         "signup_by_event": signup_by_event,
                         "pending": pending,
+                        "competition_rsvp_by_event": competition_rsvps_by_student.get(
+                            child.pk, {}
+                        ),
+                        "can_respond_to_competitions": child.pk in active_child_ids,
                     }
                 )
             context["parent_rows"] = parent_rows
@@ -388,6 +740,30 @@ class TravelEventListView(
 
         # ── Parent chaperones ─────────────────────────────────────────────────
         context.update(self._chaperone_context(adult, is_lead, upcoming_events))
+
+        for event in events:
+            if is_lead:
+                needs_action = bool(event.travel_outstanding_signups)
+            elif role == "Student":
+                signup = context.get("signup_by_event", {}).get(event.pk)
+                needs_action = bool(signup and signup.readiness_action_labels)
+            elif context["viewer_is_parent"]:
+                parent_signups = [
+                    row["signup_by_event"].get(event.pk)
+                    for row in context.get("parent_rows", [])
+                ]
+                needs_action = any(
+                    signup is not None and signup.readiness_action_labels
+                    for signup in parent_signups
+                )
+            else:
+                needs_action = False
+            event.viewer_needs_action = needs_action and not event.is_past
+            event.viewer_past_trip_needs_attention = needs_action and event.is_past
+
+        context["past_trip_attention_count"] = sum(
+            event.viewer_past_trip_needs_attention for event in past_events
+        )
 
         return context
 
@@ -439,8 +815,16 @@ class TravelInlineFormsetsMixin:
             )
         return context
 
-    def _update_approved_signup_charges(self):
+    def _update_approved_signup_charges(self, departure_changes=None):
+        departure_changes = departure_changes or {}
         organization = self.object.organization
+        local_cost_options = TravelCostOption.objects.for_organization(
+            organization
+        ).filter(
+            organization=organization,
+            event=self.object,
+            event__organization=organization,
+        )
         signups = (
             TravelSignup.objects.for_organization(organization)
             .filter(
@@ -460,19 +844,27 @@ class TravelInlineFormsetsMixin:
             )
             .select_for_update(of=("self",))
             .select_related("student", "event", "departure")
-            .prefetch_related("cost_items", "event__cost_options")
+            .prefetch_related(
+                Prefetch("cost_items", queryset=local_cost_options),
+                Prefetch("event__cost_options", queryset=local_cost_options),
+            )
             .order_by("pk")
         )
         updates = []
         for signup in signups:
-            if signup.approved_total is None:
+            if signup.approved_total is None and signup.pk not in departure_changes:
                 continue
             previous_total = signup.approved_total
             new_total = signup.total_cost
-            if previous_total == new_total:
+            cost_changed = (
+                previous_total != new_total
+                if previous_total is not None
+                else signup.balance_amount != new_total
+            )
+            previous_departure = departure_changes.get(signup.pk)
+            if not cost_changed and previous_departure is None:
                 continue
 
-            effective_date = timezone.localdate()
             before = {
                 "status": signup.status,
                 "approved_total": str(previous_total),
@@ -490,48 +882,110 @@ class TravelInlineFormsetsMixin:
                     if signup.balance_effective_date
                     else None
                 ),
+                "departure_id": signup.departure_id,
             }
             signup.status = TravelSignup.INTERESTED
             signup.approved_by = None
             signup.approved_at = None
             signup.approved_total = None
-            signup.balance_amount = new_total
-            signup.balance_effective_date = effective_date
-            signup.save(
-                update_fields=[
-                    "status",
-                    "approved_by",
-                    "approved_at",
-                    "approved_total",
-                    "balance_amount",
-                    "balance_effective_date",
-                    "updated_at",
-                ]
+            update_fields = [
+                "status",
+                "approved_by",
+                "approved_at",
+                "approved_total",
+                "updated_at",
+            ]
+            after = {
+                "status": signup.status,
+                "approved_total": None,
+                "approved_by_id": None,
+                "approved_at": None,
+                "balance_amount": (
+                    str(signup.balance_amount)
+                    if signup.balance_amount is not None
+                    else None
+                ),
+                "departure_id": signup.departure_id,
+            }
+            if cost_changed:
+                effective_date = timezone.localdate()
+                signup.balance_amount = new_total
+                signup.balance_effective_date = effective_date
+                update_fields.extend(["balance_amount", "balance_effective_date"])
+                after["balance_amount"] = str(new_total)
+                after["balance_effective_date"] = effective_date.isoformat()
+            signup.save(update_fields=update_fields)
+
+            audit_event = (
+                AuditEvent.TRAVEL_CHARGE_UPDATED
+                if cost_changed
+                else AuditEvent.TRAVEL_APPROVAL_REOPENED
             )
             log_event(
-                event=AuditEvent.TRAVEL_CHARGE_UPDATED,
+                event=audit_event,
                 resource=signup,
                 request=self.request,
                 organization=organization,
                 before=before,
-                after={
-                    "status": signup.status,
-                    "approved_total": None,
-                    "approved_by_id": None,
-                    "approved_at": None,
-                    "balance_amount": str(new_total),
-                    "balance_effective_date": effective_date.isoformat(),
-                },
-                notes="Travel fee total changed; parent reapproval is required.",
+                after=after,
+                notes=(
+                    "Travel fee total changed; guardian reapproval is required."
+                    if cost_changed
+                    else "Selected departure details changed; guardian reapproval is required."
+                ),
             )
-            updates.append(
-                {
-                    "signup_id": signup.pk,
-                    "previous_total": previous_total,
-                    "new_total": new_total,
-                }
-            )
+            update = {
+                "signup_id": signup.pk,
+                "previous_total": previous_total,
+                "new_total": new_total,
+                "cost_changed": cost_changed,
+                "departure_changed": previous_departure is not None,
+                "approval_reopened": True,
+            }
+            if previous_departure is not None:
+                update["previous_departure"] = previous_departure
+                update["current_departure"] = (
+                    signup.departure.display_label
+                    if signup.departure_id
+                    else "No specific departure"
+                )
+            updates.append(update)
         return updates
+
+    def _pending_signup_totals(self):
+        organization = self.object.organization
+        local_cost_options = TravelCostOption.objects.for_organization(
+            organization
+        ).filter(
+            organization=organization,
+            event=self.object,
+            event__organization=organization,
+        )
+        signups = (
+            TravelSignup.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                event=self.object,
+                event__organization=organization,
+                event__program=self.program,
+                event__program__organization=organization,
+                student__organization=organization,
+                status=TravelSignup.INTERESTED,
+            )
+            .filter(
+                Q(departure__isnull=True)
+                | Q(
+                    departure__organization=organization,
+                    departure__event=self.object,
+                )
+            )
+            .select_related("event")
+            .prefetch_related(
+                Prefetch("cost_items", queryset=local_cost_options),
+                Prefetch("event__cost_options", queryset=local_cost_options),
+            )
+        )
+        return {signup.pk: signup.total_cost for signup in signups}
 
     def form_valid(self, form):
         context = self.get_context_data(form=form)
@@ -545,8 +999,46 @@ class TravelInlineFormsetsMixin:
             if is_update
             else []
         )
+        changed_departure_ids = {
+            inline_form.instance.pk
+            for inline_form in departure_formset.forms
+            if inline_form.instance.pk
+            and inline_form.has_changed()
+            and (
+                any(field != "DELETE" for field in inline_form.changed_data)
+                or inline_form.cleaned_data.get("DELETE", False)
+            )
+        }
         with transaction.atomic():
             response = super().form_valid(form)
+            pending_totals_before = (
+                self._pending_signup_totals() if is_update and changes else {}
+            )
+            departure_changes = {}
+            if is_update and changed_departure_ids:
+                affected_signups = (
+                    TravelSignup.objects.for_organization(self.object.organization)
+                    .filter(
+                        organization=self.object.organization,
+                        event=self.object,
+                        event__organization=self.object.organization,
+                        event__program__organization=self.object.organization,
+                        student__organization=self.object.organization,
+                        departure_id__in=changed_departure_ids,
+                        status=TravelSignup.APPROVED,
+                    )
+                    .filter(
+                        departure__organization=self.object.organization,
+                        departure__event=self.object,
+                    )
+                    .select_for_update(of=("self",))
+                    .select_related("departure")
+                    .order_by("pk")
+                )
+                departure_changes = {
+                    signup.pk: signup.departure.display_label
+                    for signup in affected_signups
+                }
             for formset in (departure_formset, cost_formset):
                 formset.instance = self.object
                 for inline_form in formset.forms:
@@ -558,11 +1050,35 @@ class TravelInlineFormsetsMixin:
                         inline_form.instance.organization = self.object.organization
                 formset.save()
             signup_updates = (
-                self._update_approved_signup_charges() if is_update and changes else []
+                self._update_approved_signup_charges(departure_changes)
+                if is_update and changes
+                else []
             )
+            updated_signup_ids = {update["signup_id"] for update in signup_updates}
+            pending_totals_after = (
+                self._pending_signup_totals() if pending_totals_before else {}
+            )
+            for signup_id, previous_total in pending_totals_before.items():
+                if signup_id in updated_signup_ids:
+                    continue
+                current_total = pending_totals_after.get(signup_id)
+                if current_total is None or current_total == previous_total:
+                    continue
+                signup_updates.append(
+                    {
+                        "signup_id": signup_id,
+                        "previous_total": previous_total,
+                        "new_total": current_total,
+                        "cost_changed": True,
+                        "departure_changed": False,
+                        "approval_reopened": False,
+                    }
+                )
             if is_update and changes:
                 transaction.on_commit(
-                    lambda event_id=self.object.pk, organization_id=self.object.organization_id, changes=changes, signup_updates=signup_updates: notify_approved_trip_changes(
+                    lambda event_id=self.object.pk, organization_id=self.object.organization_id, changes=changes, signup_updates=signup_updates: _notify_with_warning(
+                        self.request,
+                        notify_approved_trip_changes,
                         event_id,
                         organization_id,
                         changes,
@@ -572,8 +1088,8 @@ class TravelInlineFormsetsMixin:
         if is_update and changes:
             messages.info(
                 self.request,
-                "Trip updated. Update emails may be sent to students with approved "
-                "sign-ups and their eligible parents/guardians, as well as signed-up "
+                "Trip updated. Update emails may be sent to students with pending or "
+                "approved sign-ups and their eligible parents/guardians, as well as signed-up "
                 "mentors and parent chaperones with email updates enabled, when "
                 "email addresses are available.",
             )
@@ -676,18 +1192,48 @@ class TravelEventDeleteView(
                     ).values_list("pk", flat=True)
                 )
 
-            signups = list(TravelSignup.objects.select_for_update().filter(event=event))
+            signups = list(
+                TravelSignup.objects.select_for_update(of=("self",))
+                .filter(event=event)
+                .select_related(
+                    "organization", "student", "event__program", "departure"
+                )
+            )
             related_signups = list(
-                TravelSignup.objects.select_for_update().filter(
+                TravelSignup.objects.select_for_update(of=("self",)).filter(
                     pk__in=related_signup_ids
                 )
             )
             mentor_signups = list(
-                TravelMentorSignup.objects.select_for_update().filter(event=event)
+                TravelMentorSignup.objects.select_for_update(of=("self",))
+                .filter(event=event)
+                .select_related(
+                    "organization",
+                    "adult__user",
+                    "adult",
+                    "event__program",
+                    "departure",
+                )
             )
             parent_signups = list(
-                TravelParentChaperoneSignup.objects.select_for_update().filter(
-                    event=event
+                TravelParentChaperoneSignup.objects.select_for_update(of=("self",))
+                .filter(event=event)
+                .select_related(
+                    "organization",
+                    "adult__user",
+                    "adult",
+                    "event__program",
+                    "departure",
+                )
+            )
+            signed_forms = list(
+                TravelSignedPermissionForm.objects.select_for_update(of=("self",))
+                .filter(signup__event=event)
+                .select_related("signup__student", "signup__event__program")
+            )
+            approval_snapshots = list(
+                TravelReapprovalSnapshot.objects.select_for_update().filter(
+                    signup__event=event
                 )
             )
             has_foreign_records = any(
@@ -699,7 +1245,15 @@ class TravelEventDeleteView(
                     *related_signups,
                     *mentor_signups,
                     *parent_signups,
+                    *signed_forms,
+                    *approval_snapshots,
                 ]
+            ) or any(
+                row.signup.organization_id != event.organization_id
+                or row.signup.student.organization_id != event.organization_id
+                or row.signup.event.program_id is None
+                or row.signup.event.program.organization_id != event.organization_id
+                for row in signed_forms
             )
             if has_foreign_records:
                 messages.error(
@@ -709,6 +1263,31 @@ class TravelEventDeleteView(
                 return redirect("travel:event_list", program_id=self.program.id)
 
             self.object = event
+            signed_files = [
+                (row.file.storage, row.file.name) for row in signed_forms if row.file
+            ]
+            for _, name in signed_files:
+                if (
+                    TravelSignedPermissionForm.objects.filter(file=name)
+                    .exclude(pk__in=[row.pk for row in signed_forms])
+                    .exists()
+                ):
+                    messages.error(
+                        request,
+                        "This trip cannot be deleted because related records need review.",
+                    )
+                    return redirect("travel:event_list", program_id=self.program.id)
+            cancellation_notice = build_trip_cancellation_notice(
+                event,
+                signups,
+                mentor_signups,
+                parent_signups,
+            )
+            transaction.on_commit(
+                lambda notice=cancellation_notice: _notify_with_warning(
+                    request, notify_trip_cancelled, notice
+                )
+            )
             return super().post(request, *args, **kwargs)
 
     def dispatch(self, request, *args, **kwargs):
@@ -741,11 +1320,16 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         if event.is_past:
             messages.error(request, "This trip has already ended.")
             return redirect("travel:event_list", program_id=self.program.id)
+        if event.is_competition:
+            messages.error(
+                request,
+                "Use the competition attendance response to sign up for this event.",
+            )
+            return redirect("travel:event_list", program_id=self.program.id)
 
         student = self._resolve_student(request)
         if student is None:
             return redirect("travel:event_list", program_id=self.program.id)
-
         existing = (
             TravelSignup.objects.for_organization(org)
             .filter(student=student, event=event)
@@ -764,23 +1348,45 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
                 )
             return redirect("travel:event_list", program_id=self.program.id)
 
-        departure, cost_items = self._validated_choices(event, request.POST)
+        if (
+            event.signup_deadline
+            and timezone.now() >= event.signup_deadline
+            and get_user_role(request.user, org=org) != "LeadMentor"
+        ):
+            messages.error(
+                request,
+                "The signup deadline has passed. Contact a lead mentor.",
+            )
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        choices = self._validated_choices(event, request.POST)
+        if choices is None:
+            messages.error(request, "Choose valid travel options for this trip.")
+            return redirect("travel:event_list", program_id=self.program.id)
+        departure, cost_items = choices
 
         signup = TravelSignup(
             student=student, event=event, departure=departure, organization=org
         )
         try:
-            signup.save()
-            signup.cost_items.set(cost_items)
-            messages.success(
-                request,
-                f"{student} is signed up for {event.name}. The parents have been "
-                "emailed to review and approve.",
-            )
-            notify_signup_created(signup)
+            with transaction.atomic():
+                signup.save()
+                signup.cost_items.set(cost_items)
         except Exception as exc:  # noqa: BLE001
-            signup.delete()
-            messages.error(request, f"Could not complete signup: {exc}")
+            logger.error(
+                "Travel signup could not be saved (event_id=%s, error_type=%s).",
+                event.pk,
+                type(exc).__name__,
+            )
+            messages.error(
+                request,
+                "Could not complete signup. Please try again or contact a lead mentor.",
+            )
+        else:
+            messages.success(request, f"{student} is signed up for {event.name}.")
+            transaction.on_commit(
+                lambda: _notify_signup_created_after_commit(request, signup)
+            )
 
         return redirect("travel:event_list", program_id=self.program.id)
 
@@ -828,10 +1434,13 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         )
         form = TravelSignupForm(
             post,
+            instance=TravelSignup(event=event, organization=organization),
             departures=departures,
             cost_options=cost_options,
+            requires_departure=event.requires_departure,
         )
-        form.is_valid()
+        if not form.is_valid():
+            return None
         departure = form.cleaned_data.get("departure")
         if departure is None and departures.count() == 1:
             departure = departures.first()
@@ -841,26 +1450,603 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         )
 
 
+class TravelCompetitionRSVPView(LoginRequiredMixin, TravelProgramMixin, View):
+    """Record a student's competition attendance separately from approval."""
+
+    def post(self, request, program_id, pk):
+        organization = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(organization),
+            pk=pk,
+            program=self.program,
+            is_competition=True,
+        )
+        student = self._resolve_student(request, event, organization)
+        if student is None:
+            messages.error(
+                request, "You do not have permission to update this response."
+            )
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        response = request.POST.get("response")
+        if response not in TravelCompetitionRSVP.Response.values:
+            messages.error(request, "Choose whether the student is attending.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        notify = False
+        with transaction.atomic():
+            event = get_object_or_404(
+                TravelEvent.objects.for_organization(organization).select_for_update(),
+                pk=pk,
+                program=self.program,
+                is_competition=True,
+            )
+            signup = (
+                _local_travel_signups(organization, self.program)
+                .select_for_update(of=("self",))
+                .filter(event=event, student=student)
+                .first()
+            )
+            if (
+                TravelCompetitionRSVP.objects.filter(event=event, student=student)
+                .exclude(organization=organization)
+                .exists()
+            ):
+                messages.error(
+                    request,
+                    "This response needs organization review before it can be changed.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            active_signup = signup and signup.status in (
+                TravelSignup.INTERESTED,
+                TravelSignup.APPROVED,
+            )
+            is_lead = get_user_role(request.user, org=organization) == "LeadMentor"
+            if (
+                response == TravelCompetitionRSVP.YES
+                and event.is_past
+                and not active_signup
+            ):
+                messages.error(request, "This competition has already ended.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if (
+                response == TravelCompetitionRSVP.YES
+                and event.signup_deadline
+                and timezone.now() >= event.signup_deadline
+                and not is_lead
+                and not active_signup
+            ):
+                messages.error(
+                    request,
+                    "The signup deadline has passed. Contact a lead mentor to be added.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            if response == TravelCompetitionRSVP.YES and not active_signup:
+                choices = TravelSignupView()._validated_choices(event, request.POST)
+                if choices is None:
+                    messages.error(
+                        request, "Choose valid travel options for this event."
+                    )
+                    return redirect("travel:event_list", program_id=self.program.id)
+                departure, cost_items = choices
+                if signup is None:
+                    signup = TravelSignup(
+                        organization=organization,
+                        event=event,
+                        student=student,
+                        departure=departure,
+                    )
+                    signup.save()
+                else:
+                    if not signup.can_be_signed_up_again:
+                        messages.error(request, "This signup cannot be reactivated.")
+                        return redirect("travel:event_list", program_id=self.program.id)
+                    signup.rejoin()
+                    signup.departure = departure
+                    signup.save()
+                signup.cost_items.set(cost_items)
+            elif (
+                response == TravelCompetitionRSVP.NO
+                and active_signup
+                and signup.can_be_withdrawn
+            ):
+                signup.withdraw()
+                signup.save()
+
+            rsvp = (
+                TravelCompetitionRSVP.objects.for_organization(organization)
+                .select_for_update()
+                .filter(event=event, student=student)
+                .first()
+            )
+            notify = rsvp is None or rsvp.response != response
+            if rsvp is None:
+                rsvp = TravelCompetitionRSVP(
+                    organization=organization,
+                    event=event,
+                    student=student,
+                )
+            rsvp.response = response
+            rsvp.responded_by = request.user
+            rsvp.save()
+
+        if notify:
+            transaction.on_commit(
+                lambda: _notify_with_warning(
+                    request,
+                    notify_competition_rsvp,
+                    event.pk,
+                    student.pk,
+                    response,
+                    organization.pk,
+                )
+            )
+        messages.success(
+            request,
+            f"{student.display_name}'s response for {event.name} was saved.",
+        )
+        return redirect("travel:event_list", program_id=self.program.id)
+
+    def _resolve_student(self, request, event, organization):
+        role = get_user_role(request.user, org=organization)
+        active_students = active_students_in_program(
+            self.program, organization=organization
+        )
+        if role == "LeadMentor":
+            student_id = request.POST.get("student")
+            return active_students.filter(pk=student_id).first() if student_id else None
+        if role == "Student":
+            return active_students.filter(user=request.user).first()
+        if not user_is_parent(request.user, org=organization):
+            return None
+        try:
+            adult = request.user.adult_profile
+        except Exception:
+            return None
+        if adult.organization_id != organization.pk or not adult.is_parent:
+            return None
+        student = active_students.filter(pk=request.POST.get("student")).first()
+        if student is None:
+            return None
+        return (
+            student
+            if AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                adult=adult,
+                student=student,
+                student__organization=organization,
+            )
+            .exists()
+            else None
+        )
+
+
+class TravelSignupEditView(LoginRequiredMixin, TravelProgramMixin, View):
+    """Let a student update their active departure and optional cost choices."""
+
+    def post(self, request, program_id, pk):
+        organization = getattr(request, "organization", None)
+        if get_user_role(request.user, org=organization) != "Student":
+            messages.error(request, "Only students can edit their own trip choices.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        student = (
+            active_students_in_program(self.program, organization=organization)
+            .filter(user=request.user, organization=organization)
+            .first()
+        )
+        if student is None:
+            messages.error(
+                request, "Only active students in this program can edit sign-ups."
+            )
+            return redirect("travel:event_list", program_id=self.program.id)
+
+        signup_queryset = _local_travel_signups(organization, self.program).filter(
+            student=student,
+            status__in=(TravelSignup.INTERESTED, TravelSignup.APPROVED),
+        )
+        with transaction.atomic():
+            signup = get_object_or_404(
+                signup_queryset.select_for_update(of=("self",)).select_related(
+                    "event", "event__program", "departure"
+                ),
+                pk=pk,
+            )
+            if signup.event.is_past:
+                messages.error(request, "This trip has already ended.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if signup.cost_items.exclude(
+                organization=organization, event=signup.event
+            ).exists():
+                messages.error(
+                    request,
+                    "This signup has cost records that require organization review.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            departures = TravelDeparture.objects.for_organization(organization).filter(
+                event=signup.event,
+                event__organization=organization,
+            )
+            cost_options = TravelCostOption.objects.for_organization(
+                organization
+            ).filter(event=signup.event, event__organization=organization)
+            previous_departure_id = signup.departure_id
+            previous_departure = signup.departure
+            previous_costs = list(
+                signup.cost_items.filter(
+                    organization=organization, event=signup.event
+                ).order_by("sort_order", "pk")
+            )
+            previous_total = signup.total_cost
+            previous_charge = (
+                signup.balance_amount
+                if signup.balance_amount is not None
+                else signup.approved_total
+            )
+            previous_total_for_notice = (
+                previous_charge if previous_charge is not None else previous_total
+            )
+            form = TravelSignupForm(
+                request.POST,
+                instance=signup,
+                departures=departures,
+                cost_options=cost_options,
+                requires_departure=signup.event.requires_departure,
+            )
+            if not form.is_valid():
+                messages.error(request, "Choose valid travel options for this trip.")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            selected_costs = list(form.cleaned_data["cost_items"])
+            previous_optional_ids = {
+                option.pk for option in previous_costs if not option.is_required
+            }
+            selected_optional_ids = {
+                option.pk for option in selected_costs if not option.is_required
+            }
+            selected_departure = form.cleaned_data["departure"]
+            departure_changed = previous_departure_id != getattr(
+                selected_departure, "pk", None
+            )
+            if not departure_changed and previous_optional_ids == selected_optional_ids:
+                messages.info(request, "Your trip choices have not changed.")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            was_approved = signup.status == TravelSignup.APPROVED
+            before = {
+                "status": signup.status,
+                "approved_total": (
+                    str(signup.approved_total)
+                    if signup.approved_total is not None
+                    else None
+                ),
+                "approved_by_id": signup.approved_by_id,
+                "approved_at": (
+                    signup.approved_at.isoformat() if signup.approved_at else None
+                ),
+                "balance_amount": (
+                    str(signup.balance_amount)
+                    if signup.balance_amount is not None
+                    else None
+                ),
+                "balance_effective_date": (
+                    signup.balance_effective_date.isoformat()
+                    if signup.balance_effective_date
+                    else None
+                ),
+            }
+
+            signup.departure = selected_departure
+            update_fields = ["departure", "updated_at"]
+            if was_approved:
+                signup.status = TravelSignup.INTERESTED
+                signup.approved_by = None
+                signup.approved_at = None
+                signup.approved_total = None
+                update_fields.extend(
+                    [
+                        "status",
+                        "approved_by",
+                        "approved_at",
+                        "approved_total",
+                    ]
+                )
+            signup.save(update_fields=update_fields)
+            signup.cost_items.set(selected_costs)
+            new_total = signup.total_cost
+
+            charge_tracked = was_approved or signup.balance_amount is not None
+            charge_changed = charge_tracked and signup.balance_amount != new_total
+            if charge_changed:
+                effective_date = timezone.localdate()
+                signup.balance_amount = new_total
+                signup.balance_effective_date = effective_date
+                signup.save(
+                    update_fields=[
+                        "balance_amount",
+                        "balance_effective_date",
+                        "updated_at",
+                    ]
+                )
+                log_event(
+                    event=AuditEvent.TRAVEL_CHARGE_UPDATED,
+                    resource=signup,
+                    request=request,
+                    organization=organization,
+                    before=before,
+                    after={
+                        "status": signup.status,
+                        "approved_total": (
+                            None
+                            if was_approved
+                            else (
+                                str(signup.approved_total)
+                                if signup.approved_total is not None
+                                else None
+                            )
+                        ),
+                        "approved_by_id": signup.approved_by_id,
+                        "approved_at": (
+                            signup.approved_at.isoformat()
+                            if signup.approved_at
+                            else None
+                        ),
+                        "balance_amount": str(new_total),
+                        "balance_effective_date": effective_date.isoformat(),
+                    },
+                    notes="Student travel choices changed the current trip charge.",
+                )
+
+            previous_cost_labels = [option.name for option in previous_costs]
+            selected_cost_labels = [option.name for option in selected_costs]
+            previous_departure_label = (
+                previous_departure.display_label
+                if previous_departure
+                else "No specific departure"
+            )
+            selected_departure_label = (
+                selected_departure.display_label
+                if selected_departure
+                else "No specific departure"
+            )
+            transaction.on_commit(
+                lambda signup_id=signup.pk, organization_id=organization.pk, previous_departure=previous_departure_label, selected_departure=selected_departure_label, previous_costs=previous_cost_labels, selected_costs=selected_cost_labels, previous_total=previous_total_for_notice, new_total=new_total: _notify_with_warning(
+                    request,
+                    notify_signup_choices_updated,
+                    signup_id,
+                    organization_id,
+                    previous_departure,
+                    selected_departure,
+                    previous_costs,
+                    selected_costs,
+                    previous_total,
+                    new_total,
+                )
+            )
+
+        messages.success(request, "Your trip choices were updated.")
+        return redirect("travel:event_list", program_id=self.program.id)
+
+
+class TravelSignupDepartureView(
+    LoginRequiredMixin, TravelProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Let a Lead Mentor reassign a student's departure without changing approval."""
+
+    def post(self, request, program_id, pk):
+        organization = getattr(request, "organization", None)
+        signup_queryset = _local_travel_signups(organization, self.program).filter(
+            status__in=(TravelSignup.INTERESTED, TravelSignup.APPROVED)
+        )
+        with transaction.atomic():
+            signup = get_object_or_404(
+                signup_queryset.select_for_update(of=("self",)).select_related(
+                    "event", "event__program", "departure"
+                ),
+                pk=pk,
+            )
+            if signup.event.is_past:
+                messages.error(request, "This trip has already ended.")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            previous_departure_id = signup.departure_id
+            previous_departure = signup.departure
+            departures = TravelDeparture.objects.for_organization(organization).filter(
+                event=signup.event,
+                event__organization=organization,
+            )
+            form = TravelSignupDepartureForm(
+                request.POST,
+                instance=signup,
+                departures=departures,
+                requires_departure=signup.event.requires_departure,
+            )
+            if not form.is_valid():
+                messages.error(request, "Choose a valid departure for this trip.")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            new_departure = form.cleaned_data["departure"]
+            if previous_departure_id == (new_departure.pk if new_departure else None):
+                messages.info(request, "The student's departure has not changed.")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            previous_label = (
+                previous_departure.display_label
+                if previous_departure
+                else "No specific departure"
+            )
+            new_label = (
+                new_departure.display_label
+                if new_departure
+                else "No specific departure"
+            )
+            signup.departure = new_departure
+            update_fields = ["departure", "updated_at"]
+            if signup.status == TravelSignup.APPROVED:
+                signup.status = TravelSignup.INTERESTED
+                signup.approved_by = None
+                signup.approved_at = None
+                signup.approved_total = None
+                update_fields.extend(
+                    ["status", "approved_by", "approved_at", "approved_total"]
+                )
+            signup.save(update_fields=update_fields)
+            transaction.on_commit(
+                lambda signup_id=signup.pk, organization_id=organization.pk, previous_departure=previous_label, selected_departure=new_label: _notify_with_warning(
+                    request,
+                    notify_signup_departure_changed,
+                    signup_id,
+                    organization_id,
+                    previous_departure,
+                    selected_departure,
+                )
+            )
+
+        messages.success(
+            request,
+            f"{signup.student}'s departure was updated. Guardian approval is required again.",
+        )
+        return redirect("travel:event_list", program_id=self.program.id)
+
+
+def _can_access_signed_permission(user, signup, organization):
+    if user_is_lead_mentor(user, org=organization):
+        return True
+    if not user_is_parent(user, org=organization):
+        return False
+    parent = getattr(user, "adult_profile", None)
+    return bool(
+        parent
+        and parent.is_parent
+        and parent.organization_id == organization.pk
+        and AdultStudentRelationship.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            adult=parent,
+            student=signup.student,
+            student__organization=organization,
+        )
+        .exists()
+    )
+
+
+class TravelSignedPermissionUploadView(LoginRequiredMixin, TravelProgramMixin, View):
+    def post(self, request, program_id, pk):
+        organization = getattr(request, "organization", None)
+        with transaction.atomic():
+            signup = get_object_or_404(
+                _local_travel_signups(organization, self.program).select_related(
+                    "event", "student"
+                ),
+                pk=pk,
+            )
+            if not _can_access_signed_permission(request.user, signup, organization):
+                raise Http404
+            if not signup.can_be_withdrawn:
+                raise Http404
+            event = get_object_or_404(
+                TravelEvent.objects.for_organization(organization).select_for_update(),
+                pk=signup.event_id,
+                program=self.program,
+            )
+            form = TravelSignedPermissionFormUpload(request.POST, request.FILES)
+            if (
+                not event.requires_permission_form
+                or not form.is_valid()
+                or form.cleaned_data["form_version"] != event.permission_form_version
+            ):
+                messages.error(
+                    request,
+                    "Choose a valid signed form for the current trip form (PDF, JPEG, or PNG, up to 10 MB).",
+                )
+                return redirect(self.get_success_url())
+            TravelSignedPermissionForm.objects.create(
+                organization=organization,
+                signup=signup,
+                form_version=event.permission_form_version,
+                file=form.cleaned_data["file"],
+                uploaded_by=request.user,
+            )
+            transaction.on_commit(
+                lambda signup_id=signup.pk, organization_id=organization.pk: _notify_with_warning(
+                    request,
+                    notify_signed_permission_uploaded,
+                    signup_id,
+                    organization_id,
+                )
+            )
+        messages.success(
+            request,
+            "Signed permission form uploaded. Approval of the current trip choices is a separate step.",
+        )
+        return redirect(self.get_success_url())
+
+
+class TravelSignedPermissionDownloadView(LoginRequiredMixin, TravelProgramMixin, View):
+    def get(self, request, program_id, pk):
+        organization = getattr(request, "organization", None)
+        document = get_object_or_404(
+            TravelSignedPermissionForm.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                signup__in=_local_travel_signups(organization, self.program),
+            )
+            .select_related("signup__student"),
+            pk=pk,
+        )
+        if not _can_access_signed_permission(
+            request.user, document.signup, organization
+        ):
+            raise Http404
+        response = FileResponse(
+            document.file.open("rb"),
+            as_attachment=True,
+            filename=Path(document.file.name).name,
+            content_type="application/octet-stream",
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
 class TravelSignupRejoinView(LoginRequiredMixin, TravelProgramMixin, View):
     """A withdrawn signup can be reactivated to 'interested' by the student or
     a Lead Mentor; parents are emailed again for approval."""
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup, org=org):
+                messages.error(request, "You do not have permission to do that.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_signed_up_again:
+                messages.error(request, "This signup cannot be reactivated.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if signup.event.is_competition:
+                messages.error(
+                    request,
+                    "Use the competition attendance response to reactivate this signup.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if (
+                signup.event.signup_deadline
+                and timezone.now() >= signup.event.signup_deadline
+                and get_user_role(request.user, org=org) != "LeadMentor"
+            ):
+                messages.error(
+                    request,
+                    "The signup deadline has passed. Contact a lead mentor.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.rejoin()
+            signup.save()
+        transaction.on_commit(
+            lambda: _notify_signup_created_after_commit(request, signup)
         )
-        if not self._may_act(request.user, signup, org=org):
-            messages.error(request, "You do not have permission to do that.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_signed_up_again:
-            messages.error(request, "This signup cannot be reactivated.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.rejoin()
-        signup.save()
-        notify_signup_created(signup)
         messages.success(
             request, f"Reactivated {signup.student}'s signup for {signup.event.name}."
         )
@@ -882,27 +2068,22 @@ class TravelSignupWithdrawView(LoginRequiredMixin, TravelProgramMixin, View):
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup, org=org):
-            messages.error(request, "You do not have permission to do that.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_withdrawn:
-            messages.error(
-                request, "This signup can't be withdrawn in its current state."
-            )
-            return redirect("travel:event_list", program_id=self.program.id)
-        name = signup.student
-        event = signup.event
-        signup.withdraw()
-        signup.save()
-        notify_signup_withdrawn(signup)
-        messages.info(
-            request, f"{name} is no longer going to {event.name} (status emails sent)."
-        )
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup, org=org):
+                messages.error(request, "You do not have permission to do that.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_withdrawn:
+                messages.error(
+                    request, "This signup can't be withdrawn in its current state."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            name = signup.student
+            event = signup.event
+            signup.withdraw()
+            signup.save()
+        _notify_with_warning(request, notify_signup_withdrawn, signup)
+        messages.info(request, f"{name} is no longer going to {event.name}.")
         return redirect("travel:event_list", program_id=self.program.id)
 
     def _may_act(self, user, signup, org=None):
@@ -926,50 +2107,96 @@ class _ParentSignupActionView(LoginRequiredMixin, TravelProgramMixin, View):
             return None
 
     def _may_act(self, user, signup):
+        organization = getattr(self.request, "organization", None)
         parent = self._parent(user)
-        if parent is None:
+        if (
+            parent is None
+            or organization is None
+            or not user_is_parent(user, org=organization)
+            or not parent.is_parent
+            or parent.organization_id != organization.pk
+        ):
             return False
-        return parent.students.filter(pk=signup.student_id).exists()
+        return (
+            AdultStudentRelationship.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                adult=parent,
+                student=signup.student,
+                student__organization=organization,
+            )
+            .exists()
+        )
 
 
 class TravelSignupApproveView(_ParentSignupActionView):
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
         signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
+            _local_travel_signups(org, self.program),
             pk=pk,
             event__program=self.program,
         )
         if not self._may_act(request.user, signup):
             messages.error(request, "Only a parent of this student can approve travel.")
             return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_approved:
-            messages.error(request, "This signup can't be approved right now.")
-            return redirect("travel:event_list", program_id=self.program.id)
-
-        form = TravelApprovalForm(
-            request.POST,
-            requires_form=signup.event.requires_permission_form,
-        )
-        if not form.is_valid():
-            messages.error(request, form.errors.as_text().strip())
-            return redirect("travel:event_list", program_id=self.program.id)
-
-        parent = self._parent(request.user)
-        try:
-            signup.approve(
-                parent,
-                permission_acknowledged=form.cleaned_data.get(
-                    "permission_acknowledged", False
-                ),
-                acknowledged_by=parent.display_name,
+        with transaction.atomic():
+            event = get_object_or_404(
+                TravelEvent.objects.for_organization(org).select_for_update(),
+                pk=signup.event_id,
+                program=self.program,
             )
-            signup.save()
-        except Exception as exc:  # noqa: BLE001
-            messages.error(request, f"Could not approve: {exc}")
-            return redirect("travel:event_list", program_id=self.program.id)
+            signup = get_object_or_404(
+                _local_travel_signups(org, self.program)
+                .select_for_update(of=("self",))
+                .select_related("event", "departure", "student"),
+                pk=pk,
+                event=event,
+            )
+            if not self._may_act(request.user, signup):
+                messages.error(
+                    request, "Only a parent of this student can approve travel."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_approved:
+                messages.error(request, "This signup can't be approved right now.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            try:
+                snapshot = signing.loads(
+                    request.POST.get("approval_token", ""), salt="travel.approval"
+                )
+            except signing.BadSignature:
+                snapshot = None
+            if snapshot != signup.approval_snapshot:
+                messages.error(
+                    request,
+                    "Trip details changed or the approval page expired. Review the current details before approving.",
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
 
-        notify_signup_approved(signup)
+            form = TravelApprovalForm(
+                request.POST,
+                requires_form=signup.needs_permission_acknowledgment,
+            )
+            if not form.is_valid():
+                messages.error(request, form.errors.as_text().strip())
+                return redirect("travel:event_list", program_id=self.program.id)
+
+            parent = self._parent(request.user)
+            try:
+                signup.approve(
+                    parent,
+                    permission_acknowledged=form.cleaned_data.get(
+                        "permission_acknowledged", False
+                    ),
+                    acknowledged_by=parent.display_name,
+                )
+                signup.save()
+            except ValidationError as exc:
+                messages.error(request, f"Could not approve: {exc}")
+                return redirect("travel:event_list", program_id=self.program.id)
+
+        _notify_with_warning(request, notify_signup_approved, signup)
         messages.success(
             request,
             f"Approved {signup.student} for {signup.event.name} at "
@@ -981,20 +2208,19 @@ class TravelSignupApproveView(_ParentSignupActionView):
 class TravelSignupDeclineView(_ParentSignupActionView):
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup):
-            messages.error(request, "Only a parent of this student can decline travel.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_declined:
-            messages.error(request, "This signup can't be declined right now.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.decline()
-        signup.save()
-        notify_signup_declined(signup)
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup):
+                messages.error(
+                    request, "Only a parent of this student can decline travel."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_declined:
+                messages.error(request, "This signup can't be declined right now.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.decline()
+            signup.save()
+        _notify_with_warning(request, notify_signup_declined, signup)
         messages.info(request, f"Declined {signup.student} for {signup.event.name}.")
         return redirect("travel:event_list", program_id=self.program.id)
 
@@ -1004,22 +2230,19 @@ class TravelSignupUndoView(_ParentSignupActionView):
 
     def post(self, request, program_id, pk):
         org = getattr(request, "organization", None)
-        signup = get_object_or_404(
-            TravelSignup.objects.for_organization(org),
-            pk=pk,
-            event__program=self.program,
-        )
-        if not self._may_act(request.user, signup):
-            messages.error(
-                request, "Only a parent of this student can update this decision."
-            )
-            return redirect("travel:event_list", program_id=self.program.id)
-        if not signup.can_be_undone:
-            messages.error(request, "This decision can't be undone right now.")
-            return redirect("travel:event_list", program_id=self.program.id)
-        signup.undo_decision()
-        signup.save()
-        notify_signup_decision_undone(signup)
+        with transaction.atomic():
+            signup = _locked_local_travel_signup(org, self.program, pk)
+            if not self._may_act(request.user, signup):
+                messages.error(
+                    request, "Only a parent of this student can update this decision."
+                )
+                return redirect("travel:event_list", program_id=self.program.id)
+            if not signup.can_be_undone:
+                messages.error(request, "This decision can't be undone right now.")
+                return redirect("travel:event_list", program_id=self.program.id)
+            signup.undo_decision()
+            signup.save()
+        _notify_with_warning(request, notify_signup_decision_undone, signup)
         messages.info(
             request,
             f"Decision for {signup.student} / {signup.event.name} was reset; "
@@ -1069,6 +2292,20 @@ class TravelMentorStaffSignupView(
             messages.error(request, "An existing signup requires organization review.")
             return redirect("travel:event_list", program_id=self.program.id)
 
+        existing_signup = (
+            TravelMentorSignup.objects.for_organization(org)
+            .filter(event=event, adult=adult)
+            .exists()
+        )
+        if (
+            not existing_signup
+            and event.signup_deadline
+            and timezone.now() >= event.signup_deadline
+            and get_user_role(request.user, org=org) != "LeadMentor"
+        ):
+            messages.error(request, "The signup deadline has passed.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
         departure = form.cleaned_data.get("departure") or _resolve_departure_for_event(
             event, request.POST
         )
@@ -1084,7 +2321,7 @@ class TravelMentorStaffSignupView(
             signup.departure = departure
             signup.save(update_fields=["departure"])
         if created:
-            notify_mentor_signup_created(signup)
+            _notify_with_warning(request, notify_mentor_signup_created, signup)
             messages.success(
                 request,
                 f"{adult.display_name} has been added to {event.name}.",
@@ -1129,6 +2366,20 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
             messages.error(request, "An existing signup requires organization review.")
             return redirect("travel:event_list", program_id=self.program.id)
 
+        existing_signup = (
+            TravelMentorSignup.objects.for_organization(org)
+            .filter(event=event, adult=adult)
+            .exists()
+        )
+        if (
+            not existing_signup
+            and event.signup_deadline
+            and timezone.now() >= event.signup_deadline
+            and get_user_role(request.user, org=org) != "LeadMentor"
+        ):
+            messages.error(request, "The signup deadline has passed.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
         departure = _resolve_departure_for_event(event, request.POST)
 
         signup, created = TravelMentorSignup.objects.for_organization(
@@ -1147,7 +2398,7 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
                 request,
                 f"Thanks! You're signed up to go to {event.name}.",
             )
-            notify_mentor_signup_created(signup)
+            _notify_with_warning(request, notify_mentor_signup_created, signup)
         else:
             messages.info(
                 request,
@@ -1177,7 +2428,7 @@ class TravelMentorCancelView(LoginRequiredMixin, TravelProgramMixin, View):
             notes=f"Mentor cancelled travel signup for '{event.name}'.",
         )
         signup.delete()
-        notify_mentor_signup_cancelled(signup)
+        _notify_with_warning(request, notify_mentor_signup_cancelled, signup)
         messages.info(request, f"You're no longer going to {event.name}.")
         return redirect("travel:event_list", program_id=self.program.id)
 
@@ -1202,6 +2453,36 @@ class TravelMentorDriverToggleView(
             request,
             f"{signup.adult} {'is now marked as a driver' if signup.is_driver else 'is no longer marked as a driver'}.",
         )
+        return redirect("travel:event_list", program_id=self.program.id)
+
+
+class TravelMentorRemoveView(
+    LoginRequiredMixin, TravelProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentors remove a mentor from a trip's roster."""
+
+    def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelMentorSignup.objects.for_organization(org).filter(
+                Q(departure__isnull=True)
+                | Q(departure__organization=org, departure__event_id=F("event_id"))
+            ),
+            pk=pk,
+            event__program=self.program,
+            adult__organization=org,
+            event__organization=org,
+        )
+        name, event_name = signup.adult.display_name, signup.event.name
+        log_deletion(
+            resource=signup,
+            request=request,
+            before={"adult": str(signup.adult), "event": event_name},
+            notes=f"Lead Mentor removed {name} from mentoring '{event_name}'.",
+        )
+        signup.delete()
+        _notify_with_warning(request, notify_mentor_signup_cancelled, signup)
+        messages.info(request, f"{name} is no longer going to {event_name}.")
         return redirect("travel:event_list", program_id=self.program.id)
 
 
@@ -1253,6 +2534,20 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
             messages.error(request, "An existing signup requires organization review.")
             return redirect("travel:event_list", program_id=self.program.id)
 
+        existing_signup = (
+            TravelParentChaperoneSignup.objects.for_organization(org)
+            .filter(event=event, adult=adult)
+            .exists()
+        )
+        if (
+            not existing_signup
+            and event.signup_deadline
+            and timezone.now() >= event.signup_deadline
+            and get_user_role(request.user, org=org) != "LeadMentor"
+        ):
+            messages.error(request, "The signup deadline has passed.")
+            return redirect("travel:event_list", program_id=self.program.id)
+
         departure = _resolve_departure_for_event(event, request.POST)
         signup, created = TravelParentChaperoneSignup.objects.for_organization(
             org
@@ -1271,7 +2566,9 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
                 request,
                 f"{adult.display_name} is signed up to chaperone {event.name}.",
             )
-            notify_parent_chaperone_signup_created(signup)
+            _notify_with_warning(
+                request, notify_parent_chaperone_signup_created, signup
+            )
         else:
             messages.info(
                 request,
@@ -1335,7 +2632,7 @@ class TravelParentChaperoneCancelView(LoginRequiredMixin, TravelProgramMixin, Vi
             notes=f"Parent cancelled chaperone signup for '{event.name}'.",
         )
         signup.delete()
-        notify_parent_chaperone_signup_cancelled(signup)
+        _notify_with_warning(request, notify_parent_chaperone_signup_cancelled, signup)
         messages.info(
             request, f"{adult.display_name} is no longer chaperoning {event.name}."
         )
@@ -1364,6 +2661,6 @@ class TravelParentChaperoneRemoveView(
             notes=f"Lead Mentor removed {name} from chaperoning '{event_name}'.",
         )
         signup.delete()
-        notify_parent_chaperone_signup_cancelled(signup)
+        _notify_with_warning(request, notify_parent_chaperone_signup_cancelled, signup)
         messages.info(request, f"{name} is no longer chaperoning {event_name}.")
         return redirect("travel:event_list", program_id=self.program.id)

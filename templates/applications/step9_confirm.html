@@ -10,6 +10,12 @@
     After you submit, our lead mentors will be notified to review your
     application. You'll get an email confirmation with your application ID.
 </p>
+{% if custom_snapshot_error %}
+    <div class="alert alert-danger" role="alert">
+        Program-specific questions need attention before submission.
+        <a href="{% url 'apply_step6' app_id=application.application_id %}">Review them</a>.
+    </div>
+{% endif %}
 
 <div class="mb-4">
     <div class="card shadow-sm border-0 rounded-3">
@@ -92,6 +98,15 @@
                 </dl>
             {% else %}
                 <p class="text-muted mb-0">No experience information provided.</p>
+            {% endif %}
+            {% if step6_custom_data %}
+                <h3 class="h6 mt-4">Program-specific questions</h3>
+                <dl class="row mb-0">
+                    {% for item in step6_custom_data %}
+                        <dt class="col-sm-4">{{ item.question_text }}</dt>
+                        <dd class="col-sm-8">{{ item.answer|default:"Not answered" }}</dd>
+                    {% endfor %}
+                </dl>
             {% endif %}
         </div>
     </div>

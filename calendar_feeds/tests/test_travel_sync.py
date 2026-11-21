@@ -1,8 +1,11 @@
 """Tests for travel → calendar sync signals."""
 
-from datetime import date
+from datetime import date, time
+from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.test import TestCase
+from django.utils import timezone
 
 from calendar_feeds.models import CalendarEvent, CalendarFeed
 from calendar_feeds.tests.factories import make_feed, make_program
@@ -57,6 +60,31 @@ class TravelSyncTests(TestCase):
 
         cal_event.refresh_from_db()
         self.assertEqual(cal_event.title, "World Championships")
+
+    def test_timed_competition_syncs_as_timed_calendar_event(self):
+        travel = TravelEvent.objects.create(
+            program=self.program,
+            name="Local Competition",
+            start_date=date(2026, 12, 12),
+            end_date=date(2026, 12, 12),
+            is_competition=True,
+            start_time=time(9, 0),
+            end_time=time(16, 30),
+        )
+
+        cal_event = CalendarEvent.objects.get(source_id=str(travel.pk))
+        local_start = timezone.localtime(
+            cal_event.start_datetime,
+            ZoneInfo(travel.organization.get_setting("time_zone", settings.TIME_ZONE)),
+        )
+        local_end = timezone.localtime(
+            cal_event.end_datetime,
+            ZoneInfo(travel.organization.get_setting("time_zone", settings.TIME_ZONE)),
+        )
+        self.assertFalse(cal_event.all_day)
+        self.assertEqual(local_start.date(), travel.start_date)
+        self.assertEqual(local_start.time(), time(9, 0))
+        self.assertEqual(local_end.time(), time(16, 30))
 
     def test_travel_event_delete_removes_calendar_event(self):
         travel = TravelEvent.objects.create(

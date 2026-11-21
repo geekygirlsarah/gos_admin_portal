@@ -29,11 +29,70 @@ newer unrelated JSON and wizard progress rather than saving a stale instance.
 Step 2 rechecks identity and status under the lock and rejects a request whose
 applicant/email changed while the form was being submitted; changing the email
 clears its verification and pending OTP. Program selection rechecks the
-tenant's eligible programs and current status before updating only the program
-and progress fields. Handoff also revalidates the parent address and applicant
-status against the locked row before issuing a token; the notification is sent
-after the transaction. Conversion extracts historical answers from the same
-locked data before normalizing it.
+tenant's eligible programs and current status before updating the program,
+progress, and program-bound custom-question snapshot together. When switching
+programs, it archives the active snapshot by program ID and restores a saved
+snapshot for the selected program; malformed, unbound, or ambiguous snapshots
+are left unchanged and require staff assistance. Handoff also revalidates the
+parent address and applicant status against the locked row before issuing a
+token; the notification is sent after the transaction. Conversion extracts
+historical answers from the same locked data before normalizing it.
+
+Student steps 5–8 and mentor information/clearance writes also recheck the
+locked row after form validation. They do not save when the application has
+become terminal, browser or handoff authorization no longer applies, the
+applicant type or program changed, or student-contact context used for parent
+email validation has changed. Step 8 rechecks the primary/secondary contact
+email-update opt-in against current data. Mentor clearance details are saved
+only while current clearance interest remains affirmative, and clearance
+interest edits reject a conflicting intervening change. Rejected forms are
+rendered with their submitted values so applicants can review and resubmit.
+Primary and secondary guardian forms reject addresses that match each other
+after trimming surrounding whitespace and comparing case-insensitively. The
+comparison is repeated against the locked application before saving, so an
+intervening change cannot introduce a shared guardian address. Blank secondary
+emails remain optional when email updates are not selected, and plus-tagged
+addresses remain distinct. This is an application-form check, not a global
+email uniqueness constraint; historical profile addresses are unchanged.
+Step 7 applies the tenant-scoped unique-person resolver to direct guardian-email
+prefill, welcome-back display, and swap-prompt discovery. If that email matches
+multiple people in the organization, it does not select or reveal one of their
+profiles, and previously saved application fields remain untouched. Relationship-
+derived guardian details and student-address fallback now require the saved
+student to be identified by the verified student email or by a uniquely matched
+guardian with an existing same-organization relationship. When a parent swap
+needs to hydrate a missing contact, the relationship must belong to that saved
+student and organization. Invalid, ambiguous, or cross-organization references
+fail closed without deleting application answers. This is only a prefill
+safeguard: it does not implement incomplete live profiles, lead-review
+decisions, conversion matching changes, or protection against concurrent
+profile-email claims.
+
+### Resume and restart
+
+Starting over from a verified duplicate page locks the current application and
+all eligible matching drafts in the same organization. It marks eligible older
+drafts with `superseded_at` without changing their status, applicant progress
+timestamp, legacy `updated_at` fallback, answers, document submissions, files,
+or history. Superseded applications are omitted from active wizard and resume
+routes, reviewer queues, applicant dashboards, duplicate discovery, and
+reminders. They remain eligible for the existing 30-day expiration policy.
+That command is not scheduled automatically.
+
+A student email verification alone cannot supersede a student-started
+application awaiting guardian handoff. That record remains active unless its
+own guardian-specific browser grant and handoff authorization are present.
+Starting over reports partial completion without identifying protected
+applications. Resume keeps the new draft active until the selected existing
+application is verified in its own browser session. A session-bound intent is
+rechecked with both application rows locked in deterministic order; a guardian
+handoff requires the guardian's OTP and token. Failed or stale verification
+leaves both records and their documents unchanged. No browser grant or handoff
+token is copied between applications. The marker is additive to the legacy
+JSON workflow and does not replace conversion or profile matching.
+The ordered row locks coordinate existing records but cannot prevent another
+request from inserting a new same-email draft at the same time; there is no
+global email uniqueness constraint, so a concurrent new draft may remain active.
 
 Student/parent and mentor confirmation also reload and lock the organization-
 bound application after form validation. They recheck terminal status and the
@@ -43,13 +102,13 @@ updates opt-in. The status transition is saved once, and applicant/lead notices
 are sent only after the transaction, so stale or repeated confirmation posts
 do not reset submission time or resend notifications.
 
-Other JSON writers do not yet all use this locking protocol, so this is not a
-complete concurrency guarantee; SQLite does not provide row-level
-`select_for_update` locking, and concurrent edits to the same step are not
-conflict-detected. Program changes after a custom-question snapshot is frozen
-still need an explicit policy; applicant question collection is not enabled
-until program changes and all relevant writers can preserve the snapshot's
-question binding.
+Application JSON writers outside these coordinated paths may not all use the
+same locking protocol, so this is not a complete concurrency guarantee; SQLite
+does not provide row-level `select_for_update` locking. Step 6 freezes the
+program's active question set and saves it with experience answers under the
+application lock. A signed version rejects competing Step 6 answer edits, and
+the locked confirmation path checks required answers again so direct submission
+cannot bypass them.
 
 ---
 
@@ -57,6 +116,8 @@ question binding.
 
 Staff manage applications via `/applications/review/`:
 - **Workflow States**: `draft` → `submitted` → `under_review` → `accepted` / `waitlisted` / `rejected`.
+- **Required forms before acceptance**: Active required student/parent program documents must have tenant-owned uploaded submissions before the reviewer can accept an application. The locked decision rechecks current uploads; an applicant or staff upload does not itself accept a submitted application. New approvals with required documents use `APPROVED_SIGNED`; existing approved applications remain accessible so families and staff can finish their uploads without changing the prior decision.
+- **Edit conflict protection**: Staff edit forms carry a signed version of the tenant-bound application state. The locked POST rejects missing, forged, or stale versions before saving and redisplays submitted values with a reload notice. GET first persists legacy step-key normalization and then signs the refreshed row so its timestamp matches the normalized data.
 - **Conversion Workflow (`convert_application_to_student`)**:
   - Automatically provisions or links the `Student` profile.
   - Provisions or links primary and secondary parent `Adult` profiles.
@@ -94,37 +155,122 @@ manual review; see `report_application_answer_backfill` in `docs/operations.md`.
 Unlinked approved applications are expected until conversion. The backfill
 cannot recover data already lost before it ran. Answer rows follow the source
 application's and student's deletion lifecycle, and student merges transfer
-them only after validating their ownership. Question configuration and the
-replacement application wizard are not part of this phase.
-Conversion stops with an error if an experience answer is malformed rather than
-discarding it during step-key normalization.
+them only after validating their ownership. Conversion stops with an error if
+an experience answer is malformed rather than discarding it during step-key
+normalization.
 
-Conversion also recognizes a `step6-custom` snapshot: a list of objects with
-`question_id` (UUID), `question_text`, and `answer` (strings). It preserves each
-nonblank answer with the exact question text shown, alongside legacy answers.
-Invalid snapshots or repeated question IDs stop conversion without changing the
-source data. Snapshot creation is not yet connected to applicant forms, and
-application-answer editing is not yet implemented. Lead Mentors can prepare
-free-text questions in program settings,
-mark them required or optional, set their order, and deactivate them. These
-definitions are organization-scoped and do not yet change the public wizard.
-Each definition has a stable UUID intended for future answer snapshots. Existing
-applications and their answers are unaffected by configuring questions.
-Snapshot-building and validation helpers select active questions from the same
-program and organization, retain the wording and required flag, and reject
-malformed or unanswered required entries. A form can render and validate that
-frozen set. A persistence helper can freeze a program-bound snapshot while
-locking and reloading the application; it rejects stale programs, inconsistent
-ownership, completed applications, and malformed or unbound snapshots instead
-of overwriting them. It is not yet wired to the wizard: other application
-writers must be coordinated before it can safely be used publicly. Staff review
-renders existing custom snapshots as questions and answers and flags malformed
-snapshots. Lead Mentors may edit answers on submitted or approved applications;
-the question text and metadata are retained, required answers remain required,
-and stale edits are rejected. Answer edits use the existing application edit
-audit event. Custom answers are read-only during an in-progress application
-until concurrent applicant writes are coordinated, and after conversion to
-avoid diverging from the student profile.
+Lead Mentors can configure organization-scoped, free-text questions for a
+program, including active/inactive state, required/optional status, and display
+order. When an applicant reaches Step 6, the application freezes the active
+question set—including exact wording and required status—against its selected
+program. Later configuration changes do not rewrite that application's frozen
+questions. Switching programs archives the outgoing snapshot and restores a
+saved snapshot for the target program; malformed, unbound, or ambiguous state
+is retained for staff assistance rather than guessed or discarded.
+
+Applicants answer the frozen questions alongside the existing experience
+questions. Required answers are checked by the Step 6 form and again against the
+freshly locked application during confirmation; direct submission cannot skip
+an unfrozen set or submit an unanswered required question. The confirmation
+page shows the saved wording and answers. Step 6 reads legacy fixed experience
+answers through the existing key normalizer without rewriting legacy data just
+because the page was viewed. New conversions preserve nonblank custom answers
+with the exact wording shown, alongside the legacy experience answers.
+
+Staff review renders custom snapshots and flags malformed data. Lead Mentors may
+edit answers on submitted or approved applications; the wording and metadata are
+retained, required answers remain required, and stale edits are rejected. Answer
+edits use the existing application edit audit event. Staff edits remain
+read-only for in-progress applications and after conversion to avoid diverging
+from applicant answers or the student profile.
+
+### Typed application draft foundation (inactive)
+
+Schema-only migrations `0024` and `0025` add application-owned student drafts,
+guardian contact drafts, frozen question sets, and fixed/custom answer rows.
+`Application` remains the progress tracker. The optional one-to-one student
+draft includes typed Step 5 fields and encrypted medical text; guardian rows are
+keyed by primary/secondary slot and distinguish unanswered, present, and
+explicitly skipped contacts. Race/ethnicity selections are stored through a
+tenant-owned join model. These records do not create or link live student/adult
+profiles, relationships, enrollments, user accounts, or portal access.
+
+Schema-only migrations `applications.0026` and `programs.0143` add optional
+tenant-validated profile links to `Application` and an explicit incomplete
+lifecycle flag to `Student` and `Adult`. Existing profiles retain the default
+active state; the links remain unset for existing applications. Incomplete
+profiles are excluded by the ordinary Student, Adult, Enrollment, and
+AdultStudentRelationship managers, active-student helpers, and the dashboard's
+relationship-derived access paths.
+Primary/secondary contact properties suppress incomplete endpoints, and model
+save paths reject account links, enrollments, and live guardian relationships
+for incomplete profiles. Database constraints also prohibit incomplete
+profiles from carrying linked user accounts. The unrestricted `all_objects`
+managers are for scoped internal lifecycle and invariant checks, not ordinary
+views or forms.
+
+This isolation foundation is not connected to the public wizard: new applicant
+profile creation and direct updates remain disabled. The legacy application
+workflow continues to use `Application.data`; `profile_workflow_version` stays
+at its legacy default until the complete identity, review, conversion, and
+compatibility flow is ready. Authorized application reviewers retain access to
+their tenant-scoped application review pages; ordinary profile detail routes do
+not expose incomplete profiles.
+
+Schema-only migrations `applications.0027`–`0034` add tenant-owned identity and
+relationship proposal records, while `programs.0144`–`0146` add revision
+counters and database defaults for the profile lifecycle fields. Identity
+resolution distinguishes no match, one active same-organization match, and
+ambiguity across both Student and Adult personal
+and organization email addresses; an ambiguous result carries no candidate.
+Proposals store typed candidate/target references, action, baseline and reviewer
+decision metadata. Live profile, application-draft and relationship revisions
+detect partial saves as well as ordinary updates, and application progress is
+checked again before a proposal baseline is considered current. `pghistory`
+records proposal decision history without copying applicant contact or profile
+values into proposal events.
+
+The relationship action model supports additions, removals, replacements, and
+primary-contact changes. Authorized reviewers can record identity and
+relationship decisions for `profile_workflow_version=1`; those decisions do not
+change live access until final approval. That approval rechecks required forms,
+proposal decisions, current baselines, profile ownership, email conflicts, and
+relationship endpoints under tenant-bound locks, then activates linked
+incomplete profiles, applies only approved relationship changes, enrolls the
+student, and preserves structured answers in one transaction. Profile-workflow
+applications cannot use the legacy conversion endpoint.
+
+The read-only `evaluate_application_profile_edit` helper encodes the approved
+exact-linked-account, unique verified-email, and existing linked-guardian rules;
+edits to another guardian, ambiguous identities, or an unrelated student
+require lead review. It is not connected to applicant profile writes. The public
+wizard still creates legacy version-0 applications, and conversion for those
+applications continues through its existing email-matching path. This remains a
+foundation, not a user-visible rollout. The legacy staff editor is unavailable
+for profile-workflow applications because it writes JSON rather than structured
+records; a safe typed editor is required before enabling the new workflow.
+
+A question-set row is keyed by application and program; the row itself means
+the set was frozen, including when it has zero answer rows. Its ordered answers
+copy the stable question UUID, displayed wording, required flag, and nullable
+answer without requiring the live program-question record to remain. Separate
+sets can retain snapshots for earlier programs. Fixed experience answers use
+source-step and question-key identity, so legacy and current responses can
+coexist without overwriting one another. Model save paths validate that related
+application, program, and answer records share an organization; database
+uniqueness constraints enforce row cardinality, not cross-table tenant ownership
+or integrity for bulk operations that bypass model saves.
+
+This foundation is not connected to the wizard, review, conversion, reminders,
+or maintenance commands. `Application.data` remains authoritative; there is no
+dual-write, backfill, historical normalization, live-data migration, profile
+activation, or user-visible rollout. Before typed records can replace JSON,
+each reader and writer must be migrated with application-row locking, stale
+conflict versions, staff/applicant audit coverage, and the approved per-person
+authorization and relationship-review rules. Legacy approved applications,
+protected documents, snapshot wording, fixed-answer conflicts, and historical
+audit snapshots must remain recoverable; any backfill or JSON removal needs a
+separately approved migration and recovery plan.
 
 Conversion matches existing students and adults only within the application's
 organization and explicitly assigns that organization to new profiles,
@@ -137,6 +283,70 @@ the database changes are rolled back; the reviewer must resolve the document
 before retrying. Storage writes are not transactional, so files copied before a
 later conversion error may remain in storage.
 
+### Application reminders
+
+`send_application_reminders --organization <slug>` processes a bounded batch for
+one active organization. Its `--dry-run` reports only an eligible-message count;
+it does not create claims, update application timestamps, or send email. No
+automatic scheduler is configured by this feature.
+
+New applications start with `applicant_progress_at`. Successful applicant wizard
+writes, handoff, submission, and applicant document uploads advance that clock;
+OTP activity, staff edits, and reminder delivery do not. Older applications
+without the field use `updated_at` as the approximate inactivity clock, which
+may reflect OTP or staff activity. Inactivity reminders become due after 48
+hours. A deadline reminder is due from two date-days before `applications_close`
+through the inclusive closing date, using `timezone.now().date()`; programs with
+no close date have no deadline reminder, and applications for closed windows are
+not reminded.
+
+Draft student, guardian, and mentor applications are eligible only for a
+verified applicant address or an authorized student-to-guardian handoff. A
+handoff reminder uses the recorded guardian address and tokenized resume route;
+it does not grant browser verification. Submitted student/guardian applications
+are eligible only while required forms remain missing, and notices use
+`document_recipient` and the protected documents route. Applications merely
+awaiting staff review with complete forms and finalized applications are not
+reminded. Simultaneous inactivity and deadline triggers are combined into one
+message for that application phase. Separate tenant-scoped ledger rows dedupe
+each trigger within the draft or missing-documents phase.
+
+Delivery uses synchronous email history and organization tracking. A confirmed
+pre-send failure may be retried; accepted delivery is recorded, while a transport
+exception or interrupted pending claim is treated as uncertain and must not be
+automatically resent. Operators should investigate the delivery history and
+provider before resolving an uncertain outcome. This is not an exactly-once
+delivery guarantee, and reminder links continue to rely on existing browser and
+guardian document verification.
+
+### Application expiration
+
+`expire_applications --organization <slug> [--limit <count>]` checks a bounded
+batch for one active organization. It is read-only by default; only the explicit
+`--execute` option permanently deletes eligible applications and their owned
+uploaded files. The default batch size is 200 and the maximum is 500. No
+automatic scheduler is configured.
+
+The 30-day clock starts at the last recorded applicant progress. Existing
+applications without `applicant_progress_at` use `updated_at` as an
+approximation, which may include OTP or staff activity. Eligible phases are
+unfinished drafts, student applications awaiting parent handoff, and submitted
+student/parent applications that still have at least one active required form
+missing. Applications with complete forms that are waiting for staff review,
+mentor submissions, and finalized/declined applications are excluded. The
+policy applies to applications already in progress as well as new applications;
+expired applicants must start over and cannot resume the deleted application.
+
+Execution rechecks the tenant, progress, status, program, and required-document
+state under an application-row lock. It removes only files under that exact
+organization/application storage prefix, preserving the deletion audit event; an
+inconsistent submission, unsafe path, unsupported storage listing, or failed
+audit prevents deletion. Database and storage deletion are not atomic: a storage
+failure can leave some files already removed while the application remains, so
+operators should review failures before retrying. The existing reviewer stale
+cleanup is a separate manual path with its own selection behavior and is not the
+30-day timeout.
+
 ### Tenant isolation
 
 Reviewer lists, filters, details, decisions, edits, conversions, uploads, and deletes require the resolved organization and only load applications owned by it. Review authorization requires a Lead Mentor in that organization or a platform superuser; a global Django reviewer permission does not override tenant roles. Applications linked to a program owned by another organization are treated as inconsistent and are not available in review. Program choices and application KPIs are tenant-scoped.
@@ -145,7 +355,18 @@ Stale cleanup only considers applications belonging to the current organization.
 
 Public wizard routes require a resolved organization and load application IDs only within that organization. New applications are assigned to the request organization; program choices, duplicate-draft actions, and returning student/adult prefill are likewise organization-scoped. A missing tenant context fails closed. Lead notifications go only to active users with an active `LeadMentor` membership in the application organization; if there are no eligible email addresses, no lead notification is sent.
 
-Step 10 displays and accepts documents only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. Document notices use that same recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping.
+Step 5 student self-prefill and the guardian's existing-student picker require a
+unique email match across both Student and Adult records in the application
+organization, checking personal and organization email fields. If the address
+matches multiple records, or matches both a Student and an Adult, the wizard
+withholds the profile prefill or picker rather than selecting one. The student
+match is rechecked against the locked application before saving Step 5. This is
+limited to these wizard lookup paths: it does not enforce global email
+uniqueness, change conversion matching, link profiles, or authorize profile
+edits. The application-row lock does not serialize concurrent changes to the
+matched profiles, so this is not a portal-wide identity guarantee.
+
+Step 10 displays and accepts documents for submitted student/parent applications before approval, as well as approved legacy applications, only when the application, program, document, and submission ownership are consistent with the request organization. New submissions explicitly inherit the application's organization. Existing mismatched submissions cannot be exposed or overwritten, and duplicate/withdraw deletion is blocked when it would cascade through an inconsistent submission. Applicant downloads and uploads require a fresh, rate-limited email code verified in the same browser session; the grant expires with the OTP lifetime and is bound to the tenant, application, and document recipient. For a student-started application, the recipient is the handoff parent, or the primary parent's saved email for a legacy application without a handoff address. For a parent-started application, it is the application email. After submission, a separate required-document notice and protected link are sent only to that same parent/guardian; the student is never used as a fallback recipient. A missing parent address requires staff assistance, not a fallback to the student. The document challenge is separate from application email verification, and a recipient change invalidates both pending codes and access grants. Staff use a separate download route protected by application-review permission and tenant scoping; staff uploads recheck the application and program under a row lock. Completing uploads while the application is still submitted does not auto-accept it. Previously approved applications with missing required documents retain their approval and can complete uploads; completion preserves the existing `APPROVED_SIGNED` transition.
 
 Approved and later application states are read-only through earlier public wizard steps. An application ID alone is not proof of applicant identity. Other in-progress wizard routes continue to follow the existing email-verification and parent-handoff workflow; this Step 10 challenge is an additional control for signed-document access.
 

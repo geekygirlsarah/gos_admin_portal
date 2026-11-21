@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import close_old_connections, transaction
 from django.db.models import Q
+from django.db.models.functions import Trim
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -21,12 +23,23 @@ from programs.models import (
     AdultStudentRelationship,
     Enrollment,
     Program,
+    ProgramDocument,
     Student,
 )
 
-from .models import Application, normalize_step_keys
+from .models import (
+    Application,
+    ApplicationDocumentSubmission,
+    normalize_step_keys,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ApplicationIdentityResolution:
+    status: str
+    profile: Optional[Student | Adult] = None
 
 
 def normalize_email(email: str) -> str:
@@ -327,6 +340,91 @@ def find_adult_by_email(email: str, organization=None):
     return qs.first()
 
 
+def _find_unique_application_person_by_email(email: str, organization=None):
+    """Return a sole tenant-owned Student or Adult match, otherwise ``None``."""
+    return resolve_application_person_identity(email, organization).profile
+
+
+def resolve_application_person_identity(
+    email: str, organization=None
+) -> ApplicationIdentityResolution:
+    """Classify an email without choosing between multiple tenant profiles."""
+    email = normalize_email(email)
+    if not email or organization is None:
+        return ApplicationIdentityResolution("no_match")
+
+    email_filter = Q(normalized_personal_email__iexact=email) | Q(
+        normalized_org_email__iexact=email
+    )
+    students = list(
+        Student.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("pk")[:2]
+    )
+    adults = list(
+        Adult.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("pk")[:2]
+    )
+    if len(students) + len(adults) != 1:
+        status = "ambiguous" if students or adults else "no_match"
+        return ApplicationIdentityResolution(status)
+    return ApplicationIdentityResolution(
+        "unique", students[0] if students else adults[0]
+    )
+
+
+def find_application_person_candidates(email: str, organization=None):
+    """Return same-organization active people matching an identity-review email."""
+    email = normalize_email(email)
+    if not email or organization is None:
+        return []
+    email_filter = Q(normalized_personal_email__iexact=email) | Q(
+        normalized_org_email__iexact=email
+    )
+    candidates = [
+        ("student", profile)
+        for profile in Student.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("last_name", "legal_first_name", "pk")
+    ]
+    candidates.extend(
+        ("adult", profile)
+        for profile in Adult.objects.for_organization(organization)
+        .alias(
+            normalized_personal_email=Trim("personal_email"),
+            normalized_org_email=Trim("org_email"),
+        )
+        .filter(email_filter)
+        .order_by("last_name", "legal_first_name", "pk")
+    )
+    return candidates
+
+
+def find_unique_student_by_email(email: str, organization=None):
+    """Return a Student only when the email identifies one person in the tenant."""
+    match = _find_unique_application_person_by_email(email, organization)
+    return match if isinstance(match, Student) else None
+
+
+def find_unique_adult_by_email(email: str, organization=None):
+    """Return an Adult only when the email identifies one person in the tenant."""
+    match = _find_unique_application_person_by_email(email, organization)
+    return match if isinstance(match, Adult) else None
+
+
 def find_existing_mentor_by_email(email: str, organization=None):
     """Return an existing Adult flagged as a mentor matching this email,
     or ``None``. Used to block re-applications by people we already know.
@@ -389,7 +487,11 @@ def applications_for_user(user, organization=None):
 
     if not match:
         return []
-    applications = Application.objects.filter(match, status__in=PENDING_STATUSES)
+    applications = Application.objects.filter(
+        match,
+        status__in=PENDING_STATUSES,
+        superseded_at__isnull=True,
+    )
     if organization is not None:
         applications = applications.for_organization(organization).filter(
             Q(program__isnull=True) | Q(program__organization=organization)
@@ -562,7 +664,6 @@ def send_parent_handoff_email(
     organization_name = (
         application.organization.name if application.organization else "Momentum"
     )
-
     ctx = _build_app_email_ctx(
         application,
         {
@@ -587,6 +688,9 @@ def get_primary_parent_email(application: Application) -> Optional[str]:
     """Return the primary parent's email address from Step 7 data.
     Falls back to handoff email, then application email if applicant is a parent.
     """
+    if application.profile_workflow_version == 1:
+        return _linked_primary_guardian_email(application)
+
     data = application.data or {}
     step7 = data.get("step7-primaryparent") or {}
     parent_email = (step7.get("email") or "").strip()
@@ -605,6 +709,8 @@ def get_primary_parent_email(application: Application) -> Optional[str]:
 
 def document_recipient(application: Application) -> str:
     """Find the parent address eligible for a document challenge."""
+    if application.profile_workflow_version == 1:
+        return _linked_primary_guardian_email(application) or ""
     if application.applicant_type == Application.Type.PARENT:
         return (application.email or "").strip().lower()
     if application.applicant_type != Application.Type.STUDENT:
@@ -620,6 +726,54 @@ def document_recipient(application: Application) -> str:
             if isinstance(email, str) and email.strip():
                 return email.strip().lower()
     return ""
+
+
+def _linked_primary_guardian_email(application: Application) -> Optional[str]:
+    if not application.primary_guardian_profile_id or not application.organization_id:
+        return None
+    guardian = Adult.all_objects.filter(
+        pk=application.primary_guardian_profile_id,
+        organization_id=application.organization_id,
+    ).first()
+    if guardian is None:
+        return None
+    return normalize_email(guardian.personal_email or guardian.org_email) or None
+
+
+def required_application_documents(application: Application):
+    """Return the active, tenant-owned required forms for a student application."""
+    if application.is_mentor or not application.program_id:
+        return ProgramDocument.objects.none()
+    return ProgramDocument.objects.filter(
+        program_id=application.program_id,
+        program__organization_id=application.organization_id,
+        is_active=True,
+        is_required=True,
+    )
+
+
+def has_required_application_documents(application: Application) -> bool:
+    return required_application_documents(application).exists()
+
+
+def required_application_documents_complete(application: Application) -> bool:
+    required_ids = set(
+        required_application_documents(application).values_list("pk", flat=True)
+    )
+    if not required_ids:
+        return True
+    uploaded_ids = set(
+        ApplicationDocumentSubmission.objects.for_organization(application.organization)
+        .filter(
+            application=application,
+            organization_id=application.organization_id,
+            document_id__in=required_ids,
+            document__program__organization_id=application.organization_id,
+        )
+        .exclude(file="")
+        .values_list("document_id", flat=True)
+    )
+    return required_ids.issubset(uploaded_ids)
 
 
 def _collect_applicant_recipients(application: Application) -> List[str]:
@@ -696,9 +850,53 @@ def send_application_submitted_email(application: Application, request=None) -> 
     )
 
 
+def send_application_documents_required_email(
+    application: Application, request=None
+) -> None:
+    """Send the required-document link only to the responsible guardian."""
+    documents = list(required_application_documents(application))
+    if not documents or required_application_documents_complete(application):
+        return
+    recipient = document_recipient(application)
+    if not recipient:
+        return
+    organization_name = (
+        application.organization.name if application.organization else "Momentum"
+    )
+    documents_url = _application_email_url(
+        application,
+        reverse(
+            "apply_step10_document_access",
+            kwargs={"app_id": application.application_id},
+        ),
+    )
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "documents": documents,
+            "documents_url": documents_url,
+        },
+    )
+    text_body = render_to_string(
+        "applications/email/application_documents_required.txt", ctx
+    )
+    html_body = render_to_string(
+        "applications/email/application_documents_required.html", ctx
+    )
+    _send_html_email(
+        subject=f"Action needed: required forms for your {organization_name} application",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=[recipient],
+        organization=application.organization,
+        request=request,
+        history_category="application_document_request",
+        retain_history_body=False,
+    )
+
+
 def send_application_approved_email(application: Application, request=None) -> None:
-    """Notify the applicant that their application was approved and that
-    they have signed documents to download/upload (Step 9).
+    """Notify the applicant that their application has been approved.
 
     Student document notices go to the parent responsible for document access.
     """
@@ -720,16 +918,22 @@ def send_application_approved_email(application: Application, request=None) -> N
     # will redirect to /apply/<id>/step9/ for APPROVED applications.
 
     documents_url = _absolute_apply_url(request, application)
+    has_required_documents = has_required_application_documents(application)
+    required_documents_complete = required_application_documents_complete(application)
     ctx = _build_app_email_ctx(
         application,
         {
             "documents_url": documents_url,
+            "has_required_documents": has_required_documents,
+            "required_documents_complete": required_documents_complete,
         },
     )
     text_body = render_to_string("applications/email/application_approved.txt", ctx)
     html_body = render_to_string("applications/email/application_approved.html", ctx)
     if application.is_mentor:
         subject = f"Your {organization_name} application has been approved"
+    elif has_required_documents and required_documents_complete:
+        subject = f"Approved: your {organization_name} application"
     else:
         subject = (
             f"Approved: action needed to finish your {organization_name} enrollment"

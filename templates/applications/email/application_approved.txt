@@ -7,6 +7,16 @@ Welcome aboard! You're on your way to becoming a {{ org_email_settings.organizat
 and our lead mentors will be in touch with your onboarding details.
 
 Mentor:         {{ application.mentor_name|default:"(not specified)" }}
+{% elif has_required_documents and required_documents_complete %}
+We have received the required signed forms, and your application has been approved.
+
+Student:        {{ application.student_name|default:"(not specified)" }}
+Program:        {{ application.program|default:"(not specified)" }}
+
+{% if documents_url %}You can review your documents here:
+
+  {{ documents_url }}
+{% endif %}
 {% else %}
 There is one more step before {{ application.student_name|default:"your student" }}
 is officially in {{ application.program|default:"the program" }}:

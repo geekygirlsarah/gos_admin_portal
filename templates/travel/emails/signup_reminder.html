@@ -1,0 +1,14 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel signup reminder{% endblock %}
+{% block header %}Action Needed: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p>This is a reminder about <strong>{{ student.display_name }}</strong>'s signup for <strong>{{ event.name }}</strong>.</p>
+<ul>
+    {% for reason in reasons %}
+    <li>{{ reason }}</li>
+    {% endfor %}
+</ul>
+<p>Please review the current trip choices and complete any outstanding action in the portal. A signed permission form and parent or guardian approval are separate requirements.</p>
+<p><a href="{{ trip_link }}">Review the trip details</a></p>
+{% endblock %}

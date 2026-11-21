@@ -1,0 +1,9 @@
+<p>{{ student.display_name }}'s competition attendance response for <strong>{{ event.name }}</strong> was updated to <strong>{{ response }}</strong>.</p>
+<p>Event date: {{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %}–{{ event.end_date|date:"N j, Y" }}{% endif %}{% if event.start_time %}, {{ event.start_time|time:"g:i A" }}–{{ event.end_time|time:"g:i A" }} (organization local time){% endif %}</p>
+{% if response == "Attending" %}
+{% if approval_pending %}<p>Guardian approval is still needed for the travel choices and any required form. Please review and confirm the current trip details in the portal.</p>{% else %}<p>This attendance response does not change the existing guardian approval or any signed permission form.</p>{% endif %}
+{% else %}
+{% if signup_withdrawn %}<p>The active travel signup was withdrawn and its tracked charge was cleared. Any signed form remains on file, but no current guardian approval is active.</p>{% else %}<p>This response records attendance only; guardian approval or decline remains separate. It does not create or alter an active travel signup.</p>{% endif %}
+{% endif %}
+<p>Parent chaperone signups remain separate.</p>
+<p><a href="{{ trip_link }}">View the event in {{ program.name }}</a></p>

@@ -1,0 +1,11 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel departure changed{% endblock %}
+{% block header %}Departure Update: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p>The departure for <strong>{{ student.display_name }}</strong> on <strong>{{ event.name }}</strong> was changed by a trip administrator.</p>
+<p>Previous departure: <strong>{{ previous_departure }}</strong><br>
+New departure: <strong>{{ current_departure }}</strong></p>
+<p>A parent or guardian needs to confirm this departure change before the signup is considered approved. The current signed permission form remains valid, and the trip approval is separate from the form.</p>
+<p><a href="{{ trip_link }}">Review the trip details</a></p>
+{% endblock %}

@@ -23,6 +23,8 @@ NON_PROTECT_MODELS = {
     "programs.EnrollmentEvent",
     "programs.StudentEvent",
     "applications.ApplicationEvent",
+    "applications.ApplicationIdentityProposalEvent",
+    "applications.ApplicationRelationshipProposalEvent",
 }
 
 

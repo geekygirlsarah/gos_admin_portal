@@ -7,13 +7,14 @@ import logging
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 
 from programs.utils import calculate_grade
 
 from ..models import Application, normalize_step_keys
 from ..services import (
     find_existing_mentor_by_email,
-    find_student_by_email,
+    find_unique_student_by_email,
     send_otp_email,
     student_to_prefill,
 )
@@ -53,7 +54,9 @@ def _get_application_or_404(app_id: str, organization) -> Application:
     if organization is None:
         raise Http404
     application = get_object_or_404(
-        Application.objects.for_organization(organization).select_related("program"),
+        Application.objects.for_organization(organization)
+        .filter(superseded_at__isnull=True)
+        .select_related("program"),
         application_id=(app_id or "").upper(),
     )
     if (
@@ -236,7 +239,13 @@ def _auto_authorize_handoff(request, application: Application) -> None:
 
 
 def _save_step_data(
-    application: Application, key: str, payload: dict, next_step: int, remove_keys=()
+    application: Application,
+    key: str,
+    payload: dict,
+    next_step: int,
+    remove_keys=(),
+    validate_current=None,
+    data_updates=None,
 ):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
@@ -246,17 +255,36 @@ def _save_step_data(
         current = (
             Application.objects.using(using)
             .select_for_update()
-            .get(pk=application.pk, organization_id=application.organization_id)
+            .get(
+                pk=application.pk,
+                organization_id=application.organization_id,
+                superseded_at__isnull=True,
+            )
         )
+        if validate_current is not None:
+            response = validate_current(current)
+            if response is not None:
+                return response
         data = dict(normalize_step_keys(current.data) or {})
         for remove_key in remove_keys:
             data.pop(remove_key, None)
         data[key] = payload
+        data.update(data_updates or {})
         current.data = data
         current.current_step = max(current.current_step, next_step)
-        current.save(update_fields=["data", "current_step", "updated_at"])
+        current.applicant_progress_at = timezone.now()
+        current.save(
+            update_fields=[
+                "data",
+                "current_step",
+                "applicant_progress_at",
+                "updated_at",
+            ]
+        )
         application.data = current.data
         application.current_step = current.current_step
+        application.applicant_progress_at = current.applicant_progress_at
+    return None
 
 
 def _sanitize_payload(cleaned_data: dict) -> dict:
@@ -298,7 +326,7 @@ def _student_initial_for(application: Application) -> dict:
         return saved
     # Try to prefill from an existing Student record.
     if application.applicant_type == Application.Type.STUDENT:
-        existing = find_student_by_email(
+        existing = find_unique_student_by_email(
             application.email, organization=application.organization
         )
         if existing:

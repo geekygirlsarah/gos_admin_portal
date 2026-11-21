@@ -5,6 +5,40 @@ Recipient filtering mirrors the fee/payment notification pattern in
 opted-in and a personal email on file are notified.
 """
 
+from django.db.models import F, Prefetch
+
+
+def signed_permission_form_prefetches(organization):
+    """Prefetch current and superseded local signed forms for signup displays."""
+    from travel.models import TravelSignedPermissionForm
+
+    forms = (
+        TravelSignedPermissionForm.objects.for_organization(organization)
+        .filter(
+            organization=organization,
+            signup__organization=organization,
+            signup__event__organization=organization,
+            signup__student__organization=organization,
+        )
+        .exclude(file="")
+    )
+    return (
+        Prefetch(
+            "signed_permission_forms",
+            queryset=forms.filter(
+                form_version=F("signup__event__permission_form_version")
+            ).order_by("-uploaded_at", "-pk"),
+            to_attr="current_signed_permission_forms",
+        ),
+        Prefetch(
+            "signed_permission_forms",
+            queryset=forms.exclude(
+                form_version=F("signup__event__permission_form_version")
+            ).order_by("-uploaded_at", "-pk"),
+            to_attr="outdated_signed_permission_forms",
+        ),
+    )
+
 
 def parent_recipients(student, organization=None):
     """Unique parent emails we are allowed to notify for ``student``."""
@@ -36,16 +70,33 @@ def get_student_travel_highlights(student, program):
     """Upcoming trips this student is signed up for, for the dashboard card."""
     from datetime import date
 
+    from django.db.models import F, Q
+
     from travel.models import TravelSignup
 
+    organization = student.organization
     signups = (
-        TravelSignup.objects.filter(
+        TravelSignup.objects.for_organization(organization)
+        .filter(
+            organization=organization,
             student=student,
+            student__organization=organization,
+            event__organization=organization,
             event__program=program,
+            event__program__organization=organization,
             event__end_date__gte=date.today(),
         )
-        .select_related("event", "departure", "approved_by")
-        .prefetch_related("cost_items")
+        .filter(
+            Q(departure__isnull=True)
+            | Q(
+                departure__organization=organization,
+                departure__event_id=F("event_id"),
+            )
+        )
+        .select_related("student", "event", "departure", "approved_by")
+        .prefetch_related(
+            "cost_items", *signed_permission_form_prefetches(organization)
+        )
     )
     return [
         s

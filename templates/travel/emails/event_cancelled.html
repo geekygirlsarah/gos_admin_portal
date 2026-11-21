@@ -1,0 +1,9 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel event cancelled{% endblock %}
+{% block header %}Event Cancelled: {{ event_name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p><strong>{{ event_name }}</strong>{% if program_name %}, part of the {{ program_name }} program{% endif %}, has been cancelled.</p>
+<p>Event dates: {{ start_date|date:"N j, Y" }}{% if end_date != start_date %} through {{ end_date|date:"N j, Y" }}{% endif %}{% if location_name %}<br>Location: {{ location_name }}{% endif %}</p>
+<p>Please contact a lead mentor if you have questions. This message does not include a link to the cancelled event.</p>
+{% endblock %}

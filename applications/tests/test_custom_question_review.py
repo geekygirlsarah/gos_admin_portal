@@ -205,10 +205,14 @@ class CustomQuestionReviewTests(TestCase):
                 response = self.client.get(edit, HTTP_HOST="question-review.localhost")
                 self.assertContains(response, "Custom answers cannot be edited")
                 self.assertNotContains(response, "custom_answer_")
+                version = response.context["form"].initial["custom_snapshot_version"]
                 original = self.app.data["step6-custom"]
                 response = self.client.post(
                     edit,
-                    {f"custom_answer_{original[0]['question_id']}": "Tampered"},
+                    {
+                        "custom_snapshot_version": version,
+                        f"custom_answer_{original[0]['question_id']}": "Tampered",
+                    },
                     HTTP_HOST="question-review.localhost",
                 )
                 self.assertEqual(response.status_code, 302)
@@ -239,10 +243,18 @@ class CustomQuestionReviewTests(TestCase):
         self.app.data["step6-custom"] = [{"question_text": "Bad", "answer": []}]
         self.app.data["step6"] = {"interest_reason": "Legacy response"}
         self.app.save()
-        original = self.app.data.copy()
         edit = reverse("application_review_edit", args=[self.app.application_id])
+        get_response = self.client.get(edit, HTTP_HOST="question-review.localhost")
+        version = get_response.context["form"].initial["custom_snapshot_version"]
+        self.app.refresh_from_db()
+        original = self.app.data.copy()
         response = self.client.post(
-            edit, {"email": "new@example.test"}, HTTP_HOST="question-review.localhost"
+            edit,
+            {
+                "custom_snapshot_version": version,
+                "email": "new@example.test",
+            },
+            HTTP_HOST="question-review.localhost",
         )
         self.assertContains(response, "Custom application questions are malformed")
         self.app.refresh_from_db()

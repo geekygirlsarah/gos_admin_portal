@@ -65,12 +65,31 @@ Mentor travel links, profile commitments, and digest highlights follow the
 trip-details read permission; calendar feeds retain their separate access rules.
 
 ### Travel Models
-- **`TravelEvent`**: Destination, `start_date`, `end_date`, location, and optional `permission_form` file upload.
+- **`TravelEvent`**: Destination, `start_date`, `end_date`, optional organization-local `start_time`/`end_time`, optional signup deadline, location, permission form, and an opt-in `requires_departure` setting. Events marked as competitions collect explicit student attendance responses; legacy events remain untimed unless times are entered.
 - **`TravelDeparture`**: Specific bus/flight departures and departure times.
 - **`TravelCostOption`**: Per-traveler fee options. Required options are included for every signup; new options default to required, while existing options are migrated as optional.
 - **`TravelSignup`**: Student registration (`status`: `interested` → `approved` / `declined` / `withdrawn`). Approval posts the approved total to the student's program balance.
+- **`TravelSignedPermissionForm`**: Encrypted signed upload tied to the signup and the version of the blank form. Each upload is retained until the trip is deleted.
 - **`TravelMentorSignup`**: Mentor registrations with `is_driver` flag and departure choice.
 - **`TravelParentChaperoneSignup`**: Parent chaperone roster.
+- **`TravelCompetitionRSVP`**: Explicit `Attending` / `Not attending` response for competition attendance, independent of guardian approval and parent chaperone status.
+
+Competition responses can be entered by the active student, a linked local
+guardian, or a Lead Mentor. The event roster shows only students with a recorded
+response; Lead Mentors can update those responses or record one for an active
+student in the program. A new `Attending` response creates or reactivates the
+student's travel signup as pending guardian approval, while `Not attending`
+withdraws an active signup and clears any associated charge. Neither response
+approves travel or replaces a required signed form. Chaperone attendance remains
+a separate adult role/signup.
+
+Event start/end times are optional and interpreted in the organization's
+configured time zone; calendar feeds retain all-day entries when no times are
+set. A signup deadline is also optional and displayed in organization-local
+time. After it passes, students, guardians, mentors, and chaperones cannot create
+a new self-signup; Lead Mentors may add attendees, and existing guardian approval
+and withdrawal actions remain available. A closed deadline is a cutoff, not an
+approval deadline.
 
 Departure and cost-option editors and event-list rosters are scoped to the
 resolved organization, and signup POSTs accept only departures owned by that
@@ -78,6 +97,29 @@ organization. Mentor and parent signup profiles and their adult-student
 eligibility relationships must also belong to that organization. Existing
 mismatched links are hidden from tenant rosters and are not changed or notified;
 signup conflicts are left for separate review.
+
+Student signup transitions lock the event before locking and reloading the
+tenant-scoped signup. Rejoin, withdrawal, guardian decline, and decision undo
+recheck the current state under those locks. The Django admin exposes travel
+records only as read-only to platform superusers outside tenant context; it is
+not a supported path for creating or changing travel data.
+
+Students can update the departure and optional cost selections on their own
+active signup. An actual change returns an approved signup to pending guardian
+approval, recalculates a tracked balance charge, and notifies the student and
+eligible local guardians after the update commits. No-op edits preserve approval
+and do not send notices. Lead Mentors can reassign an active student's departure;
+an approved signup returns to pending guardian approval while retaining its
+balance charge and current signed form. The student and eligible local guardians
+receive an after-commit notice asking them to confirm the new departure.
+
+Editing a selected departure's details also reopens approval for approved
+signups assigned to that departure. The current charge and signed form are
+preserved; the approval snapshot is cleared and the transition is audit logged.
+General event-change notices go to active pending and approved families and
+signed-up adults. Each family receives its own message, including any
+signup-specific cost or departure change, so another student's amount or choices
+are not disclosed.
 
 Trip deletion is refused before audit logging if a foreign-owned departure,
 cost option, or signup would be deleted or changed. This includes foreign
@@ -87,12 +129,68 @@ records are preserved for review rather than detached or reassigned.
 ### Parent Approval Workflow & Notifications
 - Students submit initial sign-ups (`interested`).
 - **Guardian Approval Invariant**: **Only a student's linked parents can approve or decline** (`_ParentSignupActionView` verifies `parent.students.filter(pk=...)`).
-- All state transitions dispatch transactional notification emails via `travel/services.py` (`notify_signup_created`, `notify_parent_approval_requested`, `notify_signup_approved`).
-- When a trip is edited, students with approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded, and shared addresses receive one email.
-- If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending parent approval. An after-commit email with that student's previous and current totals goes only to the student and eligible local guardians; other attendees do not receive the individualized amount. Edits that do not change a student's total preserve the approval. Charge changes are audit logged.
+- State-transition notification functions live in `travel/services.py` (`notify_signup_created`, `notify_signup_approved`, `notify_signup_declined`). Signup and selected costs commit atomically before notices are sent. Family members are sent separate messages so one recipient failure does not prevent attempts to notify others; failures are logged without addresses or personal details, and uncertain sends are not automatically retried.
+- Direct signup and adult-notice helpers fail closed when signup, event, program, participant, or departure organization ownership is inconsistent; guardian recipients are additionally restricted to the event organization.
+- When a trip is edited, students with pending or approved sign-ups, their eligible local guardians, and signed-up local mentors and parent chaperones receive an email listing changed trip fields, departures, and costs when an address is available. Adult recipients must have login enabled and email updates opted in; inconsistent organization or departure ownership is excluded. Family messages are individual and can include only that signup's private cost and departure details.
+- If an edit changes a student's computed total, the current balance charge is updated immediately, the approval snapshot is cleared, and the signup returns to pending guardian approval. An after-commit family email shows that student's previous and current totals; other attendees do not receive the individualized amount. Edits that do not change the total or selected departure preserve approval. Charge changes and departure-triggered reapproval are audit logged.
 - Email templates must not rely on `request` context; they direct users to log in directly to the portal.
 
-### Parent Chaperone System
+Lead Mentors see each active signup's outstanding parent approval, signed form,
+and required departure. Linked local guardians and Lead Mentors may upload signed
+forms; only those guardians and Lead Mentors can download them. Uploading is
+separate from approving the current trip choices. A previously acknowledged form
+does not need acknowledgment again on reapproval if its signed upload is still
+current. Replacing the blank form requires a new signed upload, but does not
+automatically revoke the current approval. Approval submits a signed snapshot of
+the displayed choices, prices, and form version; a stale page must be reloaded
+before it can be approved. Signed files are encrypted and stored
+under the protected `private/` prefix. PDF, JPEG, and PNG uploads are limited to
+10 MB.
+
+Travel readiness is shown as separate guardian-approval, signed-form, and
+departure statuses on family views, the dashboard, and the lead roster. A form is
+current only when its upload matches the event's current form version; a replaced
+form is shown as out of date. Forms and departures that are not required are
+explicitly marked optional/not required. Only active signups count toward the
+lead's ready and outstanding totals. “Complete” means these tracked requirements
+are met; it does not mean fees are paid or that other untracked arrangements are
+complete.
+
+Each successful signed-form upload sends the student and eligible local
+guardians a receipt notice. Uploading does not approve the current cost or travel
+choices; a guardian must explicitly confirm those choices. Event cancellation
+notices are sent after the deletion commits to pending and approved families and
+signed-up mentors/chaperones, and do not contain a link to the deleted event.
+
+`python manage.py send_travel_reminders --organization <slug> --dry-run` previews
+due reminder messages without sending or claiming them. The reminder command
+sends one combined family email for outstanding approval, signed-form, or
+departure actions three days after signup and seven days and one day before the
+selected departure (or event start when no departure is selected). Trigger dates
+use the organization's configured time zone. Claims and delivery outcomes are
+stored in the tenant-scoped `TravelReminderDelivery` ledger; uncertain sends,
+interrupted claims, and signups with no eligible recipients are not automatically
+retried. Leads see missing eligible guardian contact and unresolved reminder
+outcomes on the roster. The command is not scheduled automatically; operators
+must separately review tenant email settings and dry-run counts before arranging
+a daily schedule.
+
+The reapproval migration resets approved signups with a permission form, including
+past trips, and preserves their existing balance charges. It records the previous
+approval details for review; inconsistent cross-organization records are not
+changed. It sends no notification. Families can approve past trips from the travel
+page. Reversing this migration is refused when snapshots exist, because a later
+trip change can make the original approval invalid. Plan a backup and manual
+review before deployment; pause trip writes while the migration runs.
+
+Deleting a trip or its program queues signed-file deletion after commit. Failed
+deletions remain in the tenant-owned cleanup queue; operators may retry using
+`python manage.py retry_signed_permission_cleanup --organization-id <id>` after
+reviewing the target environment and receiving any required operational approval.
+Deleting a student or signup is blocked while signed travel forms exist. Storage
+origins and proxies must continue to deny public access to the `private/` prefix.
+
+### Parent Chaperone and Mentor Signups
 - Any parent with at least one active student in the program can self-register as a chaperone (`TravelParentChaperoneSignup.eligible_adults(program)`).
 - Lead Mentors can add or remove chaperones via `TravelParentChaperoneStaffForm`.
-- Lead Mentors can add active mentors from their organization to a trip; mentor candidates and departure choices are scoped to that program and event.
+- Lead Mentors can add active mentors from their organization to a trip and remove mentor signups; mentor candidates, removal lookups, and departure choices are scoped to that organization, program, and event.

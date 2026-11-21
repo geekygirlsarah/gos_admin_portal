@@ -14,7 +14,13 @@ from audit.service import log_event
 
 from ..forms import ResumeApplicationForm
 from ..models import Application
-from ..services import PENDING_STATUSES, applications_for_user, get_program_buckets
+from ..services import (
+    PENDING_STATUSES,
+    applications_for_user,
+    get_program_buckets,
+    has_required_application_documents,
+    required_application_documents_complete,
+)
 from .browser import _require_browser_access, _start_bootstrap
 from .utils import (
     TOTAL_STEPS,
@@ -215,6 +221,11 @@ class SubmittedView(View):
             self.template_name,
             {
                 "application": application,
+                "required_documents_pending": (
+                    not application.is_mentor
+                    and has_required_application_documents(application)
+                    and not required_application_documents_complete(application)
+                ),
                 "current_step": current_step,
                 "total_steps": total_steps,
                 "step5_data": application.data.get("step5-student") or {},

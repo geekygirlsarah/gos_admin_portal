@@ -3,8 +3,9 @@ import datetime
 import pghistory
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.signals import request_finished, request_started
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from organizations.models import OrganizationManager, OrganizationQuerySet
@@ -19,6 +20,37 @@ from programs.validators import validate_phone_number, validate_zip_code
 from .fields import sync_linked_user
 
 _ACTIVE_CHECK_TYPES_CACHE = {}
+
+
+class AdultRevisionQuerySet(OrganizationQuerySet):
+    def update(self, **kwargs):
+        kwargs["profile_revision"] = models.F("profile_revision") + 1
+        return super().update(**kwargs)
+
+
+class AdultManager(OrganizationManager.from_queryset(AdultRevisionQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_incomplete_application_profile=False)
+
+
+class AdultStudentRelationshipRevisionQuerySet(OrganizationQuerySet):
+    def update(self, **kwargs):
+        kwargs["revision"] = models.F("revision") + 1
+        return super().update(**kwargs)
+
+
+class AdultStudentRelationshipManager(
+    OrganizationManager.from_queryset(AdultStudentRelationshipRevisionQuerySet)
+):
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(
+                adult__is_incomplete_application_profile=False,
+                student__is_incomplete_application_profile=False,
+            )
+        )
 
 
 def get_active_background_check_types(org=None):
@@ -51,7 +83,11 @@ class AdultStudentRelationship(models.Model):
         related_name="adult_student_relationships",
         help_text="Organization that owns this adult-student relationship (multi-tenant).",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = AdultStudentRelationshipManager()
+    all_objects = OrganizationManager.from_queryset(
+        AdultStudentRelationshipRevisionQuerySet
+    )()
+    revision = models.PositiveIntegerField(default=1, db_default=1, editable=False)
 
     adult = models.ForeignKey("Adult", on_delete=models.CASCADE)
     student = models.ForeignKey("Student", on_delete=models.CASCADE)
@@ -66,7 +102,57 @@ class AdultStudentRelationship(models.Model):
     )
 
     class Meta:
+        default_manager_name = "objects"
+        base_manager_name = "all_objects"
         unique_together = ("organization", "adult", "student")
+
+    def clean(self):
+        super().clean()
+        from .students import Student
+
+        if (
+            self.adult_id
+            and Adult.all_objects.filter(
+                pk=self.adult_id,
+                is_incomplete_application_profile=True,
+            ).exists()
+        ):
+            raise ValidationError(
+                "Incomplete application profiles cannot have live guardian relationships."
+            )
+        if (
+            self.student_id
+            and Student.all_objects.filter(
+                pk=self.student_id,
+                is_incomplete_application_profile=True,
+            ).exists()
+        ):
+            raise ValidationError(
+                "Incomplete application profiles cannot have live guardian relationships."
+            )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        if self.pk is None:
+            super().save(*args, **kwargs)
+            return
+
+        using = kwargs.get("using") or self._state.db or "default"
+        with transaction.atomic(using=using):
+            current_revision = (
+                type(self)
+                .all_objects.using(using)
+                .select_for_update()
+                .filter(pk=self.pk)
+                .values_list("revision", flat=True)
+                .first()
+            )
+            if current_revision is not None:
+                self.revision = current_revision + 1
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {"revision"}
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.adult} - {self.relationship_to_student} to {self.student}"
@@ -86,7 +172,18 @@ class Adult(models.Model):
         related_name="adults",
         help_text="Organization that owns this adult (multi-tenant).",
     )
-    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+    objects = AdultManager()
+    all_objects = OrganizationManager.from_queryset(AdultRevisionQuerySet)()
+
+    is_incomplete_application_profile = models.BooleanField(
+        default=False,
+        db_default=False,
+        editable=False,
+        help_text="Application draft profile hidden from ordinary portal access until accepted.",
+    )
+    profile_revision = models.PositiveIntegerField(
+        default=1, db_default=1, editable=False
+    )
 
     # Role flags
     is_parent = models.BooleanField(
@@ -306,7 +403,16 @@ class Adult(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        default_manager_name = "objects"
+        base_manager_name = "all_objects"
         ordering = ["last_name", "legal_first_name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_incomplete_application_profile=False)
+                | models.Q(user__isnull=True),
+                name="adult_incomplete_profile_no_user",
+            )
+        ]
         indexes = [
             models.Index(
                 fields=["last_name", "legal_first_name"], name="adult_name_idx"
@@ -381,7 +487,11 @@ class Adult(models.Model):
         """Return a list of Student objects related to this adult,
         with an 'attached_rel' attribute for each student.
         """
-        if not self.pk or self.organization_id is None:
+        if (
+            not self.pk
+            or self.organization_id is None
+            or self.is_incomplete_application_profile
+        ):
             return []
         relationships = getattr(self, "tenant_student_relationships", None)
         if relationships is None:
@@ -389,10 +499,14 @@ class Adult(models.Model):
                 organization_id=self.organization_id,
                 adult__organization_id=self.organization_id,
                 student__organization_id=self.organization_id,
+                adult__is_incomplete_application_profile=False,
+                student__is_incomplete_application_profile=False,
             ).select_related("student")
         students = []
         for relationship in relationships:
             student = relationship.student
+            if student.is_incomplete_application_profile:
+                continue
             student.attached_rel = relationship.relationship_to_student
             students.append(student)
         return students
@@ -430,7 +544,7 @@ class Adult(models.Model):
         # Parents can have duplicate emails with each other, but not with students.
         if self.personal_email:
             email = self.personal_email.strip().lower()
-            if Student.objects.filter(
+            if Student.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
@@ -439,7 +553,7 @@ class Adult(models.Model):
 
         if self.org_email:
             email = self.org_email.strip().lower()
-            if Student.objects.filter(
+            if Student.all_objects.filter(
                 Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
@@ -447,6 +561,13 @@ class Adult(models.Model):
                 )
 
     def save(self, *args, **kwargs):
+        if self.is_incomplete_application_profile and self.user_id:
+            raise ValidationError(
+                {
+                    "user": "Incomplete application profiles cannot be linked to accounts."
+                }
+            )
+
         # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
         from programs.utils import normalize_image_field
 
@@ -463,7 +584,27 @@ class Adult(models.Model):
             ]
 
         normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
-        super().save(*args, **kwargs)
+        using = kwargs.get("using") or self._state.db or "default"
+        if self.pk is None:
+            super().save(*args, **kwargs)
+        else:
+            with transaction.atomic(using=using):
+                current_revision = (
+                    type(self)
+                    .all_objects.using(using)
+                    .select_for_update()
+                    .filter(pk=self.pk)
+                    .values_list("profile_revision", flat=True)
+                    .first()
+                )
+                if current_revision is not None:
+                    self.profile_revision = current_revision + 1
+                    update_fields = kwargs.get("update_fields")
+                    if update_fields is not None:
+                        kwargs["update_fields"] = set(update_fields) | {
+                            "profile_revision"
+                        }
+                super().save(*args, **kwargs)
 
         # Sync Adult name + login-active state to the linked User account.
         # Login stays enabled if they have login_enabled OR another active role

@@ -222,11 +222,57 @@ use `--dry-run` first when the command supports it.
 | Outreach Reminders | `python manage.py send_outreach_reminders --days-ahead 1` | Supports `--date` and `--dry-run`                       |
 | Monthly Balances   | `python manage.py send_monthly_balances --all-balances`   | Supports `--days-back`, `--student-id`, and `--dry-run` |
 | Calendar Reminders | `python manage.py send_calendar_reminders --days-ahead 3` | Supports `--dry-run`                                    |
+| Application Reminders | `python manage.py send_application_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000) |
+| Travel Reminders | `python manage.py send_travel_reminders --organization <slug> --dry-run` | Required tenant scope; supports `--limit` (maximum 1,000); not scheduled automatically |
+| Application Expiration | `python manage.py expire_applications --organization <slug>` | Read-only by default; destructive `--execute`; supports `--limit` (maximum 500) |
 | Audit Digest       | `python manage.py audit_digest --days 7`                  | Generates a summary of critical audit events            |
 
 Scheduled commands must be safe against accidental duplicate execution where
 practicable. Changes to recipient selection, message templates, scheduling, or
 delivery behavior require regression tests.
+
+Application expiration is not scheduled automatically. First run
+`python manage.py expire_applications --organization <slug>` and review the
+count-only summary. The command includes existing eligible applications and
+uses the recorded applicant-progress timestamp, with `updated_at` as a legacy
+fallback. It permanently deletes eligible application rows and files under the
+matching organization/application storage prefix only when `--execute` is
+provided. Completed applications and submissions awaiting staff review are
+excluded. The command writes a deletion audit event and fails closed on
+inconsistent ownership or unsafe paths. Because storage and database operations
+are not atomic, inspect any reported failures before retrying; partial file
+removal may have occurred. Do not execute this command against shared, staging,
+or production data without separate operational approval. No scheduler or
+deployment configuration is changed by this feature.
+
+Application reminders are not scheduled automatically. The `--dry-run` mode is
+read-only and reports a count without creating ledger claims, displaying
+recipients, or sending mail. Before scheduling delivery for an organization,
+verify its email configuration and tenant URL, review dry-run counts, and
+choose an operational cadence that keeps each run within a bounded `--limit`.
+Schedule only the non-dry-run command after those checks; no scheduler or
+deployment configuration is changed by the feature.
+
+Each trigger is claimed before transport and recorded in the tenant-scoped
+reminder ledger. A confirmed pre-send `failed` outcome may be retried on a later
+run. A transport `unknown` outcome or a `pending` claim left by an interrupted
+process is not automatically retried: review the application’s email history
+and provider records before taking an operator-approved recovery action. Do not
+clear or reset uncertain claims based only on the command summary; the system
+does not guarantee exactly-once delivery.
+
+Travel reminders are not scheduled automatically. Preview with
+`python manage.py send_travel_reminders --organization <slug> --dry-run`; the
+command requires an active organization and does not create claims or send mail
+in dry-run mode. It checks for outstanding approval, current signed-form, and
+required-departure actions three days after signup and seven days and one day
+before the selected departure (or event start when no departure is selected),
+using the organization's configured time zone. Before arranging a daily schedule,
+verify the organization's email settings and review dry-run counts. Delivery
+claims and outcomes are tenant scoped; uncertain or interrupted claims and
+no-recipient outcomes are not automatically retried. Leads can see missing
+eligible guardian contacts and unresolved reminder outcomes on the travel roster.
+No scheduler or deployment configuration is changed by this feature.
 
 ## Email History Retention
 

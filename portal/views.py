@@ -20,7 +20,11 @@ def _request_organization(request):
 
 def _organization_profile(user, name, organization):
     profile = getattr(user, name, None)
-    if profile and profile.organization_id == organization.pk:
+    if (
+        profile
+        and profile.organization_id == organization.pk
+        and not profile.is_incomplete_application_profile
+    ):
         return profile
     return None
 
@@ -29,7 +33,9 @@ def _organization_enrollments(organization):
     from programs.models import Enrollment
 
     return Enrollment.objects.for_organization(organization).filter(
-        student__organization=organization, program__organization=organization
+        student__organization=organization,
+        student__is_incomplete_application_profile=False,
+        program__organization=organization,
     )
 
 
@@ -263,6 +269,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             relationships = (
                 AdultStudentRelationship.objects.for_organization(org)
                 .filter(adult=adult, student__organization=org)
+                .filter(student__is_incomplete_application_profile=False)
                 .select_related("student")
                 .order_by("student__last_name", "student__legal_first_name")
             )

@@ -21,6 +21,30 @@ This document details models and workflows for Students, Adults, parent-student 
 - Shares the same name fields (`legal_first_name`, `preferred_first_name`, `last_name`) and `display_name` property.
 - Roles are designated by boolean flags (`is_parent`, `is_mentor`, `is_alumni`, `is_volunteer`).
 
+### Incomplete application profiles
+
+`Student` and `Adult` have an `is_incomplete_application_profile` lifecycle
+flag. It defaults to `False`, so existing profiles retain current behavior.
+Their ordinary `objects` managers exclude incomplete profiles; use the
+organization-scoped `all_objects` manager only for internal lifecycle checks
+that explicitly need drafts. Enrollment and adult-student relationship managers
+also exclude rows with an incomplete endpoint, and the primary/secondary
+contact properties return no contact for an incomplete student or guardian.
+
+Incomplete profiles cannot be linked to user accounts, enrolled in programs, or
+given live guardian relationships through model save paths; account-link
+constraints enforce the same rule in the database. The application wizard does
+not create or update these profiles yet. Do not treat this foundation as an
+active profile-writing workflow or create application drafts through ordinary
+profile forms.
+
+Each Student and Adult also has a `profile_revision` counter initialized to 1;
+existing-row saves lock the profile row and increment it, including partial
+updates. Existing relationship-row saves similarly increment their own
+`revision`. Application identity and relationship proposals snapshot these
+values to detect intervening edits; the counters do not grant edit permission or
+apply proposal changes.
+
 ---
 
 ## Student ↔ Adult Relationships & Contact Properties
@@ -119,13 +143,13 @@ Merges duplicate adult records:
 
 ## Roster Exports (`ProgramStudentExportView`)
 
-Active enrolled students can be exported to Excel (`.xlsx`) or CSV (`.csv`) via `/programs/<id>/roster/export/`:
-- **Default Export**: Standard name and grade level only.
-- **Lead Mentor Optional Column Groups** (passed via `?groups=` query parameters):
-  - `contact`: Student email, phone, school, graduation year.
-  - `parents`: Primary/secondary guardian names, relationships, phone numbers, emails, and update permissions.
-  - `balance`: Total fees, discounts, payments, and net balance due.
-- Non-Lead Mentor users requesting optional groups are silently restricted to the default export.
+Students can be exported to Excel (`.xlsx`) or CSV (`.csv`) via `/programs/<id>/roster/export/`:
+- **Non-Lead Mentor Export**: Active, non-graduated enrollments with standard name and grade columns only; requested optional groups are ignored.
+- **Lead Mentor Export**: Includes all program enrollments, including inactive or graduated students. The modal lets each column be selected independently; name, grade, active status, student and guardian contacts, and balance columns remain checked by default to preserve the previous modal output.
+- **Individual columns**: The choices include first and last name, grade, active status, student email, phone, school and graduation year; each parent/guardian's names, relationship, email, phone and email-update preference; each balance value; legal and preferred first names; T-shirt size; each mailing-address field; and each contact preference.
+- **First Name** uses the preferred first name when present, otherwise the legal first name. The optional legal and preferred first-name columns are separate and do not replace the display-name column.
+- Existing `?groups=` links remain supported and expand to the same individual columns. Non-Lead Mentors continue to receive only the basic name and grade export; Lead Mentors retain the existing all-enrollment roster behavior.
+- Medical fields are not included. User-entered legal/preferred name, T-shirt, and mailing-address values are escaped against spreadsheet formula interpretation.
 - Implementation uses `export_csv_response()` and `export_xlsx_response()` from `programs/utils/spreadsheets.py`.
 
 ---

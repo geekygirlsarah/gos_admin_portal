@@ -252,7 +252,7 @@
         </div>
       </div>
 
-      {% include 'programs/_email_send_confirm_modal.html' %}
+      {% include 'programs/_email_send_confirm_modal.html' with email_confirm_organization_name=request.organization.name %}
     </form>
   </div>
 </div>

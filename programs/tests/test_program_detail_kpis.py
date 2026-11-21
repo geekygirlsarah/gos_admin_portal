@@ -286,9 +286,25 @@ class ProgramDetailKPITests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="exportStudentsModal"')
-        self.assertContains(resp, 'name="groups" value="contact"')
-        self.assertContains(resp, 'name="groups" value="parents"')
-        self.assertContains(resp, 'name="groups" value="balance"')
+        self.assertContains(
+            resp,
+            f'action="{reverse("program_student_export", args=[self.program.pk])}"',
+        )
+        self.assertContains(resp, 'name="columns" value="student_email"')
+        self.assertContains(resp, 'name="columns" value="parent1_email"')
+        self.assertContains(resp, 'name="columns" value="total_fees"')
+        self.assertContains(
+            resp,
+            'name="columns" value="student_email" id="exportColumnStudentEmail" checked',
+        )
+        self.assertContains(
+            resp,
+            'name="columns" value="parent1_email" id="exportColumnParent1Email" checked',
+        )
+        self.assertContains(
+            resp, 'name="columns" value="total_fees" id="exportColumnTotalFees" checked'
+        )
+        self.assertNotContains(resp, 'name="groups"')
 
     def test_mentor_gets_plain_export_link(self):
         self.client.login(username="mentor_user", password="password123")  # nosec B106

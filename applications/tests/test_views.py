@@ -287,6 +287,7 @@ class WizardFlowTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
+        previous_progress = app.applicant_progress_at
         response = self.client.post(
             reverse("apply_step4", kwargs={"app_id": app.application_id}),
             {"program": self.future_program.pk},
@@ -298,6 +299,7 @@ class WizardFlowTests(TestCase):
         )
         app.refresh_from_db()
         self.assertEqual(app.program_id, self.future_program.pk)
+        self.assertGreater(app.applicant_progress_at, previous_progress)
 
     def test_step4_displays_grade_range(self):
         self.future_program.grade_range_start = 4

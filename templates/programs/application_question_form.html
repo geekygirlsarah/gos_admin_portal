@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-4" style="max-width: 780px;">
   <h1 class="h4">Application question: {{ program.name }}</h1>
-  <p class="text-muted">These questions are not yet shown to applicants.</p>
+  <p class="text-muted">Active questions appear on the applicant's Step 6 form. The question wording and required setting are frozen when an application first reaches that step.</p>
   <form method="post">
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}

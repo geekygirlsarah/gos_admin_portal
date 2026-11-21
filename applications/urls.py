@@ -42,6 +42,16 @@ urlpatterns = [
         name="application_review_approve",
     ),
     path(
+        "review/<str:app_id>/identity-proposals/<int:proposal_id>/decision/",
+        views.ApplicationIdentityProposalDecisionView.as_view(),
+        name="application_review_identity_decision",
+    ),
+    path(
+        "review/<str:app_id>/relationship-proposals/<int:proposal_id>/decision/",
+        views.ApplicationRelationshipProposalDecisionView.as_view(),
+        name="application_review_relationship_decision",
+    ),
+    path(
         "review/<str:app_id>/decline/",
         views.ApplicationDeclineView.as_view(),
         name="application_review_decline",

@@ -1,0 +1,15 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel choices updated{% endblock %}
+{% block header %}Updated Trip Choices: {{ event.name }}{% endblock %}
+{% block content %}
+<p>Hello,</p>
+<p><strong>{{ student.display_name }}</strong> updated their trip choices for <strong>{{ event.name }}</strong>.</p>
+<p>Previous departure: <strong>{{ previous_departure }}</strong><br>
+Current departure: <strong>{{ current_departure }}</strong></p>
+<p>Previous costs: <strong>{% if previous_costs %}{{ previous_costs|join:", " }}{% else %}No optional costs selected{% endif %}</strong><br>
+Current costs: <strong>{% if current_costs %}{{ current_costs|join:", " }}{% else %}No optional costs selected{% endif %}</strong></p>
+<p>Previous total: <strong>${{ previous_total|floatformat:2 }}</strong><br>
+Current total: <strong>${{ current_total|floatformat:2 }}</strong></p>
+<p>The updated choices are pending parent or guardian approval. Please review and approve the trip again in the portal.</p>
+<p><a href="{{ trip_link }}">Review the trip details</a></p>
+{% endblock %}
