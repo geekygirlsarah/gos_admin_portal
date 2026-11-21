@@ -13,8 +13,6 @@ from travel.views import TravelSignupWithdrawView
 
 
 class TravelConcurrentTransitionTests(TransactionTestCase):
-    reset_sequences = True
-
     def setUp(self):
         self.organization = Organization.objects.create(
             name="Travel Lock Test",

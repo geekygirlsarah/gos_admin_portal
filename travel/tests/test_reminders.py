@@ -267,8 +267,6 @@ class TravelReminderTests(TestCase):
 
 
 class TravelReminderConcurrencyTests(TransactionTestCase):
-    reset_sequences = True
-
     def setUp(self):
         self.organization = Organization.objects.create(
             name="Travel Reminder Lock Test",

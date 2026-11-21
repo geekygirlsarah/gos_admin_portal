@@ -224,7 +224,7 @@ class StaleTravelApprovalTests(TestCase):
         self.event.start_date = timezone.localdate() - timedelta(days=10)
         self.event.end_date = timezone.localdate() - timedelta(days=8)
         self.event.save(update_fields=["start_date", "end_date"])
-        token = self.load_token("Past Events", "First bus", "Hotel", "$50.00")
+        token = self.load_token("Past trips", "First bus", "Hotel", "$50.00")
         response = self.post_approval(token)
         self.assertEqual(response.status_code, 302)
         self.assert_approved("50.00")
