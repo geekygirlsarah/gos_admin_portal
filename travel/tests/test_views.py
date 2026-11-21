@@ -361,6 +361,39 @@ class TravelViewTest(TestCase):
         self.assertContains(response, f'value="{self.student.pk}"')
         self.assertContains(response, 'value="no"')
 
+    def test_parent_competition_and_chaperone_controls_are_spacious(self):
+        self.event.is_competition = True
+        self.event.save(update_fields=["is_competition"])
+        TravelDeparture.objects.create(
+            event=self.event,
+            label="Bus 2",
+            leave_date=self.departure.leave_date,
+        )
+        self.client.force_login(self.parent_user)
+
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'class="parent-competition-rsvp card card-body bg-light mt-3"',
+        )
+        self.assertContains(
+            response,
+            f'class="form-select mb-3" name="departure" '
+            f'id="parent_rsvp_departure_{self.event.pk}_{self.student.pk}"',
+        )
+        self.assertContains(
+            response,
+            'class="parent-chaperone-signup border rounded p-3 mt-3"',
+        )
+        self.assertContains(
+            response,
+            f'<select name="departure" class="form-select" '
+            f'id="chaperone_departure_{self.event.pk}">',
+        )
+        self.assertContains(response, "Bus 2")
+
     def test_competition_roster_shows_respondents_not_all_enrolled_students(self):
         from travel.models import TravelCompetitionRSVP
 
@@ -3274,7 +3307,7 @@ class TravelViewTest(TestCase):
         html = resp.content.decode()
         self.assertIn("I'd like to chaperone", html)
         self.assertIn(
-            'class="btn btn-sm btn-outline-secondary">\n'
+            'class="btn btn-primary">\n'
             '                            <i class="bi bi-person-plus me-1"></i>I\'d like to chaperone',
             html,
         )

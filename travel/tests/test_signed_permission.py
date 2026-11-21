@@ -192,6 +192,110 @@ class SignedPermissionFormTests(TestCase):
             },
         )
 
+    def test_parent_signed_form_and_approval_controls_are_spacious(self):
+        self.signup.status = TravelSignup.INTERESTED
+        self.signup.save(update_fields=["status"])
+        self.client.force_login(self.guardian)
+
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="parent-travel-signup card mt-3"')
+        self.assertContains(
+            response,
+            'class="parent-signed-form-panel border rounded p-3 bg-light mb-3"',
+        )
+        self.assertContains(
+            response,
+            f'class="form-control" type="file" name="file" '
+            f'id="signed_parent_{self.signup.pk}"',
+        )
+        self.assertContains(
+            response, 'class="parent-approval-panel border rounded p-3"'
+        )
+        self.assertContains(
+            response,
+            f'class="form-check border rounded bg-light p-3 mb-3"',
+        )
+        self.assertContains(
+            response,
+            "I reviewed the permission form and approve my child attending this trip, including any listed costs.",
+        )
+
+    def test_parent_approval_checkbox_covers_free_trip_without_departure(self):
+        self.event.requires_departure = False
+        self.event.save(update_fields=["requires_departure"])
+        self.signup.departure = None
+        self.signup.save(update_fields=["departure"])
+        self.departure.delete()
+        self.cost.delete()
+        self.client.force_login(self.guardian)
+
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "I reviewed the permission form and approve my child attending this trip, including any listed costs.",
+        )
+        self.assertContains(response, 'name="permission_acknowledged" value="1"')
+        self.assertContains(response, "required")
+        self.assertContains(
+            response,
+            reverse("travel:signup_approve", args=[self.program.pk, self.signup.pk]),
+        )
+        self.assertContains(response, "Approve")
+        self.assertContains(response, self.upload_url())
+        self.assertIsNone(self.signup.departure)
+        self.assertFalse(self.event.cost_options.exists())
+
+    def test_parent_page_explains_permission_form_and_approval_separately(self):
+        self.client.force_login(self.guardian)
+        url = reverse("travel:event_list", args=[self.program.pk])
+
+        response = self.client.get(url)
+        self.assertContains(
+            response,
+            "The signed permission form documents permission to attend.",
+        )
+        self.assertContains(
+            response,
+            "Portal approval confirms the trip choices and current costs.",
+        )
+        self.assertContains(
+            response,
+            "Uploading a form does not submit or replace portal approval.",
+        )
+        self.assertContains(
+            response, "A signed permission form is required for this trip."
+        )
+
+        self.upload(self.guardian)
+        response = self.client.get(url)
+        self.assertContains(response, "This signed form is current.")
+        self.assertContains(
+            response,
+            "If only trip costs change, you can approve the updated amount without uploading again.",
+        )
+
+        self.event.permission_form = "travel/forms/replacement.pdf"
+        self.event.save(update_fields=["permission_form"])
+        response = self.client.get(url)
+        self.assertContains(
+            response,
+            "The permission form has changed since this was uploaded.",
+        )
+        self.assertContains(
+            response,
+            "Review the current form and upload a newly signed copy.",
+        )
+
+        self.event.permission_form = ""
+        self.event.save(update_fields=["permission_form"])
+        response = self.client.get(url)
+        self.assertContains(response, "No signed permission form is required.")
+        self.assertNotContains(response, self.upload_url())
+
     def event_edit_payload(self, departures):
         payload = {
             "name": self.event.name,
@@ -673,12 +777,25 @@ class SignedPermissionFormTests(TestCase):
         self.assertContains(response, self.upload_url())
         self.assertContains(
             response,
+            "I reviewed the permission form and approve my child attending this trip, including any listed costs.",
+        )
+        self.assertContains(
+            response,
             reverse("travel:signup_approve", args=[self.program.pk, self.signup.pk]),
         )
         self.assertContains(response, "Review permission form")
+        self.assertContains(
+            response,
+            "The signed permission form documents permission to attend.",
+        )
+        self.assertContains(
+            response, "A signed permission form is required for this trip."
+        )
         self.assertContains(response, "Optional hotel ($50.00)")
         self.assertContains(response, "First bus")
         self.upload(self.guardian)
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+        self.assertContains(response, "This signed form is current.")
         self.approve()
         self.signup.refresh_from_db()
         self.assertEqual(self.signup.status, TravelSignup.APPROVED)
@@ -717,6 +834,15 @@ class SignedPermissionFormTests(TestCase):
         self.assertFalse(self.signup.needs_permission_acknowledgment)
         self.assertEqual(self.signup.current_signed_permission_form.pk, signed.pk)
         self.client.force_login(self.guardian)
+        response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+        self.assertContains(
+            response,
+            "If trip costs change after approval, the updated total is applied to your student's balance immediately.",
+        )
+        self.assertContains(
+            response,
+            "If only trip costs change, you can approve the updated amount without uploading again.",
+        )
         self.client.post(
             reverse("travel:signup_approve", args=[self.program.pk, self.signup.pk]),
             {"approval_token": self.signup.approval_token},

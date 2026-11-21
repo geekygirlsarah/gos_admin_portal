@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - Travel event details default to collapsed; student rosters group by approval status and departure, show only outstanding follow-up in high-contrast warnings, and keep staff controls tied to each student.
 - Student, parent chaperone, and mentor rosters use responsive tables; interested student rows no longer repeat guardian approval as a pending requirement.
 - Travel roster actions use a compact edit modal, approved costs show their current included options to Lead Mentors, and Lead Mentors can remove mentors from trips.
+- Parent travel approval, signed-form upload, competition attendance, and chaperone signup use larger controls with clearer spacing.
+- Parent travel guidance distinguishes signed permission from portal approval and explains cost-only reapproval and outdated forms.
+- Parent permission acknowledgments now explicitly confirm approval for the student to attend and for any listed costs.
 - Past trips are grouped under a collapsed history section with outstanding follow-up flagged.
 - Travel signup and selected-cost creation now commit atomically; signup notifications run after commit, and delivery failures no longer remove the signup.
 - Travel signup transitions now lock and recheck tenant-scoped records; inconsistent linked student, guardian, or adult records do not receive travel notifications.
