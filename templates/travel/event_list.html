@@ -24,6 +24,12 @@
     </div>
     {% endif %}
 
+    {% if past_trip_attention_count %}
+    <div class="alert alert-warning shadow-sm py-2">
+        <strong>Past trip follow-up:</strong> follow-up is needed on {{ past_trip_attention_count }} trip{{ past_trip_attention_count|pluralize }}. Open Past trips below to review.
+    </div>
+    {% endif %}
+
     {% if upcoming_events %}
     <div class="mb-4">
         <h2 class="h5 fw-semibold text-uppercase text-muted">Upcoming Events</h2>
@@ -67,6 +73,27 @@
                     {% if event.signup_closed %} — passed; contact a lead mentor to be added.{% endif %}
                 </p>
                 {% endif %}
+
+                {% if event.viewer_needs_action and not is_lead %}
+                <p class="small text-warning mt-2 mb-0">
+                    <i class="bi bi-exclamation-circle me-1"></i>
+                    {% if viewer_is_parent %}<strong>Action needed:</strong> Review the trip details and respond below.
+                    {% else %}<strong>Family follow-up:</strong> A travel requirement is still pending.
+                    {% endif %}
+                </p>
+                {% endif %}
+
+                {% if is_lead %}
+                <p class="small text-muted mt-2 mb-0">
+                    <strong>Travel readiness:</strong> {{ event.travel_ready_signup_count }} of {{ event.travel_active_signup_count }} active sign-up{{ event.travel_active_signup_count|pluralize }} ready.
+                    {% if event.travel_outstanding_signups %}<span class="text-warning fw-semibold">{{ event.travel_outstanding_signups|length }} need follow-up.</span>{% endif %}
+                    Payment is not included.
+                </p>
+                {% endif %}
+
+                <details class="travel-event-details mt-3">
+                    <summary class="fw-semibold text-primary">Trip details and actions</summary>
+                    <div class="pt-3">
 
                 {% if event.description %}
                 <p class="mb-3">{{ event.description|linebreaksbr }}</p>
@@ -158,101 +185,141 @@
                     <div class="small text-muted mt-1">Responses are separate from guardian approval and chaperone signups.</div>
                 </div>
                 {% endif %}
-                <div class="alert alert-light border py-2 small" role="status">
-                    <strong>Travel readiness:</strong> {{ event.travel_ready_signup_count }} ready of {{ event.travel_active_signup_count }} active sign-up{% if event.travel_active_signup_count != 1 %}s{% endif %}.
-                    This tracks guardian approval, a current required signed form, and required departure only; payment is not included.
-                    {% if event.travel_outstanding_signups %}
-                    <ul class="mb-0 mt-1">
-                        {% for outstanding_signup in event.travel_outstanding_signups %}
-                        <li><a href="#travel-signup-{{ outstanding_signup.pk }}">{{ outstanding_signup.student.display_name }}</a>: {{ outstanding_signup.readiness_action_labels|join:", " }}</li>
-                        {% endfor %}
-                    </ul>
-                    {% endif %}
-                </div>
                 {% endif %}
-                {% regroup event.signups.all by status as signup_status_groups %}
-                {% if signup_status_groups %}
-                {% for status_group in signup_status_groups %}
-                <div class="student-signup-status-group mb-3" data-status="{{ status_group.grouper }}">
+                {% if event.signup_status_groups %}
+                {% for status_group in event.signup_status_groups %}
+                <div class="student-signup-status-group mb-4 {% if not forloop.first %}mt-4{% endif %}" data-status="{{ status_group.grouper }}">
                     <h5 class="h6 fw-semibold">{% if status_group.grouper == 'approved' %}Parent Approved{% elif status_group.grouper == 'interested' %}Interested{% elif status_group.grouper == 'declined' %}Declined{% else %}{{ status_group.list.0.get_status_display }}{% endif %}</h5>
-                {% for signup in status_group.list %}
-                <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom" id="travel-signup-{{ signup.pk }}">
-                    <div>
-                        <strong>{{ signup.student.display_name }}</strong>
-                        <span class="badge {% if signup.status == 'approved' %}bg-success{% elif signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ signup.get_status_display }}</span>
-                        {% if signup.departure %}<span class="text-muted small ms-2">{{ signup.departure.display_label }}</span>{% endif %}
-                        {% if can_manage and signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
-                        {% if can_manage and signup.can_be_withdrawn %}
-                        {% include "travel/_readiness_status.html" with signup=signup %}
-                        {% if signup.readiness_action_labels %}
-                        <div class="small mt-1"><strong>Outstanding trip requirements</strong>
-                            <ul class="mb-1">
-                                {% for label in signup.readiness_action_labels %}<li>{{ label }}</li>{% endfor %}
-                            </ul>
-                        </div>
-                        {% else %}
-                        <div class="small text-muted">No outstanding tracked trip requirements</div>
-                        {% endif %}
-                        {% if signup.guardian_contact_missing %}
-                        <div class="small text-warning mt-1"><strong>Lead follow-up:</strong> No linked guardian has an eligible email address; contact the family directly. Student email alone does not count as guardian contact.</div>
-                        {% endif %}
-                        {% if signup.reminder_delivery_problems %}
-                        <div class="small text-warning mt-1"><strong>Reminder delivery needs review:</strong>
-                            <ul class="mb-1">
-                                {% for delivery in signup.reminder_delivery_problems %}
-                                <li>{{ delivery.get_reminder_type_display }} — {{ delivery.get_status_display }}{% if delivery.status == 'unknown' %}; do not retry automatically{% endif %}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-                        {% if event.requires_permission_form %}
-                        {% with signed_form=signup.current_signed_permission_form %}
-                        {% if signed_form %}<a class="small" href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}">Download signed permission form</a>{% endif %}
-                        {% endwith %}
-                        <form action="{% url 'travel:signup_signed_form_upload' program.id signup.id %}" method="post" enctype="multipart/form-data" class="mt-1 mb-1">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
-                            <label class="small" for="signed_staff_{{ signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
-                            <input class="form-control form-control-sm" type="file" name="file" id="signed_staff_{{ signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
-                            <button class="btn btn-sm btn-outline-primary mt-1" type="submit">Upload signed form</button>
-                        </form>
-                        {% endif %}
-                        {% endif %}
-                    </div>
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        {% if can_manage and signup.status == 'approved' and signup.permission_acknowledged and signup.permission_acknowledged_version == event.permission_form_version %}
-                        <span class="small text-muted"><i class="bi bi-check2-circle text-success me-1"></i>Permission form acknowledged</span>
-                        {% endif %}
-                        {% if can_manage and signup.can_be_withdrawn %}
-                        <form action="{% url 'travel:signup_withdraw' program.id signup.id %}" method="post" class="mb-0">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Withdraw {{ signup.student.display_name }} from {{ event.name }}?">Withdraw</button>
-                        </form>
-                        {% endif %}
-                        {% if can_manage %}
-                        {% if event.has_multiple_departures or event.requires_departure %}
-                        {% if signup.status == 'approved' or signup.status == 'interested' %}
-                        <form action="{% url 'travel:signup_departure' program.id signup.id %}" method="post" class="d-flex align-items-end gap-1 mb-0">
-                            {% csrf_token %}
-                            <div>
-                                <label class="form-label small mb-0" for="id_signup_departure_{{ signup.id }}">Departure</label>
-                                <select name="departure" id="id_signup_departure_{{ signup.id }}" class="form-select form-select-sm" {% if event.requires_departure %}required{% endif %}>
-                                    <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
-                                    {% for departure in event.ordered_departures %}
-                                    <option value="{{ departure.id }}" {% if departure.id == signup.departure_id %}selected{% endif %}>{{ departure.display_label }}</option>
+                    <div class="table-responsive" tabindex="0" role="region" aria-label="Student sign-ups for {{ event.name }}">
+                        <table class="table table-sm align-middle mb-0">
+                            <caption class="visually-hidden">Student sign-ups for {{ event.name }}</caption>
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Student</th>
+                                    {% if can_manage %}<th scope="col">Approved cost</th>{% endif %}
+                                    <th scope="col">Departure</th>
+                                    <th scope="col">What's missing</th>
+                                    <th scope="col">Signed form</th>
+                                    <th scope="col">Actions</th>
+                                </tr>
+                            </thead>
+                    {% for departure_group in status_group.departure_groups %}
+                            <tbody class="student-signup-departure-group" data-departure="{% if departure_group.departure %}{{ departure_group.departure.id }}{% else %}none{% endif %}">
+                    {% for signup in departure_group.list %}
+                        <tr id="travel-signup-{{ signup.pk }}">
+                            <th scope="row">{{ signup.student.display_name }}</th>
+                            {% if can_manage %}
+                            <td>
+                                {% if signup.status == 'approved' %}
+                                <strong>{% if signup.approved_total is not None %}${{ signup.approved_total|floatformat:2 }}{% else %}Not recorded{% endif %}</strong>
+                                <div class="small text-muted">
+                                    Current included costs:
+                                    {% for cost in signup.approval_costs %}{{ cost.name }}{% if not forloop.last %}, {% endif %}{% empty %}None{% endfor %}
+                                </div>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            {% endif %}
+                            <td>{% if signup.departure %}{% if signup.departure.label %}{{ signup.departure.label }}{% else %}{{ signup.departure.leave_date|date:"N j" }}{% endif %}{% else %}<span class="text-muted">No departure selected</span>{% endif %}</td>
+                            <td>
+                                {% if can_manage and signup.can_be_withdrawn %}
+                                {% if signup.roster_missing_requirements %}
+                                <ul class="list-unstyled d-flex flex-wrap gap-1 mb-0">
+                                    {% for requirement in signup.roster_missing_requirements %}
+                                    <li><span class="badge rounded-pill bg-warning text-dark">{{ requirement.label }}: {{ requirement.status }}</span></li>
                                     {% endfor %}
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                        </form>
-                        {% endif %}
-                        {% endif %}
-                        {% endif %}
+                                </ul>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                                {% if signup.guardian_contact_missing %}
+                                <div class="alert alert-warning text-dark py-2 px-3 small mt-2 mb-0"><strong>Lead follow-up:</strong> No linked guardian has an eligible email address; contact the family directly. Student email alone does not count as guardian contact.</div>
+                                {% endif %}
+                                {% if signup.reminder_delivery_problems %}
+                                <div class="alert alert-warning text-dark py-2 px-3 small mt-2 mb-0">
+                                    <strong>Reminder delivery needs review:</strong>
+                                    <ul class="mb-0">
+                                        {% for delivery in signup.reminder_delivery_problems %}
+                                        <li>{{ delivery.get_reminder_type_display }} — {{ delivery.get_status_display }}{% if delivery.status == 'unknown' %}; do not retry automatically{% endif %}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if can_manage and signup.can_be_withdrawn and event.requires_permission_form %}
+                                {% with signed_form=signup.current_signed_permission_form %}
+                                {% if signed_form %}<a class="small" href="{% url 'travel:signup_signed_form_download' program.id signed_form.id %}" aria-label="View signed permission form for {{ signup.student.display_name }}">View form</a>{% else %}<span class="text-muted">—</span>{% endif %}
+                                {% endwith %}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if can_manage and signup.can_be_withdrawn %}
+                                <div class="d-flex flex-wrap gap-1">
+                                    <form action="{% url 'travel:signup_withdraw' program.id signup.id %}" method="post" class="mb-0">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Withdraw {{ signup.student.display_name }} from {{ event.name }}?">Withdraw</button>
+                                    </form>
+                                    {% if event.requires_permission_form or event.has_multiple_departures or event.requires_departure %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#signup-edit-modal-{{ signup.pk }}" aria-label="Edit forms or departure for {{ signup.student.display_name }}">Edit</button>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                            </tbody>
+                    {% endfor %}
+                        </table>
                     </div>
-                </div>
-                {% endfor %}
-                </div>
-                {% endfor %}
+                    {% if can_manage %}
+                    {% for departure_group in status_group.departure_groups %}
+                    {% for signup in departure_group.list %}
+                    {% if signup.can_be_withdrawn %}
+                    {% if event.requires_permission_form or event.has_multiple_departures or event.requires_departure %}
+                    <div class="modal fade" id="signup-edit-modal-{{ signup.pk }}" tabindex="-1" aria-labelledby="signup-edit-modal-title-{{ signup.pk }}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h2 class="modal-title h5" id="signup-edit-modal-title-{{ signup.pk }}">Edit {{ signup.student.display_name }}</h2>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    {% if event.requires_permission_form %}
+                                    {% if signup.status == 'approved' and signup.permission_acknowledged and signup.permission_acknowledged_version == event.permission_form_version %}
+                                    <p class="small text-muted"><i class="bi bi-check2-circle text-success me-1"></i>Permission form acknowledged</p>
+                                    {% endif %}
+                                    <form action="{% url 'travel:signup_signed_form_upload' program.id signup.id %}" method="post" enctype="multipart/form-data" class="mb-3">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_version" value="{{ event.permission_form_version }}">
+                                        <label class="form-label small" for="signed_staff_{{ signup.id }}">Upload signed permission form (PDF, JPEG or PNG; max 10 MB)</label>
+                                        <input class="form-control form-control-sm" type="file" name="file" id="signed_staff_{{ signup.id }}" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <button class="btn btn-sm btn-outline-primary mt-2" type="submit">Upload signed form</button>
+                                    </form>
+                                    {% endif %}
+                                    {% if event.has_multiple_departures or event.requires_departure %}
+                                    {% if signup.status == 'approved' or signup.status == 'interested' %}
+                                    <form action="{% url 'travel:signup_departure' program.id signup.id %}" method="post" class="mb-0">
+                                        {% csrf_token %}
+                                        <label class="form-label small" for="id_signup_departure_{{ signup.id }}">Departure</label>
+                                        <select name="departure" id="id_signup_departure_{{ signup.id }}" class="form-select form-select-sm" {% if event.requires_departure %}required{% endif %}>
+                                            <option value="">{% if event.requires_departure %}Choose a departure{% else %}No specific departure{% endif %}</option>
+                                            {% for departure in event.ordered_departures %}
+                                            <option value="{{ departure.id }}" {% if departure.id == signup.departure_id %}selected{% endif %}>{% if departure.label %}{{ departure.label }}{% else %}{{ departure.leave_date|date:"N j" }}{% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-primary mt-2">Save departure</button>
+                                    </form>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                    {% endif %}
+                    {% endfor %}
                 {% else %}
                 <p class="text-muted small">No students signed up yet.</p>
                 {% endif %}
@@ -305,18 +372,29 @@
                     </div>
                     <div class="card-body">
                     {% if event.parent_chaperones.all %}
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        {% for cs in event.parent_chaperones.all %}
-                        <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 rounded-pill d-inline-flex align-items-center">
-                            <span>{{ cs.adult.display_name }}{% if cs.departure %} <span class="small opacity-75">({{ cs.departure.display_label }})</span>{% endif %}</span>
-                            {% if can_manage %}
-                            <form action="{% url 'travel:chaperone_remove' program.id cs.id %}" method="post" class="d-inline mb-0 ms-1 js-confirm" data-confirm="Remove {{ cs.adult.display_name }} from chaperoning {{ event.name }}?">
-                                {% csrf_token %}
-                                <button type="submit" class="btn-close btn-close-sm p-1" style="font-size:.4rem;" aria-label="Remove {{ cs.adult.display_name }}" title="Remove {{ cs.adult.display_name }}"></button>
-                            </form>
-                            {% endif %}
-                        </span>
-                        {% endfor %}
+                    <div class="table-responsive" tabindex="0" role="region" aria-label="Parent chaperones for {{ event.name }}">
+                        <table class="table table-sm align-middle mb-0">
+                            <caption class="visually-hidden">Parent chaperones for {{ event.name }}</caption>
+                            <thead class="table-light">
+                                <tr><th scope="col">Parent chaperone</th><th scope="col">Departure</th><th scope="col">Actions</th></tr>
+                            </thead>
+                            <tbody>
+                            {% for cs in event.parent_chaperones.all %}
+                                <tr>
+                                    <th scope="row">{{ cs.adult.display_name }}</th>
+                                    <td>{% if cs.departure %}{% if cs.departure.label %}{{ cs.departure.label }}{% else %}{{ cs.departure.leave_date|date:"N j" }}{% endif %}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
+                                    <td>
+                                        {% if can_manage %}
+                                        <form action="{% url 'travel:chaperone_remove' program.id cs.id %}" method="post" class="mb-0 js-confirm" data-confirm="Remove {{ cs.adult.display_name }} from chaperoning {{ event.name }}?">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                        </form>
+                                        {% else %}<span class="text-muted">—</span>{% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                     {% elif not cs_form and not can_chaperone %}
                     <p class="text-muted small mb-0">No parents signed up to chaperone yet.</p>
@@ -624,13 +702,28 @@
                     <div class="card-body">
                 {% if can_manage %}
                 {% if event.mentor_signups.all %}
-                <p class="small text-muted mb-0">
-                    <i class="bi bi-people me-1"></i>
-                    Mentors going:
-                    {% for ms in event.mentor_signups.all %}
-                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill me-1">{{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i>{% endif %}</span>
-                    {% endfor %}
-                </p>
+                <div class="table-responsive" tabindex="0" role="region" aria-label="Mentors going to {{ event.name }}">
+                    <table class="table table-sm align-middle mb-0">
+                        <caption class="visually-hidden">Mentors going to {{ event.name }}</caption>
+                        <thead class="table-light">
+                            <tr><th scope="col">Mentor</th><th scope="col">Departure</th><th scope="col">Actions</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for ms in event.mentor_signups.all %}
+                            <tr>
+                                <th scope="row">{{ ms.adult.display_name }}{% if ms.is_driver %} <span class="badge bg-info text-dark">Driver</span>{% endif %}</th>
+                                <td>{% if ms.departure %}{% if ms.departure.label %}{{ ms.departure.label }}{% else %}{{ ms.departure.leave_date|date:"N j" }}{% endif %}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
+                                <td>
+                                    <form action="{% url 'travel:mentor_remove' program.id ms.id %}" method="post" class="mb-0 js-confirm" data-confirm="Remove {{ ms.adult.display_name }} from mentoring {{ event.name }}?">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% else %}
                 <p class="text-muted small mb-0">No mentors signed up yet.</p>
                 {% endif %}
@@ -644,7 +737,7 @@
                         {% for ms in event.mentor_signups.all %}
                     {% if ms.adult_id == request.user.adult_profile.pk %}
                     {% if ms.is_driver %}<span class="badge bg-info text-dark ms-2 rounded-pill"><i class="bi bi-car-front me-1"></i>Driver</span>{% endif %}
-                    {% if ms.departure %}<span class="text-muted ms-2">{{ ms.departure.display_label }}</span>{% endif %}
+                    {% if ms.departure %}<span class="text-muted ms-2">{% if ms.departure.label %}{{ ms.departure.label }}{% else %}{{ ms.departure.leave_date|date:"N j" }}{% endif %}</span>{% endif %}
                     {% endif %}
                     {% endfor %}
                     </div>
@@ -691,6 +784,8 @@
                 </section>
                 {% endif %}
                 {% endwith %}
+                    </div>
+                </details>
             </div>
         </div>
         {% endfor %}
@@ -700,14 +795,21 @@
     {% endif %}
 
     {% if past_events %}
-    <h2 class="h5 fw-semibold text-uppercase text-muted mb-2">Past Events</h2>
-    <div class="list-group mb-4">
+    <section class="mb-4" aria-labelledby="past-trips-heading">
+        <h2 class="h5 fw-semibold text-uppercase text-muted mb-2" id="past-trips-heading">Travel History</h2>
+        <details class="past-trips-disclosure">
+            <summary class="fw-semibold p-3 border rounded-3">
+                Past trips ({{ past_events|length }})
+                {% if past_trip_attention_count %}<span class="badge bg-warning text-dark ms-2">{{ past_trip_attention_count }} need follow-up</span>{% endif %}
+            </summary>
+            <div class="list-group mt-2 mb-4">
         {% for event in past_events %}
         <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center">
             <div>
                 <strong>{{ event.name }}</strong>
                 <span class="text-muted small ms-2">{{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}{% if event.start_time %} {{ event.start_time|time:"g:i A" }}{% if event.end_time %} &ndash; {{ event.end_time|time:"g:i A" }}, organization local time{% endif %}{% endif %}</span>
                 {% if event.location_name %}<span class="text-muted small ms-2">{{ event.location_name }}</span>{% endif %}
+                {% if event.viewer_past_trip_needs_attention %}<span class="badge bg-warning text-dark ms-2">Follow-up needed</span>{% endif %}
             </div>
             {% if can_edit or can_manage %}
             <div class="d-flex gap-2">
@@ -815,7 +917,9 @@
             {% endif %}
         </div>
         {% endfor %}
-    </div>
+            </div>
+        </details>
+    </section>
     {% endif %}
 </div>
 {% endblock %}

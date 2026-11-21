@@ -83,6 +83,11 @@ urlpatterns = [
         name="mentor_driver_toggle",
     ),
     path(
+        "mentor-signups/<int:pk>/remove/",
+        views.TravelMentorRemoveView.as_view(),
+        name="mentor_remove",
+    ),
+    path(
         "events/<int:pk>/chaperone-signup/",
         views.TravelParentChaperoneSignupView.as_view(),
         name="chaperone_signup",

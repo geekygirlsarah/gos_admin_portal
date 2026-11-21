@@ -438,8 +438,21 @@ class TravelEventListView(
         context["user_role"] = role
 
         events = [e for e in self.get_queryset() if e.start_date is not None]
+        signup_status_order = {
+            TravelSignup.APPROVED: 0,
+            TravelSignup.INTERESTED: 1,
+            TravelSignup.DECLINED: 2,
+            TravelSignup.WITHDRAWN: 3,
+        }
         for event in events:
             event.competition_rsvp_rows = list(event.competition_rsvps.all())
+            event.viewer_needs_action = False
+            event.viewer_past_trip_needs_attention = False
+            event_signups = list(event.signups.all())
+            departure_order = {
+                departure.pk: index
+                for index, departure in enumerate(event.ordered_departures)
+            }
             event.signup_closed = bool(
                 event.signup_deadline and timezone.now() >= event.signup_deadline
             )
@@ -456,9 +469,19 @@ class TravelEventListView(
                     TravelCompetitionRSVPForm(students=active_program_students)
                 )
             active_signups = []
-            for signup in event.signups.all():
+            for signup in event_signups:
                 signup.travel_readiness_requirements = signup.readiness_requirements
                 signup.readiness_action_labels = signup.outstanding_readiness_labels
+                signup.roster_missing_requirements = [
+                    requirement
+                    for requirement in signup.travel_readiness_requirements
+                    if requirement["required"]
+                    and not requirement["complete"]
+                    and not (
+                        signup.status == TravelSignup.INTERESTED
+                        and requirement["key"] == "guardian_decision"
+                    )
+                ]
                 signup.travel_ready = signup.is_ready_for_travel
                 if signup.status in (TravelSignup.INTERESTED, TravelSignup.APPROVED):
                     active_signups.append(signup)
@@ -473,6 +496,44 @@ class TravelEventListView(
                 signup.reminder_delivery_problems = getattr(
                     signup, "travel_reminder_delivery_problems", []
                 )
+            event.signup_status_groups = []
+            ordered_signups = sorted(
+                event_signups,
+                key=lambda signup: (
+                    signup_status_order.get(signup.status, 4),
+                    departure_order.get(signup.departure_id, len(departure_order)),
+                    (
+                        signup.student.preferred_first_name
+                        or signup.student.legal_first_name
+                        or ""
+                    ).casefold(),
+                    (signup.student.last_name or "").casefold(),
+                    signup.student_id,
+                ),
+            )
+            status_group = None
+            departure_group = None
+            for signup in ordered_signups:
+                if status_group is None or status_group["grouper"] != signup.status:
+                    status_group = {
+                        "grouper": signup.status,
+                        "list": [],
+                        "departure_groups": [],
+                    }
+                    event.signup_status_groups.append(status_group)
+                    departure_group = None
+                if (
+                    departure_group is None
+                    or departure_group["grouper"] != signup.departure_id
+                ):
+                    departure_group = {
+                        "grouper": signup.departure_id,
+                        "departure": signup.departure,
+                        "list": [],
+                    }
+                    status_group["departure_groups"].append(departure_group)
+                departure_group["list"].append(signup)
+                status_group["list"].append(signup)
             event.travel_active_signup_count = len(active_signups)
             event.travel_ready_signup_count = sum(
                 signup.travel_ready for signup in active_signups
@@ -538,6 +599,8 @@ class TravelEventListView(
                         _outdated_signed_forms(org),
                     )
                 )
+                for signup in signups:
+                    signup.readiness_action_labels = signup.outstanding_readiness_labels
                 signup_by_event = {s.event_id: s for s in signups}
                 context["my_events"] = [
                     e for e in upcoming_events if e.id in signup_by_event
@@ -639,6 +702,7 @@ class TravelEventListView(
                 )
             )
             for signup in signups:
+                signup.readiness_action_labels = signup.outstanding_readiness_labels
                 signups_by_student.setdefault(signup.student_id, []).append(signup)
             for child in children:
                 signups = signups_by_student.get(child.pk, [])
@@ -676,6 +740,30 @@ class TravelEventListView(
 
         # ── Parent chaperones ─────────────────────────────────────────────────
         context.update(self._chaperone_context(adult, is_lead, upcoming_events))
+
+        for event in events:
+            if is_lead:
+                needs_action = bool(event.travel_outstanding_signups)
+            elif role == "Student":
+                signup = context.get("signup_by_event", {}).get(event.pk)
+                needs_action = bool(signup and signup.readiness_action_labels)
+            elif context["viewer_is_parent"]:
+                parent_signups = [
+                    row["signup_by_event"].get(event.pk)
+                    for row in context.get("parent_rows", [])
+                ]
+                needs_action = any(
+                    signup is not None and signup.readiness_action_labels
+                    for signup in parent_signups
+                )
+            else:
+                needs_action = False
+            event.viewer_needs_action = needs_action and not event.is_past
+            event.viewer_past_trip_needs_attention = needs_action and event.is_past
+
+        context["past_trip_attention_count"] = sum(
+            event.viewer_past_trip_needs_attention for event in past_events
+        )
 
         return context
 
@@ -2365,6 +2453,36 @@ class TravelMentorDriverToggleView(
             request,
             f"{signup.adult} {'is now marked as a driver' if signup.is_driver else 'is no longer marked as a driver'}.",
         )
+        return redirect("travel:event_list", program_id=self.program.id)
+
+
+class TravelMentorRemoveView(
+    LoginRequiredMixin, TravelProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentors remove a mentor from a trip's roster."""
+
+    def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelMentorSignup.objects.for_organization(org).filter(
+                Q(departure__isnull=True)
+                | Q(departure__organization=org, departure__event_id=F("event_id"))
+            ),
+            pk=pk,
+            event__program=self.program,
+            adult__organization=org,
+            event__organization=org,
+        )
+        name, event_name = signup.adult.display_name, signup.event.name
+        log_deletion(
+            resource=signup,
+            request=request,
+            before={"adult": str(signup.adult), "event": event_name},
+            notes=f"Lead Mentor removed {name} from mentoring '{event_name}'.",
+        )
+        signup.delete()
+        _notify_with_warning(request, notify_mentor_signup_cancelled, signup)
+        messages.info(request, f"{name} is no longer going to {event_name}.")
         return redirect("travel:event_list", program_id=self.program.id)
 
 

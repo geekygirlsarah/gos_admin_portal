@@ -574,7 +574,7 @@ class SignedPermissionFormTests(TestCase):
             ).exists()
         )
         response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
-        self.assertContains(response, "Guardian approval: Approved")
+        self.assertNotContains(response, "Guardian approval: Approved")
         self.assertContains(response, "Signed permission form: Out of date")
         self.upload(self.guardian)
         self.assertTrue(
@@ -627,8 +627,20 @@ class SignedPermissionFormTests(TestCase):
         signups = {signup.pk: signup for signup in event.signups.all()}
         self.assertFalse(signups[self.signup.pk].needs_permission_acknowledgment)
         self.assertTrue(signups[other_signup.pk].needs_permission_acknowledgment)
-        self.assertContains(response, "Signed permission form: Current", count=1)
+        self.assertNotContains(response, "Signed permission form: Current")
         self.assertContains(response, "Signed permission form: Needed", count=1)
+        self.assertContains(response, self.download_url(signed))
+        self.assertContains(
+            response,
+            reverse(
+                "travel:signup_signed_form_upload",
+                args=[self.program.pk, other_signup.pk],
+            ),
+        )
+        self.assertContains(
+            response, f'data-bs-target="#signup-edit-modal-{other_signup.pk}"'
+        )
+        self.assertContains(response, f'id="signup-edit-modal-{other_signup.pk}"')
 
         for user in (self.student_user, self.mentor):
             with self.subTest(user=user.username):
@@ -651,13 +663,21 @@ class SignedPermissionFormTests(TestCase):
         self.event.start_date = timezone.localdate() - timedelta(days=10)
         self.event.end_date = timezone.localdate() - timedelta(days=8)
         self.event.save()
+        self.signup.cost_items.add(self.cost)
         self.client.force_login(self.guardian)
         response = self.client.get(reverse("travel:event_list", args=[self.program.pk]))
+        self.assertRegex(
+            response.content.decode(), r'<details class="past-trips-disclosure">'
+        )
+        self.assertContains(response, "Follow-up needed")
         self.assertContains(response, self.upload_url())
         self.assertContains(
             response,
             reverse("travel:signup_approve", args=[self.program.pk, self.signup.pk]),
         )
+        self.assertContains(response, "Review permission form")
+        self.assertContains(response, "Optional hotel ($50.00)")
+        self.assertContains(response, "First bus")
         self.upload(self.guardian)
         self.approve()
         self.signup.refresh_from_db()

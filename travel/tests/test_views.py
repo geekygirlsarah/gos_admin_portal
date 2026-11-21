@@ -601,6 +601,114 @@ class TravelViewTest(TestCase):
         self.event.refresh_from_db()
         self.assertEqual(self.event.name, "Competition Trip")
 
+    def test_trip_details_are_collapsed_for_each_travel_role(self):
+        second_event = TravelEvent.objects.create(
+            program=self.program,
+            name="Second Competition Trip",
+            start_date=timezone.localdate() + timedelta(days=45),
+            end_date=timezone.localdate() + timedelta(days=46),
+        )
+        url = reverse("travel:event_list", args=[self.program.pk])
+
+        for username in ("lead", "mentor", "student", "parent"):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                html = response.content.decode()
+                self.assertIn(self.event.name, html)
+                self.assertIn(second_event.name, html)
+                self.assertEqual(
+                    html.count('<details class="travel-event-details mt-3">'), 2
+                )
+                self.assertEqual(html.count("Trip details and actions"), 2)
+
+    def test_past_trip_follow_up_is_limited_to_each_viewers_role(self):
+        today = timezone.localdate()
+        self.event.start_date = today - timedelta(days=10)
+        self.event.end_date = today - timedelta(days=8)
+        self.event.save(update_fields=("start_date", "end_date"))
+        TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+        completed_event = TravelEvent.objects.create(
+            program=self.program,
+            name="Completed Past Trip",
+            start_date=today - timedelta(days=20),
+            end_date=today - timedelta(days=18),
+        )
+        TravelSignup.objects.create(
+            student=self.student,
+            event=completed_event,
+            status=TravelSignup.APPROVED,
+        )
+        url = reverse("travel:event_list", args=[self.program.pk])
+
+        for username, should_flag in (
+            ("lead", True),
+            ("mentor", False),
+            ("student", True),
+            ("parent", True),
+        ):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                past_events = {
+                    event.pk: event for event in response.context["past_events"]
+                }
+                self.assertEqual(
+                    past_events[self.event.pk].viewer_past_trip_needs_attention,
+                    should_flag,
+                )
+                self.assertFalse(
+                    past_events[completed_event.pk].viewer_past_trip_needs_attention
+                )
+                self.assertEqual(
+                    response.context["past_trip_attention_count"],
+                    int(should_flag),
+                )
+                html = response.content.decode()
+                self.assertIn(' <details class="past-trips-disclosure">', html)
+                self.assertIn(self.event.name, html)
+                self.assertIn(completed_event.name, html)
+                self.assertEqual("Follow-up needed" in html, should_flag)
+
+    def test_upcoming_trip_with_follow_up_opens_for_affected_roles(self):
+        signup = TravelSignup.objects.create(
+            student=self.student,
+            event=self.event,
+            status=TravelSignup.INTERESTED,
+        )
+        url = reverse("travel:event_list", args=[self.program.pk])
+
+        for username in ("lead", "parent", "student"):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(
+                    response,
+                    '<details class="travel-event-details mt-3">',
+                )
+                self.assertNotContains(
+                    response,
+                    '<details class="travel-event-details mt-3" open>',
+                )
+                if username == "lead":
+                    self.assertContains(response, "0 of 1 active sign-up ready")
+                    self.assertContains(response, "1 need follow-up")
+                elif username == "parent":
+                    self.assertContains(
+                        response,
+                        reverse(
+                            "travel:signup_approve",
+                            args=[self.program.pk, signup.pk],
+                        ),
+                    )
+
     def test_student_roster_groups_statuses_then_sorts_students_by_name(self):
         signup_data = [
             ("Zoe", "Zulu", "Zara", TravelSignup.APPROVED),
@@ -667,6 +775,162 @@ class TravelViewTest(TestCase):
             name_order = [roster_html.index(name) for name in expected_names]
             self.assertEqual(name_order, sorted(name_order), msg=username)
 
+    def test_student_roster_groups_statuses_then_departures(self):
+        duplicate_departure = TravelDeparture.objects.create(
+            event=self.event,
+            label=self.departure.label,
+            leave_date=self.departure.leave_date,
+        )
+        signup_data = [
+            ("Zoe", "Approved", TravelSignup.APPROVED, self.departure),
+            ("Amy", "Approved", TravelSignup.APPROVED, self.departure),
+            ("Cory", "Approved", TravelSignup.APPROVED, duplicate_departure),
+            ("Noah", "Approved", TravelSignup.APPROVED, None),
+            ("Eli", "Interested", TravelSignup.INTERESTED, self.departure),
+            ("Bea", "Interested", TravelSignup.INTERESTED, self.departure),
+            ("Tina", "Interested", TravelSignup.INTERESTED, duplicate_departure),
+            ("Ari", "Interested", TravelSignup.INTERESTED, None),
+        ]
+        for first_name, last_name, status, departure in signup_data:
+            student = Student.objects.create(
+                organization=self.organization,
+                legal_first_name=first_name,
+                last_name=last_name,
+                school=self.school,
+                graduation_year=2027,
+            )
+            TravelSignup.objects.create(
+                student=student,
+                event=self.event,
+                departure=departure,
+                status=status,
+            )
+
+        for username in ("lead", "mentor"):
+            with self.subTest(username=username):
+                self.client.login(username=username, password="password")  # nosec B106
+                response = self.client.get(
+                    reverse("travel:event_list", args=[self.program.id])
+                )
+                self.assertEqual(response.status_code, 200, msg=username)
+                event = response.context["upcoming_events"][0]
+                status_groups = event.signup_status_groups
+                self.assertEqual(
+                    [group["grouper"] for group in status_groups],
+                    [TravelSignup.APPROVED, TravelSignup.INTERESTED],
+                )
+                self.assertEqual(
+                    [
+                        [
+                            signup.student.display_name
+                            for signup in departure_group["list"]
+                        ]
+                        for departure_group in status_groups[0]["departure_groups"]
+                    ],
+                    [
+                        ["Amy Approved", "Zoe Approved"],
+                        ["Cory Approved"],
+                        ["Noah Approved"],
+                    ],
+                )
+                self.assertEqual(
+                    [
+                        (
+                            departure_group["departure"].pk
+                            if departure_group["departure"]
+                            else None
+                        )
+                        for departure_group in status_groups[0]["departure_groups"]
+                    ],
+                    [self.departure.pk, duplicate_departure.pk, None],
+                )
+                self.assertEqual(
+                    [
+                        [
+                            signup.student.display_name
+                            for signup in departure_group["list"]
+                        ]
+                        for departure_group in status_groups[1]["departure_groups"]
+                    ],
+                    [
+                        ["Bea Interested", "Eli Interested"],
+                        ["Tina Interested"],
+                        ["Ari Interested"],
+                    ],
+                )
+                self.assertTrue(
+                    all(
+                        not signup.readiness_action_labels
+                        for signup in status_groups[0]["list"]
+                    )
+                )
+                html = response.content.decode()
+                roster_start = html.index('aria-labelledby="student-signups-title"')
+                roster_end = html.index("</section>", roster_start)
+                roster_html = html[roster_start:roster_end]
+                self.assertIn(f'data-departure="{self.departure.pk}"', roster_html)
+                self.assertIn(f'data-departure="{duplicate_departure.pk}"', roster_html)
+                self.assertIn('data-departure="none"', roster_html)
+                self.assertIn(
+                    '<table class="table table-sm align-middle mb-0">', roster_html
+                )
+                self.assertIn('<th scope="col">Student</th>', roster_html)
+                self.assertIn('<th scope="col">What\'s missing</th>', roster_html)
+                self.assertIn('<th scope="col">Signed form</th>', roster_html)
+                self.assertIn('role="region"', roster_html)
+                self.assertNotIn("Interested (awaiting parent approval)", roster_html)
+                self.assertNotIn("Guardian approval: Pending", roster_html)
+                self.assertIn("<td>Bus 1</td>", roster_html)
+                self.assertNotIn("<td>Bus 1 -", roster_html)
+                self.assertIn(
+                    'student-signup-status-group mb-4 mt-4" data-status="interested"',
+                    roster_html,
+                )
+                self.assertIn("No departure selected", roster_html)
+                self.assertNotIn("Tracked readiness:", roster_html)
+                self.assertNotIn("Outstanding trip requirements", roster_html)
+                if username == "lead":
+                    self.assertIn("Lead follow-up:", roster_html)
+                    self.assertIn(
+                        'class="alert alert-warning text-dark py-2 px-3 small mt-2 mb-0"',
+                        roster_html,
+                    )
+                    self.assertNotIn("text-warning mt-1", roster_html)
+                    lead_signup = status_groups[0]["departure_groups"][0]["list"][0]
+                    self.assertIn(
+                        f'data-bs-target="#signup-edit-modal-{lead_signup.pk}"',
+                        roster_html,
+                    )
+                    self.assertIn(
+                        f'id="signup-edit-modal-{lead_signup.pk}"', roster_html
+                    )
+                    self.assertNotIn("signup-management-disclosure", roster_html)
+                    self.assertIn(
+                        reverse(
+                            "travel:signup_departure",
+                            args=[self.program.pk, lead_signup.pk],
+                        ),
+                        roster_html,
+                    )
+                    for signup in (
+                        status_groups[0]["departure_groups"][0]["list"][0],
+                        status_groups[1]["departure_groups"][0]["list"][0],
+                    ):
+                        row_start = roster_html.index(f'id="travel-signup-{signup.pk}"')
+                        row_end = roster_html.index("</tr>", row_start)
+                        row_content = roster_html[row_start:row_end]
+                        self.assertLess(
+                            row_content.index(signup.student.display_name),
+                            row_content.index(
+                                reverse(
+                                    "travel:signup_withdraw",
+                                    args=[self.program.pk, signup.pk],
+                                )
+                            ),
+                        )
+                else:
+                    self.assertNotIn("Lead follow-up:", roster_html)
+
     def test_mentor_without_trip_read_permission_cannot_view_trips(self):
         from programs.models import RolePermission
 
@@ -719,13 +983,13 @@ class TravelViewTest(TestCase):
         url = reverse("travel:event_list", args=[self.program.id])
 
         response = self.client.get(url)
-        self.assertContains(response, "Outstanding trip requirements")
-        self.assertContains(response, "Guardian approval")
+        self.assertNotContains(response, "Outstanding trip requirements")
+        self.assertNotContains(response, "Guardian approval: Pending")
         self.assertContains(response, "Signed permission form")
         self.assertContains(response, "Departure: Needed")
         self.assertContains(response, "Travel readiness")
-        self.assertContains(response, "0 ready of 1 active sign-up")
-        self.assertContains(response, f'href="#travel-signup-{signup.pk}"')
+        self.assertContains(response, "0 of 1 active sign-up ready")
+        self.assertContains(response, f'id="travel-signup-{signup.pk}"')
 
         signup.status = TravelSignup.APPROVED
         signup.departure = self.departure
@@ -733,9 +997,10 @@ class TravelViewTest(TestCase):
         signup.save()
         response = self.client.get(url)
         self.assertContains(response, "Signed permission form")
+        self.assertNotContains(response, "Guardian approval: Approved")
         self.assertNotContains(response, "Departure: Needed")
         self.assertNotContains(response, "Guardian approval: Pending")
-        self.assertContains(response, "0 ready of 1 active sign-up")
+        self.assertContains(response, "0 of 1 active sign-up ready")
 
         self.event.permission_form = ""
         self.event.requires_departure = False
@@ -744,10 +1009,11 @@ class TravelViewTest(TestCase):
         signup.permission_acknowledged = False
         signup.save()
         response = self.client.get(url)
-        self.assertContains(response, "No outstanding tracked trip requirements")
+        self.assertNotContains(response, "No outstanding tracked trip requirements")
+        self.assertNotContains(response, "Signed permission form: Current")
         self.assertNotContains(response, "Departure: Needed")
         self.assertNotContains(response, "Signed permission form: Needed")
-        self.assertContains(response, "1 ready of 1 active sign-up")
+        self.assertContains(response, "1 of 1 active sign-up ready")
 
         for status in (TravelSignup.DECLINED, TravelSignup.WITHDRAWN):
             signup.status = status
@@ -872,7 +1138,10 @@ class TravelViewTest(TestCase):
         self.assertNotIn(">Delete</a>", html)
         self.assertIn("Student Sign-ups", html)
         self.assertIn(self.student.display_name, html)
-        self.assertIn(signup.get_status_display(), html)
+        self.assertIn('data-status="interested"', html)
+        self.assertIn(">Interested</h5>", html)
+        self.assertIn('<table class="table table-sm align-middle mb-0">', html)
+        self.assertNotIn(signup.get_status_display(), html)
         self.assertNotIn("Add a student", html)
         self.assertNotIn(">Withdraw</button>", html)
         self.assertNotIn("Add a mentor", html)
@@ -1011,17 +1280,32 @@ class TravelViewTest(TestCase):
         self.assertIn("Add a mentor", html)
 
     def test_lead_trip_rosters_and_add_forms_are_grouped_in_cards(self):
+        self.event.permission_form = "travel/forms/blank.pdf"
+        self.event.save(update_fields=["permission_form"])
         second_departure = TravelDeparture.objects.create(
             event=self.event,
             label="Bus 2",
             leave_date=self.departure.leave_date,
         )
-        TravelSignup.objects.create(
+        student_signup = TravelSignup.objects.create(
             student=self.student,
             event=self.event,
             departure=self.departure,
             status=TravelSignup.APPROVED,
             approved_total="350.00",
+        )
+        student_signup.cost_items.add(self.van)
+        unrecorded_student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Unrecorded",
+            last_name="Cost",
+            school=self.school,
+            graduation_year=2027,
+        )
+        TravelSignup.objects.create(
+            student=unrecorded_student,
+            event=self.event,
+            status=TravelSignup.APPROVED,
         )
         parent = Adult.objects.create(
             organization=self.organization,
@@ -1034,7 +1318,7 @@ class TravelViewTest(TestCase):
             adult=parent,
             student=self.student,
         )
-        TravelParentChaperoneSignup.objects.create(
+        chaperone_signup = TravelParentChaperoneSignup.objects.create(
             organization=self.organization,
             adult=parent,
             event=self.event,
@@ -1047,7 +1331,7 @@ class TravelViewTest(TestCase):
             is_mentor=True,
             mentor_active=True,
         )
-        TravelMentorSignup.objects.create(
+        mentor_signup = TravelMentorSignup.objects.create(
             organization=self.organization,
             adult=mentor,
             event=self.event,
@@ -1078,9 +1362,32 @@ class TravelViewTest(TestCase):
         self.assertIn("Add a student", student_card)
         self.assertIn("Bus 2", student_card)
         self.assertIn(f'id="id_departure_{self.event.pk}"', student_card)
+        self.assertIn('<th scope="col">Student</th>', student_card)
+        self.assertIn('<th scope="col">Approved cost</th>', student_card)
+        self.assertIn('<th scope="col">Departure</th>', student_card)
+        self.assertIn('<th scope="col">Actions</th>', student_card)
+        self.assertIn("$350.00", student_card)
+        self.assertRegex(student_card, r"Current included costs:\s*Hotel, Van")
+        self.assertIn("Not recorded", student_card)
+        self.assertRegex(student_card, r"Current included costs:\s*Hotel")
+        self.assertRegex(student_card, r"<td>Bus 1</td>")
+        self.assertIn('data-bs-toggle="modal"', student_card)
+        self.assertIn(f'id="signup-edit-modal-{student_signup.pk}"', student_card)
+        self.assertIn("Upload signed permission form", student_card)
+        self.assertNotIn("Forms and departure", student_card)
         self.assertIn("Alex Chaperone", parent_card)
         self.assertIn("Add a parent", parent_card)
         self.assertIn("Bus 2", parent_card)
+        self.assertIn('<table class="table table-sm align-middle mb-0">', parent_card)
+        self.assertIn('<th scope="col">Parent chaperone</th>', parent_card)
+        self.assertIn('<th scope="col">Departure</th>', parent_card)
+        self.assertIn(
+            reverse(
+                "travel:chaperone_remove",
+                args=[self.program.pk, chaperone_signup.pk],
+            ),
+            parent_card,
+        )
         self.assertRegex(
             parent_card,
             r'(?s)<select name="departure"[^>]*>.*?<option[^>]*>Bus 2',
@@ -1088,6 +1395,16 @@ class TravelViewTest(TestCase):
         self.assertIn("Casey Mentor", mentor_card)
         self.assertIn("Add a mentor", mentor_card)
         self.assertIn("Bus 2", mentor_card)
+        self.assertIn('<table class="table table-sm align-middle mb-0">', mentor_card)
+        self.assertIn('<th scope="col">Mentor</th>', mentor_card)
+        self.assertIn('<th scope="col">Actions</th>', mentor_card)
+        self.assertNotIn('<th scope="col">Role</th>', mentor_card)
+        self.assertRegex(mentor_card, r"<td>Bus 1</td>")
+        self.assertIn(
+            reverse("travel:mentor_remove", args=[self.program.pk, mentor_signup.pk]),
+            mentor_card,
+        )
+        self.assertIn("Remove", mentor_card)
         self.assertIn(f'name="mentor-{self.event.pk}-departure"', mentor_card)
         self.assertLess(
             page.index("student-signups-title"), page.index("parent-chaperones-title")
@@ -1095,6 +1412,16 @@ class TravelViewTest(TestCase):
         self.assertLess(
             page.index("parent-chaperones-title"), page.index("mentor-signups-title")
         )
+
+        self.client.login(username="mentor", password="password")  # nosec B106
+        mentor_response = self.client.get(
+            reverse("travel:event_list", args=[self.program.pk])
+        )
+        self.assertEqual(mentor_response.status_code, 200)
+        mentor_page = mentor_response.content.decode()
+        self.assertNotIn("Approved cost", mentor_page)
+        self.assertNotIn("Current included costs:", mentor_page)
+        self.assertNotIn("$350.00", mentor_page)
 
     def test_lead_sees_empty_student_parent_and_mentor_cards(self):
         self.client.login(username="lead", password="password")  # nosec B106
@@ -2733,6 +3060,57 @@ class TravelViewTest(TestCase):
         mentor_signup.refresh_from_db()
         self.assertTrue(mentor_signup.is_driver)
 
+    def test_lead_can_remove_mentor_and_audit_and_notify(self):
+        signup = TravelMentorSignup.objects.create(
+            adult=self.mentor_adult, event=self.event
+        )
+        signup_id = signup.pk
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("travel:mentor_remove", args=[self.program.id, signup.pk])
+
+        with (
+            patch("travel.views.log_deletion") as log_deletion,
+            patch(
+                "travel.views.notify_mentor_signup_cancelled", return_value=True
+            ) as notify,
+        ):
+            response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TravelMentorSignup.objects.filter(pk=signup_id).exists())
+        log_deletion.assert_called_once()
+        self.assertEqual(
+            log_deletion.call_args.kwargs["before"],
+            {"adult": str(signup.adult), "event": self.event.name},
+        )
+        notify.assert_called_once()
+        notified_signup = notify.call_args.args[0]
+        self.assertEqual(notified_signup.adult_id, self.mentor_adult.pk)
+        self.assertEqual(notified_signup.event_id, self.event.pk)
+
+    def test_mentor_remove_is_lead_only_post_only_and_program_scoped(self):
+        signup = TravelMentorSignup.objects.create(
+            adult=self.mentor_adult, event=self.event
+        )
+        url = reverse("travel:mentor_remove", args=[self.program.id, signup.pk])
+
+        for username in ("student", "parent", "mentor"):
+            self.client.login(username=username, password="password")  # nosec B106
+            self.client.post(url)
+            self.assertTrue(TravelMentorSignup.objects.filter(pk=signup.pk).exists())
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 405)
+
+        wrong_program_url = reverse(
+            "travel:mentor_remove", args=[self.other_program.pk, signup.pk]
+        )
+        response = self.client.post(wrong_program_url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+        self.assertTrue(TravelMentorSignup.objects.filter(pk=signup.pk).exists())
+
     # ── Parent chaperones ─────────────────────────────────────────────────
 
     def test_eligible_parent_signs_up_to_chaperone_and_is_emailed(self):
@@ -3373,6 +3751,74 @@ class TravelOrganizationCreationTests(TestCase):
     def tenant_get(self, url, user=None):
         self.client.force_login(user or self.lead)
         return self.client.get(url, HTTP_HOST=self.host)
+
+    def test_mentor_remove_rejects_foreign_and_inconsistent_signups(self):
+        foreign_organization = Organization.objects.create(
+            name="Travel Remove Foreign",
+            slug="travel-remove-foreign",
+            subdomain="travel-remove-foreign",
+        )
+        foreign_program = Program.objects.create(organization=foreign_organization)
+        foreign_event = TravelEvent.objects.create(
+            organization=foreign_organization,
+            program=foreign_program,
+            name="Foreign Removal Trip",
+            start_date=self.start_date,
+            end_date=self.start_date + timedelta(days=2),
+        )
+        foreign_departure = TravelDeparture.objects.create(
+            organization=foreign_organization,
+            event=foreign_event,
+            label="Foreign departure",
+            leave_date=self.start_date,
+        )
+        foreign_adult = Adult.objects.create(
+            organization=foreign_organization,
+            legal_first_name="Foreign",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        local_adult = Adult.objects.create(
+            organization=self.organization,
+            legal_first_name="Local",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        signups = [
+            TravelMentorSignup.objects.create(
+                organization=foreign_organization,
+                adult=local_adult,
+                event=self.event,
+            ),
+            TravelMentorSignup.objects.create(
+                organization=self.organization,
+                adult=foreign_adult,
+                event=self.event,
+            ),
+            TravelMentorSignup.objects.create(
+                organization=self.organization,
+                adult=self.lead_adult,
+                event=self.event,
+                departure=foreign_departure,
+            ),
+        ]
+
+        with (
+            patch("travel.views.log_deletion") as log_deletion,
+            patch("travel.views.notify_mentor_signup_cancelled") as notify,
+        ):
+            for signup in signups:
+                response = self.tenant_post(
+                    reverse("travel:mentor_remove", args=[self.program.pk, signup.pk])
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response.url, reverse("home"))
+                self.assertTrue(
+                    TravelMentorSignup.objects.filter(pk=signup.pk).exists()
+                )
+
+        log_deletion.assert_not_called()
+        notify.assert_not_called()
 
     def test_signup_mutation_views_reject_foreign_owned_signup(self):
         foreign_organization = Organization.objects.create(

@@ -190,7 +190,7 @@ reviewing the target environment and receiving any required operational approval
 Deleting a student or signup is blocked while signed travel forms exist. Storage
 origins and proxies must continue to deny public access to the `private/` prefix.
 
-### Parent Chaperone System
+### Parent Chaperone and Mentor Signups
 - Any parent with at least one active student in the program can self-register as a chaperone (`TravelParentChaperoneSignup.eligible_adults(program)`).
 - Lead Mentors can add or remove chaperones via `TravelParentChaperoneStaffForm`.
-- Lead Mentors can add active mentors from their organization to a trip; mentor candidates and departure choices are scoped to that program and event.
+- Lead Mentors can add active mentors from their organization to a trip and remove mentor signups; mentor candidates, removal lookups, and departure choices are scoped to that organization, program, and event.
